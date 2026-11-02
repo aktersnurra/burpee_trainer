@@ -7,16 +7,16 @@ the composer or the CSS around them.
 
 ## What it checks
 
-- A closed Home has no handle and no Edit, Swap or New of its own.
-- A swipe right opens the swap drawer and a swipe left closes it; a swipe up does nothing until the
-  workout is opened, then opens Edit / New, and a swipe down closes it.
+- Swap, Edit and New sit along the bottom edge of Home, a tap each.
+- A swipe right opens the swap drawer and a swipe left closes it.
 - Edit: the studio starts at Home's left edge, the docked box starts at the same edge, nothing
-  scrolls sideways, a spinner shows while the coach works, and Save and Run sit under the proposal.
-- New: one question at a time, a swipe raises a value by a step, reps say what they come to,
-  unbroken asks for a set size, the last screen offers Create workout or Add a request, and Run
+  scrolls sideways, a spinner shows while the coach works, and Run sits under the proposal.
+- New: one form with Create, style, set size and pace folded under More until it is tapped (and
+  open while values change), unbroken asks for a set size, a value's buttons move it by a step, a
+  held button keeps stepping, a value can be typed, the form says what the values come to, nothing scrolls sideways, and Run
   starts the workout.
-- Every button is big enough to hit (at least 40px on both sides and 44px on one; parts and the
-  handle are exempt) and the browser logs no errors.
+- Every button and form control is big enough to hit (at least 40px on both sides and 44px on one;
+  parts are exempt) and the browser logs no errors.
 
 ## Run it
 

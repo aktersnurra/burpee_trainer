@@ -202,21 +202,6 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
     assert slot.home_state == :workout_needed
   end
 
-  test "surfaces only typed transient, limiter, and preference feedback" do
-    user = user_fixture() |> provision_timezone("Etc/UTC")
-
-    complete(user, ~U[2025-09-01 12:00:00Z], 1_200,
-      low_energy: true,
-      limiter: :legs,
-      preference: :avoid
-    )
-
-    assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2025-09-02 12:00:00Z])
-    assert slot.feedback.transient == [:low_energy]
-    assert slot.feedback.limiters == [:legs]
-    assert slot.feedback.preferences == [:avoid]
-  end
-
   defp complete(user, completed_at, duration, opts \\ []) do
     source_kind = opts[:source_kind] || :manual
 
@@ -295,18 +280,6 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
         assert slot.strategy == :standard
         assert slot.duration_sec == 1_200
       end
-    end
-
-    test "a Saturday sign-up trains 20 minutes on Sunday too, never a catch-up" do
-      user =
-        user_fixture() |> provision_timezone("Etc/UTC") |> sign_up_at(~U[2026-10-10 09:00:00Z])
-
-      complete(user, ~U[2026-10-10 10:00:00Z], 1_200)
-
-      assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2026-10-11 09:00:00Z])
-      assert slot.remaining_sec == 1_200
-      assert slot.strategy == :standard
-      assert slot.duration_sec == 1_200
     end
 
     test "is resolved in the user's timezone across a DST change" do

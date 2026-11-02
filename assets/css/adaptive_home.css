@@ -121,26 +121,6 @@ button.home-summary:hover .home-workout-name {
   margin-inline: -5px;
   padding-inline: 5px;
 }
-#home-adjustment-form {
-  margin-top: 22px;
-}
-/* Core input's fieldset carries a small DaisyUI font and padding even with a custom input class. */
-#home-adjustment-form .fieldset {
-  flex: 1;
-  min-width: 0;
-  font: inherit;
-  padding: 0;
-  margin: 0;
-  gap: 0;
-}
-.home-adjustment-row {
-  display: flex;
-  align-items: center;
-  min-height: 44px;
-  border-bottom: 1px solid var(--home-line);
-}
-.home-adjustment-row .home-action { flex: none; margin: 0; }
-.home-adjustment-row:focus-within { border-bottom-color: #5e615b; }
 #home-adjustment {
   display: block;
   width: 100%;
@@ -274,22 +254,6 @@ button.home-summary:hover .home-workout-name {
 [aria-expanded="true"] > .home-chevron {
   transform: rotate(180deg);
 }
-#home-filter-toggle {
-  min-height: 44px;
-  min-width: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 10px;
-  color: #817b70;
-}
-#home-filter-toggle[aria-expanded="true"] { color: #262722; }
-/* Filters are the same rounded choices as New's: one shape for every pick in the app. */
-#home-filters { display: grid; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--home-line); }
-#home-filters [role="group"] { display: flex; flex-wrap: wrap; gap: 6px; }
-.home-filter-level-heading { display: flex; align-items: center; justify-content: space-between; color: var(--home-muted); font-size: var(--text-body); }
-#home-filter-reset { min-height: 44px; padding: 0 0 0 12px; color: var(--home-muted); font-size: var(--text-body); }
-#home-filter-reset:hover { color: #262722; }
 #home-alternatives-toolbar {
   display: flex;
   align-items: center;
@@ -393,11 +357,6 @@ button.home-summary:hover .home-workout-name {
 .home-history {
   margin-top: 2.5rem;
 }
-.home-state-label,
-.home-result-totals dt {
-  color: var(--home-muted);
-  font-size: var(--text-small);
-}
 .home-state-heading {
   margin: 0.35rem 0 0;
   font-size: var(--text-display);
@@ -410,17 +369,6 @@ button.home-summary:hover .home-workout-name {
   padding: 0.5rem 0;
   text-decoration: underline;
   text-underline-offset: 0.25em;
-}
-.home-result-totals {
-  margin-top: 1.5rem;
-  font-variant-numeric: tabular-nums;
-}
-.home-result-totals dt:not(:first-child) {
-  margin-top: 0.75rem;
-}
-.home-result-duration {
-  font-size: var(--text-display);
-  line-height: 1.4;
 }
 .home-history {
   width: 100%;
@@ -475,23 +423,6 @@ button.home-summary:hover .home-workout-name {
 }
 .home-history-trend {
   padding: 1rem;
-}
-.home-history-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-  color: var(--home-muted);
-  font-size: var(--text-small);
-}
-.home-history-legend span::before {
-  content: "";
-  display: inline-block;
-  width: 0.5rem;
-  height: 0.5rem;
-  margin-right: 0.3rem;
-  border-radius: 50%;
-  background: #8d3d25;
 }
 .home-history-plot {
   padding: 1rem 0.75rem;
@@ -628,31 +559,14 @@ button.home-summary:hover .home-workout-name {
 .home-expansion { margin-top: 0; }
 #home-inspection { max-width: 640px; padding-top: 26px; }
 #home-inspection table { font-variant-numeric: tabular-nums; }
-#home-adjustment-form { display: flex; flex-direction: column; max-width: 640px; margin-top: 30px; }
 #home-adjustment { min-height: 28px; font-size: var(--text-body); }
 .home-action { position: static; min-width: 44px; min-height: 44px; padding: 10px; border-radius: 5px; }
-.home-action-icon-update, #home-adjustment-form[data-has-instruction="true"] .home-action-icon-start { display: none; }
-#home-adjustment-form[data-has-instruction="true"] .home-action-icon-update { display: block; }
-#home-chooser-backdrop { position: fixed; inset: 0; z-index: 40; background: #24252255; }
-#home-alternatives-panel:not([hidden]) { position: fixed; z-index: 41; left: 50%; bottom: 0; width: min(580px, 100%); max-height: min(78svh, 740px); overflow-y: auto; padding: 20px clamp(24px, 5vw, 38px) 42px; border-radius: 16px 16px 0 0; background: var(--color-base-200); transform: translateX(-50%); }
 @media (min-width: 601px) {
   .adaptive-home {
     max-width: 1040px;
     padding: 48px clamp(30px, 4vw, 64px) 80px;
   }
   #home-ready-recommendation, .home-result, #home-history, #home-coach-panel { max-width: 640px; }
-  #home-chooser-backdrop { position: fixed; border-radius: 0; }
-  #home-alternatives-panel:not([hidden]) {
-    position: fixed;
-    top: 50%;
-    right: auto;
-    bottom: auto;
-    left: 50%;
-    width: min(580px, calc(100vw - 48px));
-    padding: 28px 38px 38px;
-    border-radius: 16px;
-    transform: translate(-50%, -50%);
-  }
 }
 .home-chooser-header { display: flex; align-items: center; gap: 8px; }
 .home-chooser-header h2 { font: 600 var(--text-display)/1.2 var(--font-sans); letter-spacing: -.02em; }
@@ -700,16 +614,11 @@ button.home-summary:hover .home-workout-name {
 .home-history-svg { color: var(--series-six-count); }
 .home-history-point span { width: 8px; height: 8px; border: 1.5px solid var(--series-six-count); border-radius: 0; background: var(--home-surface); }
 .home-history-point-navy-seal span { border-color: var(--series-navy-seal); }
-.home-history-legend { margin-top: 12px; font-size: var(--text-small); }
-.home-history-legend span::before { width: 15px; height: 0; border: 0; border-top: 2px solid var(--series-six-count); border-radius: 0; background: transparent; }
-.home-history-legend #home-history-navy-seal::before { border-top: 2px dashed var(--series-navy-seal); border-radius: 0; background: transparent; }
 .home-history-sessions-heading { margin-top: 44px; }
 .home-history-table { table-layout: auto; }
 .home-history-session-card > td { padding: 7px 0; margin-top: 0; border: 0; border-top: 1px solid var(--home-line); border-radius: 0; background: transparent; }
-.home-history-sheet-tags { display: flex; flex-wrap: wrap; gap:7px; margin-top:18px; }
-.home-history-sheet-tags span { padding:5px 8px; border:1px solid var(--home-line); border-radius:3px; color:var(--home-muted); font-size: var(--text-small); }
-#home-history-sheet-note { margin-top: 12px; font-size: var(--text-body); line-height: 1.5; }
-@media (max-width: 600px) { .adaptive-home { padding-inline: var(--gutter); } }
+/* On a phone the bottom row of actions (.home-corner) stays clear of the page's end. */
+@media (max-width: 600px) { .adaptive-home { padding-inline: var(--gutter); padding-bottom: calc(76px + env(safe-area-inset-bottom)); } }
 @media (prefers-reduced-motion: reduce) { .home-title-action, .home-loading-animation { transition: none; animation: none; } }
 /* Measured local-day detail keeps the same 80-minute visual ceiling as weekly cells. */
 .home-history-week-cell { display: block; width: 100%; padding: 0; border: 0; cursor: pointer; transition: transform var(--motion-quick) ease; }
@@ -726,7 +635,6 @@ button.home-summary:hover .home-workout-name {
 .home-history-line-navy-seal { color: var(--series-navy-seal); }
 .home-history-point-six-count span { background: var(--home-surface); border-color: var(--series-six-count); }
 .home-history-point-navy-seal span { background: var(--home-surface); border-color: var(--series-navy-seal); border-radius: 0; }
-.home-history-legend #home-history-navy-seal::before { background: transparent; border-top-color: var(--series-navy-seal); border-radius: 0; }
 @media (prefers-reduced-motion: reduce) { .home-history-week-cell { transition: none; } }
 #home-history-empty { margin-top: 24px; }
 .home-history-day-bar { position: relative; }
@@ -765,25 +673,13 @@ button.home-summary:hover .home-workout-name {
 .home-authoring-form.home-enter { animation-delay: var(--motion-stagger); }
 /* The workout stays faded until the server's reply replaces it, however long that takes. */
 #home-workout-hero { transition: opacity var(--motion-quick) ease-in; }
-#home-workout-hero.home-leaving,
-#home-workout-hero:has(#home-new-workout.phx-click-loading, #home-edit-workout.phx-click-loading) { opacity: 0; }
 @media (prefers-reduced-motion: reduce) { .home-enter { animation: none; } #home-workout-hero { transition: none; } }
-.home-authoring-source { margin-top: 6px; color: var(--home-muted); font-size: var(--text-small); line-height: 1.4; }
-.home-review-name { margin: 18px 0 4px; color: #262722; font: 600 var(--text-body)/1.3 var(--font-sans); letter-spacing: -0.01em; }
-.screen-back { display: flex; align-items: center; min-width: 44px; min-height: 44px; margin: 0; padding: 0; }
 .home-coach-summary-text { margin-top: 18px; font-size: var(--text-body); line-height: 1.6; overflow-wrap: anywhere; }
 #home-coach-goals { margin-top: 28px; }
 /* Coach's message is a New form row: the label above an underlined field that grows with its text. */
 .home-authoring-form.coach-message-form { margin-top: 8px; }
 .coach-guidance-status { margin-top: 9px; color: var(--home-muted); font-size: var(--text-small); }
 .coach-guidance-status:empty { display: none; }
-.history-coach-memory { margin-top: 32px; }
-.history-coach-memory summary { display: flex; align-items: center; min-height: 44px; color: var(--home-muted); font-size: var(--text-body); cursor: pointer; }
-.history-coach-memory summary:hover { color: #24231e; }
-.history-coach-memory summary { justify-content: space-between; list-style: none; }
-.history-coach-memory summary::-webkit-details-marker { display: none; }
-.history-coach-memory-chevron { transition: transform var(--motion-quick) ease; }
-.history-coach-memory[open] .history-coach-memory-chevron { transform: rotate(180deg); }
 .history-coach-entry { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: var(--text-body); }
 .history-coach-entry p { flex: 1; }
 /* History header: facts at a glance, then the coach summary as the way into Coach. */
@@ -791,9 +687,6 @@ button.home-summary:hover .home-workout-name {
 .history-coach-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 0; color: #262722; font-size: var(--text-body); line-height: 1.5; text-decoration: none; }
 .coach-summary-loading { display: inline-flex; align-items: center; gap: 10px; color: var(--home-muted); font-size: var(--text-small); }
 .coach-summary-loader { width: 40px; height: 40px; object-fit: contain; }
-.home-edit-structure summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; color: var(--home-muted); font-size: var(--text-small); }
-.home-edit-structure ol { font-size: var(--text-small); line-height: 1.8; color: var(--home-muted); }
-.adaptive-home .history-coach-memory summary:focus-visible { outline: 2px solid #5e615b; outline-offset: 3px; }
 
 /* Approved title-led Home: stable actions, quiet inline authoring. */
 #home-ready-recommendation:has(.home-hero) {
@@ -822,33 +715,17 @@ button.home-summary:hover .home-workout-name {
 .home-start-choice { position: relative; min-width: 44px; padding-inline: 14px; }
 .home-start-choice[aria-pressed="true"] { color: #262722; background: var(--color-base-200); }
 .home-start-choice[aria-pressed="false"]::after { content: ""; position: absolute; left: 50%; top: 50%; width: 24px; height: 1.5px; background: currentColor; transform: translate(-50%, -50%) rotate(-45deg); pointer-events: none; }
-.home-workout-actions #home-edit-workout { grid-column: 1; grid-row: 2; }
 .home-workout-actions #home-title-action { grid-column: 2; grid-row: 2; }
-.home-workout-actions #home-new-workout { grid-column: 3; grid-row: 2; }
 .home-workout-actions #home-action { padding-inline: 36px; }
-.home-workout-actions .home-expanded-action { margin-top: 12px; padding-inline: 14px; }
-.home-workout-actions .home-expanded-action { opacity: 0; visibility: hidden; transform: translateY(8px); transition: opacity var(--motion-quick) ease, transform var(--motion-settle) var(--ease-out), visibility 0s linear var(--motion-quick); }
-.home-workout-actions[data-expanded="true"] .home-expanded-action { opacity: 1; visibility: visible; transform: translateY(0); transition: opacity var(--motion-settle) ease var(--motion-stagger), transform var(--motion-settle) var(--ease-out) var(--motion-stagger), visibility 0s; }
 #home-ready-recommendation .home-expansion { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease, visibility 0s linear var(--motion-settle); }
 #home-ready-recommendation .home-expansion[data-open="true"] { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease var(--motion-stagger), visibility 0s; }
-.home-review, .home-authoring-form { margin-top: 14px; }
-.home-review-heading { padding: 11px 0 13px; border-bottom: 1px solid var(--home-line); color: var(--home-muted); font-size: var(--text-small); font-weight: 400; }
-.home-review-values > div { display: flex; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--home-line); padding: 14px 0; border-radius: 0; background: transparent; font-size: var(--text-body); }
-.home-review-values dt { color: var(--home-muted); }
-.home-review-values dd { margin: 0; font-weight: 400; text-align: right; }
-.home-review-actions { display: flex; justify-content: flex-end; gap: 16px; border-top: 1px solid var(--home-line); margin-top: 20px; padding-top: 10px; }
-/* New form actions are words: a quiet Cancel or Edit, and one filled primary action. */
-.home-review-actions:has(.home-text-action, .home-primary-action) { align-items: center; gap: 8px; border-top: 0; margin-top: 16px; padding-top: 0; }
-/* Cancel sits at the left edge of every New, Edit, Swap and review step; the rest group at the right. */
-.home-review-actions-split { justify-content: space-between; }
-.home-review-actions-group { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.home-authoring-form { margin-top: 14px; }
 .home-text-action, .home-primary-action { min-height: 44px; padding: 0 20px; border-radius: 999px; font: 500 var(--text-body)/1 var(--font-sans); }
 .home-text-action { background: transparent; border: 0; color: var(--home-muted); }
 .home-text-action:hover { color: #262722; }
 .home-primary-action { background: #262722; border: 1px solid #262722; color: var(--color-base-100); }
 .home-primary-action:hover { opacity: .85; }
 :is(.home-text-action, .home-primary-action):disabled { opacity: .4; cursor: default; }
-#home-request-timing { color: var(--home-muted); font-size: var(--text-small); }
 /* Every row of the New form: label left, value right, one height and one value size. */
 .home-authoring-form .fieldset { min-height: 60px; padding: 12px 0; margin: 0; border-bottom: 1px solid var(--home-line); font: inherit; display: flex; align-items: center; }
 .home-authoring-form .fieldset > label { flex: 1; }
@@ -862,15 +739,9 @@ button.home-summary:hover .home-workout-name {
 /* The focused field underlines its row instead of drawing a box past the column edge. */
 .home-authoring-form .fieldset:focus-within { box-shadow: inset 0 -2px 0 #262722; }
 .home-authoring-form input[type="hidden"] { display: none; }
-#home-filters [role="group"] button { min-height: 44px; padding: 8px 14px; white-space: nowrap; border: 1px solid var(--home-line); border-radius: 999px; background: transparent; font: 400 var(--text-body)/1.2 var(--font-sans); color: var(--home-muted); transition: background var(--motion-quick) ease, border-color var(--motion-quick) ease; }
-#home-filters [role="group"] button[aria-pressed="true"] { background: #ece9e2; border-color: #918d83; color: #262722; }
-/* Work and recovery is computed, not typed: a caption under Duration, not a row. */
-/* Duration and its Movement/Recovery caption read as one row; with no caption, Duration keeps its own line. */
-.home-rest-alternative { margin-top: 14px; font-size: var(--text-small); line-height: 1.7; }
-@media (prefers-reduced-motion: reduce) { #home-filters [role="group"] button { transition: none; } }
 .adaptive-home :is(input, select):focus-visible { outline: 2px solid #5e615b; outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
-  #home-ready-recommendation:has(.home-hero), #home-ready-recommendation .home-expansion, #home-ready-recommendation .home-expansion[data-open="true"], .home-workout-actions .home-expanded-action, .home-workout-actions[data-expanded="true"] .home-expanded-action { transition: none; }
+  #home-ready-recommendation:has(.home-hero), #home-ready-recommendation .home-expansion, #home-ready-recommendation .home-expansion[data-open="true"] { transition: none; }
 }
 
 /* The streak: its number at display size and its words on the same baseline. */
@@ -893,17 +764,9 @@ button.home-summary:hover .home-workout-name {
 /* Points are dots: six-count filled ink, navy seal an open ring. */
 .adaptive-home .home-history-point span { width: 9px; height: 9px; border-radius: 999px; border: 2px solid var(--home-surface); background: var(--series-six-count); outline: 1px solid var(--series-six-count); }
 .adaptive-home .home-history-point-navy-seal span { background: var(--home-surface); outline: 1.5px solid var(--series-navy-seal); }
-/* A session's numbers sit like the streak pair: what was done, then "of" the plan. */
-.home-history-comparison { flex-wrap: wrap; gap: 12px 32px; margin-top: 20px; }
 /* View switches sit at the heading's right edge and look like the period tabs. */
-/* Switch opens in place: the list takes the set table's spot under the workout, which stays
-   above it, inactive, as context. No backdrop, nothing covers the page. */
-#home-chooser-backdrop { display: none; }
-#home-alternatives-panel:not([hidden]) { position: static; inset: auto; z-index: auto; width: auto; max-height: none; overflow: visible; margin-top: 24px; padding: 0; border-radius: 0; background: transparent; transform: none; }
-.adaptive-home:has(#home-alternatives-panel:not([hidden])) #home-expansion { display: none; }
 .home-workout-actions[inert] { opacity: .45; transition: opacity var(--motion-quick) ease; }
 #home-alternatives-panel .home-chooser-header h2 { font: 600 var(--text-body)/1.4 var(--font-sans); letter-spacing: 0; }
-#home-alternatives-panel:not([hidden]) { animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
 /* The workout you have now reads heavier in the list, so you can see what you would swap. */
 .home-alternative[aria-current="true"] .home-alternative-name { font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { #home-alternatives-panel:not([hidden]) { animation: none; } }
@@ -939,32 +802,16 @@ button.home-summary:hover .home-workout-name {
 .progress-gauge-meter.progress-gauge-met span { background: #6f7d55; }
 .progress-course { margin: 0; }
 .progress-course svg { display: block; width: 100%; height: 32px; overflow: visible; }
-.progress-course-target { stroke: #262722; stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
-.progress-course-done { fill: none; stroke: #262722; stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-.progress-course-ahead { fill: none; stroke: #262722; stroke-width: 2; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
 .progress-course-caption { margin-top: 8px; color: var(--home-muted); font-size: var(--text-small); }
 .progress-course-caption.progress-course-on { color: #262722; }
 .adaptive-home .progress-gauge-set { align-self: flex-start; min-height: 44px; padding: 0; color: #262722; font-size: var(--text-small); text-decoration: underline; text-underline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { .progress-gauge-meter span { transition: none; } }
 .home-result-status { color: var(--home-muted); }
-/* A destructive decision is still the one filled action, in the error colour. */
-.home-danger-action { background: #a55643; border-color: #a55643; color: var(--color-base-100); }
-/* A session opens under its own row: the coach's read, the numbers, then a quiet Delete. */
-.home-history-detail { padding: 4px 0 16px; }
-.home-history-detail #history-insight { margin-top: 4px; }
-.home-history-detail #history-insight-headline { font: 500 var(--text-body)/1.5 var(--font-sans); color: #262722; }
-.home-history-detail #history-insight-points { margin: 6px 0 0; padding: 0; list-style: none; color: var(--home-muted); font-size: var(--text-body); line-height: 1.5; }
-.home-history-detail .home-history-comparison { margin-top: 12px; }
-.home-history-detail .home-review-actions { justify-content: flex-start; margin-top: 8px; }
-.home-history-detail .home-review-actions .home-text-action:first-child { margin-left: -20px; }
 .home-history-delete-ask { margin-top: 12px; }
 .home-history-delete-ask p { color: #262722; font-size: var(--text-body); }
-.home-history-delete-ask .home-review-actions { justify-content: flex-end; }
-.home-history-delete-ask .home-review-actions .home-text-action:first-child { margin-left: 0; }
 /* Progress leads with one headline: the number at 64px, one line saying what, a thin bar. */
 .home-history-header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 #history-level { color: inherit; font: inherit; white-space: nowrap; }
-#progress-choose-goal { display: inline-flex; align-items: center; text-decoration: none; }
 /* The coach's line: plain text and a chevron, no panel. */
 /* Other goals: one quiet row each under a hairline. */
 /* The coach, open: the last exchange behind a thin rule, one-tap replies, then the field. */
@@ -982,18 +829,13 @@ button.home-summary:hover .home-workout-name {
 .progress-gauge-type.progress-key-six-count::before { border-color: var(--series-six-count); }
 .progress-gauge-type.progress-key-navy-seal::before { border-top-style: dashed; border-color: var(--series-navy-seal); }
 .progress-gauge .progress-course-caption { margin-top: 12px; }
-/* Done opens like the workout day: the title moves up and the coach unfolds under it. */
-#home-done-today, #home-week-complete { transition: margin-top var(--motion-settle) var(--ease-out); }
+/* With the coach open under it, the result sits higher. */
 #home-done-today[data-expanded="true"], #home-week-complete[data-expanded="true"] { margin-top: 56px; }
 #home-done-today .home-summary, #home-week-complete .home-summary { width: 100%; margin: 0; padding: 0; text-align: center; }
-#home-done-expansion { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease, visibility 0s linear var(--motion-settle); }
-#home-done-expansion[data-open="true"] { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease var(--motion-stagger), visibility 0s; }
-@media (prefers-reduced-motion: reduce) { #home-done-today, #home-week-complete, #home-done-expansion, #home-done-expansion[data-open="true"] { transition: none; } }
 #home-done-today .home-workout-name, #home-week-complete .home-workout-name { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
 /* Actions are icons: a 44px target, the icon centred, the label for screen readers. */
 .adaptive-home .home-icon-action { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; padding: 0; }
 .adaptive-home .home-primary-action.home-icon-action { width: 44px; }
-.adaptive-home .home-workout-actions .home-expanded-action { padding-inline: 10px; }
 .adaptive-home .progress-gauge-set { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 /* Sessions: one row each, the type in its chart colour; a tapped row shows its trash. */
 .home-history-session-line { display: flex; align-items: center; border-bottom: 1px solid var(--home-line); }
@@ -1050,11 +892,17 @@ button.home-summary:hover .home-workout-name {
 
 /* The chat dock: the box you write in rides above the keyboard, as in the Claude app.
    ChatDock sets --keyboard-inset (how far the keyboard lifts it) and --chat-dock-height. */
-.chat-dock { position: fixed; inset-inline: 0; bottom: var(--keyboard-inset, 0px); z-index: 30; padding: 8px var(--gutter) calc(8px + env(safe-area-inset-bottom)); background: var(--color-base-100); transition: bottom var(--motion-quick) var(--ease-out); }
+/* The conversation and its box share one column: the phone's width, and on a wide screen a
+   reading column like the Claude app's. */
+:root { --chat-w: 350px; }
+@media (min-width: 601px) { :root { --chat-w: 680px; } }
+/* The box floats a little above the bottom edge; the thread fades out under it rather than
+   meeting a hard line. */
+.chat-dock { position: fixed; inset-inline: 0; bottom: var(--keyboard-inset, 0px); z-index: 30; padding: 20px var(--gutter) calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(to bottom, transparent, var(--color-base-100) 20px); pointer-events: none; transition: bottom var(--motion-quick) var(--ease-out); }
+@media (min-width: 601px) { .chat-dock { padding-bottom: calc(24px + env(safe-area-inset-bottom)); } }
 /* The home indicator is behind the keyboard, so its padding would only float the box. */
 .chat-dock[data-keyboard="open"] { padding-bottom: 8px; }
-.chat-dock-inner { display: grid; gap: 8px; max-width: calc(410px - 2 * var(--gutter)); margin-inline: auto; }
-.chat-dock-actions { justify-content: flex-end; margin-left: 0; }
+.chat-dock-inner { display: grid; gap: 8px; max-width: var(--chat-w); margin-inline: auto; pointer-events: auto; }
 .chat-dock .composer textarea { min-height: 1.5em; max-height: 9rem; overflow-y: auto; }
 .chat-dock-spacer { height: calc(var(--chat-dock-height, 0px) + 16px); }
 
@@ -1069,32 +917,52 @@ button.home-summary:hover .home-workout-name {
 /* Inside the dock the form is the composer card itself; the panel's own spacing gives way. */
 @media (prefers-reduced-motion: reduce) { .coach-exchange-coach, #home-coach-pending .coach-exchange-you { animation: none; } }
 
-/* ---- Swap drawer: the page slides right and the list of workouts takes the space it leaves,
-   as in the Claude app. The page moves with `left`, not a transform, so the fixed drawer
-   stays put; the two never overlap, so the drawer needs no layer below the page. ---- */
+/* ---- Swap drawer, as in the Claude app. On a phone the page slides right and the list takes the
+   space it leaves. On a wide screen the list is a sidebar and the page re-centres in what is left;
+   between the two it lies over the page. The page moves with `left`/`padding`, not a transform,
+   so the fixed drawer stays put. ---- */
 :root { --drawer-w: min(84vw, 340px); }
-#home-page { position: relative; left: 0; background: var(--color-base-100); transition: left var(--motion-settle) var(--ease-out), border-radius var(--motion-settle) var(--ease-out); }
+#home-page { position: relative; left: 0; background: var(--color-base-100); transition: left var(--motion-settle) var(--ease-out), padding-left var(--motion-settle) var(--ease-out), border-radius var(--motion-settle) var(--ease-out); }
 body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 #home-page:has(#home-alternatives-panel:not([hidden])) { left: var(--drawer-w); border-radius: var(--radius-surface) 0 0 var(--radius-surface); box-shadow: -1px 0 0 var(--color-base-border); }
-#home-alternatives-panel:not([hidden]) { position: fixed; z-index: 41; inset: 0 auto 0 0; width: var(--drawer-w); max-height: none; margin: 0; padding: calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 0; background: var(--color-base-100); transform: none; animation: drawer-in var(--motion-settle) var(--ease-out) backwards; overscroll-behavior: contain; }
+#home-alternatives-panel:not([hidden]) { position: fixed; z-index: 41; inset: 0 auto 0 0; width: var(--drawer-w); max-height: none; margin: 0; padding: calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 0; background: var(--color-base-300); transform: none; animation: drawer-in var(--motion-settle) var(--ease-out) backwards; overscroll-behavior: contain; }
 @keyframes drawer-in { from { opacity: 0; transform: translateX(-32px); } to { opacity: 1; transform: none; } }
 /* The page is the way back: a tap on it closes the drawer. */
 #home-chooser-backdrop { display: block; position: fixed; z-index: 40; inset: 0 0 0 var(--drawer-w); background: transparent; }
 .adaptive-home:has(#home-alternatives-panel:not([hidden])) #home-expansion { display: grid; }
-@media (min-width: 601px) { #home-alternatives-panel:not([hidden]) { top: 0; left: 0; right: auto; bottom: 0; width: var(--drawer-w); padding: 28px 24px; border-radius: 0; transform: none; } }
+@media (min-width: 601px) {
+  :root { --drawer-w: 320px; }
+  #home-alternatives-panel:not([hidden]) { padding: 20px 16px 24px; border-right: 1px solid var(--color-base-border); }
+  /* Over the page, which stays where it was under a light scrim. */
+  #home-page:has(#home-alternatives-panel:not([hidden])) { left: 0; border-radius: 0; box-shadow: none; }
+  #home-chooser-backdrop { inset: 0; background: rgb(32 32 29 / .18); animation: sheet-fade var(--motion-quick) ease backwards; }
+  #home-alternatives-panel:not([hidden]) { box-shadow: 0 0 48px rgb(32 32 29 / .12); }
+}
+@media (min-width: 1024px) {
+  /* A sidebar: the page keeps its full width beside it and its column centres in what is left. */
+  #home-page:has(#home-alternatives-panel:not([hidden])) { padding-left: var(--drawer-w); }
+  #home-chooser-backdrop { inset: 0 0 0 var(--drawer-w); background: transparent; animation: none; }
+  #home-alternatives-panel:not([hidden]) { box-shadow: none; }
+}
 
-/* ---- Options sheet: swiped up from the workout. ---- */
-#home-options-backdrop { position: fixed; inset: 0; z-index: 40; background: rgb(32 32 29 / .28); animation: sheet-fade var(--motion-quick) ease backwards; }
-#home-options-sheet { position: fixed; z-index: 41; left: 50%; bottom: 0; display: grid; gap: 8px; width: min(430px, 100%); padding: 10px 20px calc(24px + env(safe-area-inset-bottom)); border-radius: var(--radius-surface) var(--radius-surface) 0 0; background: var(--color-base-200); transform: translateX(-50%); animation: sheet-up var(--motion-settle) var(--ease-out) backwards; }
+/* The drawer, Edit and New, one tap each. A phone has them in a row along the bottom edge, within
+   the thumb's reach; a wide screen at the top-left corner, where the Claude app keeps its sidebar
+   and new-chat buttons. */
+.home-corner { position: fixed; z-index: 20; left: 50%; bottom: calc(8px + env(safe-area-inset-bottom)); display: flex; gap: 16px; transform: translateX(-50%); }
+.home-corner-action { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--home-muted); cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease; }
+.home-corner-action:hover { background: var(--color-base-300); color: #262722; }
+.home-corner-action:focus-visible { outline: 2px solid #5e615b; outline-offset: -2px; }
+@media (min-width: 601px) {
+  .home-corner { top: 12px; bottom: auto; left: 12px; gap: 2px; transform: none; }
+}
+
+/* A sheet rises from the bottom edge over a fading backdrop; its grip sits at its top edge. */
 @keyframes sheet-up { from { transform: translate(-50%, 100%); } to { transform: translate(-50%, 0); } }
 @keyframes sheet-fade { from { opacity: 0; } to { opacity: 1; } }
 .home-sheet-grip { justify-self: center; width: 36px; height: 4px; margin-bottom: 8px; border-radius: 2px; background: var(--color-base-border); }
-.home-option { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 12px 14px; border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: transparent; color: #262722; text-align: left; transition: background var(--motion-quick) ease; }
-.home-option:hover, .home-option:focus-visible { background: var(--color-base-100); }
-.home-option-title { font: 600 var(--text-body)/1.3 var(--font-sans); }
 
 /* ---- The studio: Edit and New as a chat. ---- */
-.studio { display: flex; flex-direction: column; max-width: 410px; min-height: 100svh; margin: 0 auto; padding: 0 var(--gutter); color: #262722; font-family: var(--font-sans); animation: studio-in var(--motion-settle) var(--ease-out) backwards; }
+.studio { display: flex; flex-direction: column; max-width: calc(var(--chat-w) + 2 * var(--gutter)); min-height: 100svh; margin: 0 auto; padding: 0 var(--gutter); color: #262722; font-family: var(--font-sans); animation: studio-in var(--motion-settle) var(--ease-out) backwards; }
 @keyframes studio-in { from { opacity: 0; transform: translateY(32px); } to { opacity: 1; transform: none; } }
 .studio-header { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px; margin-inline: calc(-1 * var(--gutter)); padding: calc(10px + env(safe-area-inset-top)) var(--gutter) 10px; background: var(--color-base-100); }
 .studio-back, .studio-close { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--color-base-border); border-radius: 50%; background: var(--color-base-200); color: #262722; cursor: pointer; }
@@ -1129,9 +997,11 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-card #home-inspection td:last-child { color: var(--home-muted, #736f68); }
 .studio-proposal { display: grid; gap: 8px; transition: opacity var(--motion-quick) ease; }
 .studio-proposal-stale { opacity: .45; }
-.studio-working { display: flex; align-items: center; gap: 10px; }
-.studio-working picture { display: flex; }
-.studio-spinner { display: block; flex: none; width: 44px; height: 44px; margin-top: -6px; object-fit: contain; }
+.studio-working { display: flex; align-items: center; gap: 2px; min-height: 36px; }
+.studio-working picture { display: flex; flex: none; }
+/* The figure fills the middle of its frame, so the frame's centre is the line's centre. */
+.studio-spinner { display: block; flex: none; width: 36px; height: 36px; margin-left: -6px; object-fit: contain; }
+.studio-working .studio-turn { font-size: var(--text-body); line-height: 1.5; }
 .studio-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .studio-pill { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 20px; border: 1px solid var(--color-base-border); border-radius: 999px; background: var(--color-base-200); color: #262722; font: 500 15px/1 var(--font-sans); cursor: pointer; transition: background var(--motion-quick) ease, opacity var(--motion-quick) ease; }
 .studio-pill:hover:not(:disabled) { background: var(--color-base-300); }
@@ -1140,68 +1010,68 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-pill-wide { width: 100%; min-height: 52px; font-size: 16px; }
 .studio-pill:disabled { opacity: .4; cursor: default; }
 .studio-actions { display: flex; align-items: center; gap: 8px; }
+/* The coach's suggested asks: quiet pills that wrap, above Save and Run. */
+.studio-suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* On a phone one row that scrolls sideways, so the guesses never push the box up the screen. */
+@media (max-width: 600px) {
+  .studio-suggestions { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .studio-suggestions::-webkit-scrollbar { display: none; }
+  .studio-suggestion { flex: none; white-space: nowrap; }
+}
+.studio-suggestion { padding: 0 16px; background: transparent; color: var(--home-muted, #736f68); font-size: var(--text-small); text-align: left; }
 .studio-actions .studio-pill { flex: 1; min-height: 48px; }
 
-/* One question at a time: centred, with the answer under it and the progress above. */
-.studio-step { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 24px; padding-bottom: calc(40px + env(safe-area-inset-bottom)); text-align: center; animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
-.studio-dots { display: flex; gap: 8px; margin: 0; padding: 0; list-style: none; }
-.studio-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--color-base-border); transition: background var(--motion-quick) ease, transform var(--motion-quick) ease; }
-.studio-dot-on { background: #262722; }
-.studio-question { margin: 0; font: 600 var(--text-display)/1.15 var(--font-sans); letter-spacing: -.02em; text-wrap: balance; }
-.studio-options { display: grid; gap: 12px; width: 100%; }
-.studio-option { display: grid; width: 100%; padding: 18px 20px; border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: var(--color-base-200); color: #262722; text-align: left; cursor: pointer; transition: background var(--motion-quick) ease, border-color var(--motion-quick) ease; }
-.studio-option:hover, .studio-option:focus-visible { border-color: #918d83; background: var(--color-base-100); }
-.studio-option:active { background: var(--color-base-300); }
-.studio-option-title { font: 600 var(--text-heading)/1.3 var(--font-sans); }
-.studio-stepper-wrap { width: 100%; }
-.studio-stepper { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 26px 16px; border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: var(--color-base-200); touch-action: pan-y; user-select: none; -webkit-user-select: none; }
-.studio-stepper:focus-visible { outline: 2px solid #5e615b; outline-offset: 2px; }
-.studio-step-button { display: grid; place-items: center; flex: none; width: 56px; height: 56px; border: 1px solid var(--color-base-border); border-radius: 50%; background: var(--color-base-100); color: #262722; cursor: pointer; transition: background var(--motion-quick) ease; }
-.studio-step-button:active:not(:disabled) { background: var(--color-base-300); }
-.studio-step-button:disabled { opacity: .3; cursor: default; }
-.studio-step-value { min-width: 0; text-align: center; }
-.studio-step-number { display: block; font: 600 var(--text-hero)/1 var(--font-sans); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
-.studio-step-text { font-size: var(--text-title); line-height: 1.2; padding-block: 14px; }
-.studio-step-unit { display: block; margin-top: 8px; color: var(--home-muted, #736f68); font-size: var(--text-body); }
-.studio-step-hint { margin: 14px 0 0; color: var(--home-muted, #736f68); font-size: var(--text-small); }
-.studio-step-actions { display: grid; gap: 10px; width: 100%; margin-top: 8px; }
-.studio-summary { width: 100%; margin: 0; padding: 4px 0; list-style: none; border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: var(--color-base-200); text-align: left; }
-.studio-summary li + li .studio-summary-row { border-top: 1px solid var(--color-base-border); }
-.studio-summary-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 0 18px; border: 0; background: transparent; color: #262722; font: 400 var(--text-body)/1.3 var(--font-sans); text-align: left; cursor: pointer; }
-.studio-summary-row:hover { background: var(--color-base-100); }
-.studio-summary-label { flex: 1; color: var(--home-muted, #736f68); }
-.studio-summary-value { font-weight: 500; font-variant-numeric: tabular-nums; }
-.studio-summary-chevron { color: var(--home-muted, #736f68); }
+/* New's form: a card of rows, each a label and its control, then the note and Create. It takes
+   the column the chat that follows it takes, from the top. */
+.studio-form { display: grid; gap: 16px; width: 100%; padding: 12px 0 calc(32px + env(safe-area-inset-bottom)); animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
+.studio-fields { border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: var(--color-base-200); }
+.studio-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; min-width: 0; margin: 0; padding: 10px 12px 10px 18px; border: 0; }
+.studio-row + .studio-row { border-top: 1px solid var(--color-base-border); }
+.studio-row-label { float: left; padding: 0; color: #262722; font: 500 var(--text-body)/1.3 var(--font-sans); }
+.studio-row-hint { grid-column: 1 / -1; margin: 6px 0 2px; color: var(--home-muted, #736f68); font-size: var(--text-small); font-variant-numeric: tabular-nums; text-align: right; }
+.studio-segment { display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 3px; border-radius: 999px; background: var(--color-base-300); }
+.studio-segment-option { position: relative; display: grid; place-items: center; min-width: 92px; min-height: 44px; padding: 0 12px; border-radius: 999px; color: var(--home-muted, #736f68); font: 500 var(--text-small)/1 var(--font-sans); white-space: nowrap; cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease; }
+.studio-segment-option input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+.studio-segment-option:has(input:checked) { background: var(--color-base-100); color: #262722; box-shadow: 0 1px 2px rgb(32 32 29 / .12); }
+.studio-segment-option:has(input:focus-visible) { outline: 2px solid #5e615b; outline-offset: 1px; }
+.studio-number { display: grid; grid-template-columns: 44px 104px 44px; align-items: center; gap: 4px; }
+.studio-number-button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--color-base-border); border-radius: 50%; background: var(--color-base-100); color: #262722; cursor: pointer; transition: background var(--motion-quick) ease; }
+.studio-number-button:hover:not(:disabled) { background: var(--color-base-300); }
+.studio-number-button:disabled { opacity: .3; cursor: default; }
+/* Held to repeat, so a long press must not select text or open the phone's callout. */
+.studio-number-button { -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
+/* The value and its unit read as one: "20 min". */
+.studio-number-field { display: flex; align-items: baseline; justify-content: center; gap: 4px; height: 44px; padding: 0 10px; border: 1px solid var(--color-base-border); border-radius: 12px; background: var(--color-base-100); cursor: text; }
+.studio-number-field:focus-within { outline: 2px solid #5e615b; outline-offset: 1px; }
+.studio-number-input { flex: 1 1 0; min-width: 0; height: 42px; padding: 0; border: 0; background: transparent; color: #262722; font: 600 var(--text-heading)/42px var(--font-sans); font-variant-numeric: tabular-nums; text-align: right; outline: none; }
+.studio-number-input::placeholder { color: var(--home-muted, #736f68); font-size: var(--text-small); font-weight: 500; text-align: center; }
+.studio-number-unit { flex: 1 1 0; color: var(--home-muted, #736f68); font-size: var(--text-small); white-space: nowrap; }
+.studio-number-input:placeholder-shown { text-align: center; }
+.studio-number-input:placeholder-shown + .studio-number-unit { display: none; }
+/* The folded fields' row: a full-width button that reads as a row, its summary where values sit. */
+.studio-more { width: 100%; min-height: 56px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.studio-more:focus-visible { outline: 2px solid #5e615b; outline-offset: -2px; border-radius: var(--radius-surface); }
+.studio-more-summary { display: inline-flex; align-items: center; gap: 8px; color: var(--home-muted, #736f68); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.studio-more-chevron { transition: transform var(--motion-quick) ease; }
+.studio-more[aria-expanded="true"] .studio-more-chevron { transform: rotate(180deg); }
+.studio-more-fields > .studio-row { border-top: 1px solid var(--color-base-border); }
+.studio-note { display: grid; gap: 8px; }
+.studio-note-label { color: var(--home-muted, #736f68); font-size: var(--text-small); }
+.studio-note textarea { width: 100%; min-height: 3.5em; max-height: 12rem; padding: 12px 16px; border: 1px solid var(--color-base-border); border-radius: 16px; background: var(--color-base-200); color: var(--color-base-content); font: 400 var(--text-body)/1.5 var(--font-sans); resize: none; field-sizing: content; }
+.studio-note textarea::placeholder { color: #74716A; opacity: 1; }
+.studio-note textarea:focus-visible { outline: none; border-color: #918d83; }
 @media (prefers-reduced-motion: reduce) {
-  .studio, .studio-msg, .studio-step, #home-options-sheet, #home-options-backdrop, #home-alternatives-panel:not([hidden]) { animation: none; }
-  #home-page { transition: none; }
-  .studio-dot { transition: none; }
+  .studio, .studio-msg, .studio-form, #home-alternatives-panel:not([hidden]) { animation: none; }
+  #home-page, .home-corner-action { transition: none; }
+  .studio-segment-option, .studio-more-chevron { transition: none; }
 }
 /* In the studio the working indicator is a line in the conversation, not a screen of its own. */
-.studio #home-update-loading { display: flex; min-height: 0; place-items: unset; }
+.studio #home-update-loading { display: flex; align-items: center; min-height: 36px; }
 
-/* The way up on an opened workout: a handle at the bottom edge for what a swipe up does. It leaves
-   when the sheet, the drawer or the studio is open. */
-.home-grab-area { position: fixed; inset-inline: 0; bottom: 0; z-index: 10; display: grid; justify-items: center; padding-bottom: calc(4px + env(safe-area-inset-bottom)); pointer-events: none; }
-.home-grab { display: grid; place-items: center; width: 120px; height: 36px; padding: 0; border: 0; background: transparent; cursor: pointer; pointer-events: auto; }
-.home-grab-bar { width: 40px; height: 4px; border-radius: 2px; background: var(--color-base-border); transition: background var(--motion-quick) ease, width var(--motion-quick) ease; }
-.home-grab:hover .home-grab-bar, .home-grab:focus-visible .home-grab-bar { width: 56px; background: #9A9489; }
-
-#home-options-sheet:focus { outline: none; }
 .coach-summary-loader { margin-top: -8px; }
 
 /* What a proposal changed from the one before: the clay underline, on a chip as its border. */
 .studio-chip-changed { box-shadow: inset 0 0 0 1.5px #a77b5d; font-weight: 600; }
-/* A proposal's set rows take a tap to change their numbers by hand. */
-.studio .home-editable-row { cursor: pointer; }
-.studio .home-selected-row > * { background: var(--color-base-100); }
-.studio-hand-edit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 8px; margin-top: 10px; padding: 10px 14px; border-radius: var(--radius-surface); background: var(--color-base-200); font-variant-numeric: tabular-nums; animation: studio-in var(--motion-quick) var(--ease-out) backwards; }
-.studio-hand-edit-label { flex: 1 0 100%; color: var(--home-muted); font-size: var(--text-small); }
-.studio-hand-step { display: inline-flex; align-items: center; gap: 2px; }
-.studio-hand-button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--color-base-border); border-radius: 50%; background: var(--color-base-100); color: #262722; }
-.studio-hand-button:disabled { opacity: .35; }
-.studio-hand-value { min-width: 48px; font: 600 var(--text-body)/1 var(--font-sans); text-align: center; }
-.studio-hand-value small { margin-left: 2px; color: var(--home-muted); font-weight: 400; font-size: var(--text-small); }
 
 /* What the coach remembers: an icon beside the coach's note that opens a sheet with its two parts. */
 .coach-head { display: flex; align-items: flex-start; gap: 8px; }

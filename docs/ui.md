@@ -10,11 +10,11 @@
 
 - **Restraint first.** If something can be removed, remove it. Every element must earn its place.
 - **Show what is needed, reveal the rest when asked.** A screen starts with the one thing to do;
-  what it can also do waits until the athlete asks. Swap is a swipe right (the drawer); Edit and
-  New wait behind the opened workout, a swipe up or its handle. Hiding a control is only right
-  when asking is cheap and findable: the handle on an opened workout is the visible way to ask,
-  the swipes the shortcut.
-- **For someone who knows it.** The athlete knows the app: no hint lines, no suggested replies,
+  what it can also do waits until the athlete asks. Swap, Edit and New are three quiet icons, a
+  tap each; a swipe right is the shortcut to Swap. Hiding a control is only right when asking is
+  cheap and findable, and never worth an extra tap on a way the athlete takes every week.
+- **For someone who knows it.** The athlete knows the app: no hint lines, no canned replies (the
+  coach's suggestions under a proposal are its guesses about this workout, not boilerplate),
   no subtitles that explain a choice, and no number said twice on one screen. Density beats
   explanation: a workout's shape reads in one line (`5 × 3 · every 8s · 4:30 rest`), with their
   best beside it.
@@ -160,12 +160,13 @@ lines rise in rather than jump.
 
 ## 4a1a. Swipes, the drawer and the studio
 
-Home has no Edit, Swap or New buttons. A swipe right opens the swap drawer (the page slides
-right and the workout list takes the space; `#home-page` moves with `left`, never a transform).
-Edit and New are for an athlete who has opened the workout and is not happy with it: a swipe up
-inside the opened workout opens their sheet, titles only. An opened workout has a handle at its
-bottom edge (`#home-grab`, the same sheet); there are no hint lines. The sheet also lists Swap. Edit and New are the studio, a full-screen chat on the same page
-and gutter as Home:
+Swap, Edit and New are three muted 44px icons (`.home-corner`: bars, pencil, plus), a tap each,
+with the workout opened or not: in a row along the bottom edge on a phone, within the thumb's
+reach, and at the top-left corner on a wide screen, where the Claude app keeps its sidebar and
+new-chat buttons. A swipe right also opens the swap drawer (the page slides right and the workout
+list takes the space; `#home-page` moves with `left`, never a transform). A tap on a workout in
+the drawer makes it today's and closes the drawer; a tap on a video starts it. Edit and New are the
+studio, a full-screen chat on the same page and gutter as Home:
 
 - **Header**: a 44px round back button and the title (`--text-body`, 600), nothing else. Back is
   one step back, and out of the first. A drawer or sheet is closed with an x-mark, since it
@@ -176,14 +177,17 @@ and gutter as Home:
   The card needs no label; what it is, the sentence before it says. A proposal is marked against
   the one it replaced (Edit's first, against the workout): a changed chip has a clay ring, a
   changed cell the clay underline. Sets read by number (`1–4`, `5`), rests as clocks (`4:30`).
-- **Numbers by hand**: a tap on a set's row of the proposal selects it (a soft row) and opens
-  `.studio-hand-edit` under the card: the reps and the beat, each with 44px round steppers. A step
-  that cannot fit is disabled; the rests are fitted again, so the length holds.
-- **One question at a time** (New): centred, progress dots above, the question at
-  `--text-display`, a choice as a card to tap (it answers and moves on), a value as a card you
-  swipe with a round button either side (`.studio-stepper`, its number `--text-hero`) and a Next.
+- **New's form**: one card of rows (`.studio-fields`), each a label and its control: a choice of
+  two as a segmented pill (`.studio-segment`), a number as a field with its unit inside
+  (`.studio-number-field`, "20 min") and a 44px round button either side that keeps stepping while
+  held; a hint under a row in small muted type. Burpee, duration and reps show; style, set size and
+  pace fold under a **More** row that reads them in its summary ("Even · 4.5 s/rep") and unfolds
+  in place. Then the note and the one filled Create workout.
+- **Suggested asks**: up to three of the coach's guesses at the next change sit as quiet outline
+  pills (`.studio-suggestion`, muted small type) just above the chat box, wrapping on a wide screen and in one sideways-scrolling row on a phone, and go while the coach works; a tap sends one as
+  a follow-up.
 - **Words on pills**: the studio is a conversation, so its actions are words on pills (the one
-  filled ink pill per view is the way on: Run, Create workout, Next), where the rest of the app
+  filled ink pill per view is the way on: Run, Create workout), where the rest of the app
   uses icons (4a2). Run keeps its play mark and uses Home's camera and warmup choices; the studio
   has no toggles of its own.
 
@@ -199,13 +203,13 @@ every animation here.
 ## 4a2. Actions
 
 - One filled pill per view for the primary action, as an icon: Start and Resume are a
-  play mark in a wide pill; Save, Approve and Use this workout a check; Review an arrow
-  right; sending words is the composer's arrow up (4a1).
+  play mark in a wide pill; Approve a check; Review an arrow right; sending words is the
+  composer's arrow up (4a1).
 - Every other action is a quiet icon from one set (heroicons), each with an `aria-label`
   and `title`, one icon per meaning everywhere: pencil-square edits, arrows-right-left
   switches or chooses a workout, plus adds or sets, trash deletes, x-mark cancels, closes,
-  keeps or dismisses, check confirms, arrow-path resets, retries or reloads,
-  adjustments-horizontal filters, chevron-down loads more.
+  keeps or dismisses, check confirms, arrow-path resets, retries or reloads, chevron-down loads
+  more.
 - Words stay only where they are the content or an icon would be ambiguous: picks (types,
   levels, styles), tabs (period, Workouts and Videos), the coach's predicted replies, and
   "Sign in with Pocket ID". The studio (4a1a) is the one place actions are words, since it is a
@@ -216,7 +220,7 @@ every animation here.
 - Deleting a session: tap its row and its trash shows; the first tap on the trash arms it
   (error colour), the second deletes. Tapping the row again or Escape lets go.
 - A chevron only means "opens here" or, pointing down at the end of a list, "more".
-- Every pick (burpee type, set style, filters, levels) is the same rounded choice; the
+- Every pick (burpee type, set style) is the same rounded choice; the
   chosen one is filled light. A destructive decision is the filled pill in the error colour.
 - The burpee types are always "Six-count" and "Navy SEAL" (lowercase "six-count" mid-sentence).
 

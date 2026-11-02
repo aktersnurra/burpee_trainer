@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { atPageBottom, classifySwipe, createSwipeTracker } from "./swipe.mjs";
 import { gestureEvent } from "./home_gestures.mjs";
-import { stepDirection } from "./swipe_value.mjs";
 
 test("a clear, quick stroke is a swipe in its main direction", () => {
 	assert.equal(classifySwipe({ dx: 120, dy: 10, ms: 200 }), "right");
@@ -92,28 +91,12 @@ test("a cancelled touch forgets its start, and destroy detaches", () => {
 	assert.equal(f.listeners.size, 0);
 });
 
-test("a swipe on Home: right swaps anywhere; up edits or starts fresh only on an opened workout", () => {
-	const closed = { chooserOpen: false, optionsOpen: false, expanded: false };
+test("a swipe on Home: right opens the swap drawer, left puts it away, nothing else", () => {
+	const closed = { chooserOpen: false };
 	assert.equal(gestureEvent("right", closed), "open_chooser");
-	assert.equal(gestureEvent("up", closed), null);
-	assert.equal(gestureEvent("left", closed), null);
-	assert.equal(gestureEvent("down", closed), null);
+	for (const d of ["left", "up", "down"]) assert.equal(gestureEvent(d, closed), null);
 
-	const opened = { ...closed, expanded: true };
-	assert.equal(gestureEvent("up", opened), "open_options");
-	assert.equal(gestureEvent("right", opened), "open_chooser");
-
-	const drawer = { ...opened, chooserOpen: true };
+	const drawer = { chooserOpen: true };
 	assert.equal(gestureEvent("left", drawer), "close_chooser");
-	assert.equal(gestureEvent("up", drawer), null);
-
-	const sheet = { ...opened, optionsOpen: true };
-	assert.equal(gestureEvent("down", sheet), "close_options");
-	assert.equal(gestureEvent("right", sheet), null);
-});
-
-test("swiping a value right raises it and left lowers it", () => {
-	assert.equal(stepDirection("right"), "up");
-	assert.equal(stepDirection("left"), "down");
-	assert.equal(stepDirection("up"), null);
+	for (const d of ["right", "up", "down"]) assert.equal(gestureEvent(d, drawer), null);
 });

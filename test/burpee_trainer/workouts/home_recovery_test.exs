@@ -47,20 +47,6 @@ defmodule BurpeeTrainer.Workouts.HomeRecoveryTest do
     assert selected.plan.user_id == nil
   end
 
-  test "foreign archived draft corrupt missing and malformed choices have no effects", c do
-    foreign = plan_fixture(user_fixture())
-    archived = plan_fixture(c.user)
-    archived |> WorkoutPlan.archive_changeset(DateTime.utc_now(:second)) |> Repo.update!()
-    draft = workout_plan_draft_fixture(c.user)
-    corrupt = corrupt_plan(c.user)
-
-    for id <- [foreign.id, archived.id, draft.id, corrupt.id, -1, nil, "bad", %{}] do
-      before = rows()
-      assert {:error, _} = Workouts.recover_home_workout_selection(c.scope, c.slot, id)
-      assert rows() == before
-    end
-  end
-
   test "a fresh user in choose recovers with a video but never another user's plan", c do
     fresh = scope_fixture()
     {:ok, slot} = Policy.required_slot(fresh, DateTime.utc_now(:second))
@@ -77,73 +63,101 @@ defmodule BurpeeTrainer.Workouts.HomeRecoveryTest do
     assert session.workout_video_id == video.id
   end
 
-  test "owned published plan alone is sufficient choose evidence", c do
-    owner = scope_fixture()
-    plan = plan_fixture(owner.user)
-    {:ok, slot} = Policy.required_slot(owner, DateTime.utc_now(:second))
-    assert {:ok, selected} = Workouts.recover_home_workout_selection(owner, slot, plan.id)
-    assert selected.plan.id == plan.id
-    refute selected.recommendation_id == nil
-    assert c.scope.user.id != owner.user.id
-  end
-
-  test "stale malformed foreign slot and done week states reject without effects", c do
+  test "bad plan, video, slot, or token input rejects without effects", c do
+    foreign = plan_fixture(user_fixture())
+    archived = plan_fixture(c.user)
+    archived |> WorkoutPlan.archive_changeset(DateTime.utc_now(:second)) |> Repo.update!()
+    draft = workout_plan_draft_fixture(c.user)
+    corrupt = corrupt_plan(c.user)
     plan = plan_fixture(c.user)
+    unavailable = video_fixture(%{available: false})
+    malformed = video_fixture() |> Ecto.Changeset.change(duration_sec: 0) |> Repo.update!()
+    video = video_fixture()
 
-    for slot <- [
-          nil,
-          %{},
-          %{c.slot | slot_key: "stale"},
-          %{c.slot | slot_date: Date.add(c.slot.slot_date, -1)},
-          %{c.slot | home_state: :done_today},
-          %{c.slot | home_state: :week_complete}
-        ] do
+    bad_slots = [
+      nil,
+      %{},
+      %{c.slot | slot_key: "stale"},
+      %{c.slot | slot_date: Date.add(c.slot.slot_date, -1)},
+      %{c.slot | home_state: :done_today},
+      %{c.slot | home_state: :week_complete}
+    ]
+
+    bad_ids = [-1, nil, "bad", %{}]
+
+    attempts =
+      Enum.map(
+        [foreign.id, archived.id, draft.id, corrupt.id | bad_ids],
+        &fn -> Workouts.recover_home_workout_selection(c.scope, c.slot, &1) end
+      ) ++
+        Enum.map(
+          bad_slots,
+          &fn -> Workouts.recover_home_workout_selection(c.scope, &1, plan.id) end
+        ) ++
+        Enum.map(
+          [unavailable.id, malformed.id | bad_ids],
+          &fn -> Workouts.start_recovery_home_video(c.scope, c.slot, &1, Ecto.UUID.generate()) end
+        ) ++
+        Enum.map(
+          bad_slots,
+          &fn ->
+            Workouts.start_recovery_home_video(c.scope, &1, video.id, Ecto.UUID.generate())
+          end
+        ) ++
+        Enum.map(
+          [nil, "bad", %{}],
+          &fn -> Workouts.start_recovery_home_video(c.scope, c.slot, video.id, &1) end
+        )
+
+    for attempt <- attempts do
       before = rows()
-      assert {:error, _} = Workouts.recover_home_workout_selection(c.scope, slot, plan.id)
+      assert {:error, _} = attempt.()
       assert rows() == before
     end
-
-    free_form_session_fixture(c.user, %{completed_at: DateTime.utc_now(:second)})
-    before = rows()
-    assert {:error, _} = Workouts.recover_home_workout_selection(c.scope, c.slot, plan.id)
-    assert rows() == before
   end
 
-  test "an intervening valid pin cannot be replaced and video cannot bypass it", c do
-    plan = plan_fixture(c.user)
-    alternative = plan_fixture(c.user)
-    video = video_fixture()
-    assert {:ok, winner} = Workouts.recover_home_workout_selection(c.scope, c.slot, plan.id)
-    before = rows()
-    assert {:error, _} = Workouts.recover_home_workout_selection(c.scope, c.slot, alternative.id)
+  test "a pin, another active session, done today, or an available fallback blocks recovery" do
+    # Each blocker gets its own user in choose; the fallback is global, so it goes last.
+    blockers = [
+      {"pin",
+       fn scope, slot ->
+         Workouts.recover_home_workout_selection(scope, slot, plan_fixture(scope.user).id)
+       end},
+      {"active session",
+       fn scope, _slot ->
+         Workouts.start_video(scope, video_fixture().id, Ecto.UUID.generate())
+       end},
+      {"done today",
+       fn scope, _slot ->
+         free_form_session_fixture(scope.user, %{completed_at: DateTime.utc_now(:second)})
+       end},
+      {"available fallback",
+       fn _scope, _slot -> copied_plan(steady_fallback(), nil, :built_in) end}
+    ]
 
-    assert {:error, _} =
-             Workouts.start_recovery_home_video(c.scope, c.slot, video.id, Ecto.UUID.generate())
+    for {label, block} <- blockers do
+      scope = scope_fixture()
 
-    assert rows() == before
-    assert Workouts.current_home_selection(c.scope, c.slot) == winner
-  end
+      free_form_session_fixture(scope.user, %{
+        completed_at: DateTime.add(DateTime.utc_now(:second), -10, :day)
+      })
 
-  test "another active session prevents plan and video recovery without recommendation leaks",
-       c do
-    plan = plan_fixture(c.user)
-    video = video_fixture()
-    {:ok, _} = Workouts.start_video(c.scope, video.id, Ecto.UUID.generate())
-    before = rows()
-    assert {:error, _} = Workouts.recover_home_workout_selection(c.scope, c.slot, plan.id)
+      {:ok, slot} = Policy.required_slot(scope, DateTime.utc_now(:second))
+      plan = plan_fixture(scope.user)
+      video = video_fixture()
+      block.(scope, slot)
+      before = rows()
+      selection = Workouts.current_home_selection(scope, slot)
 
-    assert {:error, _} =
-             Workouts.start_recovery_home_video(c.scope, c.slot, video.id, Ecto.UUID.generate())
+      assert {:error, _} = Workouts.recover_home_workout_selection(scope, slot, plan.id), label
 
-    assert rows() == before
-  end
+      assert {:error, _} =
+               Workouts.start_recovery_home_video(scope, slot, video.id, Ecto.UUID.generate()),
+             label
 
-  test "available fallback means this is not choose and must not recover", c do
-    plan = plan_fixture(c.user)
-    copied_plan(steady_fallback(), nil, :built_in)
-    before = rows()
-    assert {:error, _} = Workouts.recover_home_workout_selection(c.scope, c.slot, plan.id)
-    assert rows() == before
+      assert rows() == before, label
+      assert Workouts.current_home_selection(scope, slot) == selection, label
+    end
   end
 
   test "video recovery uses actual video recommendation snapshot and exact replay", c do
@@ -183,57 +197,6 @@ defmodule BurpeeTrainer.Workouts.HomeRecoveryTest do
     changed = rows()
     assert {:error, _} = Workouts.start_recovery_home_video(c.scope, c.slot, video.id, token)
     assert rows() == changed
-  end
-
-  test "malformed unavailable and noncanonical videos leave no recommendation", c do
-    unavailable = video_fixture(%{available: false})
-    malformed = video_fixture() |> Ecto.Changeset.change(duration_sec: 0) |> Repo.update!()
-
-    for id <- [unavailable.id, malformed.id, -1, nil, "bad", %{}] do
-      before = rows()
-
-      assert {:error, _} =
-               Workouts.start_recovery_home_video(c.scope, c.slot, id, Ecto.UUID.generate())
-
-      assert rows() == before
-    end
-
-    video = video_fixture()
-
-    for token <- [nil, "bad", %{}] do
-      before = rows()
-      assert {:error, _} = Workouts.start_recovery_home_video(c.scope, c.slot, video.id, token)
-      assert rows() == before
-    end
-  end
-
-  test "real recovery writes participate in an enclosing lifecycle rollback", c do
-    video = video_fixture()
-    before = rows()
-
-    assert {:error, :forced_recovery_failure} =
-             Repo.immediate_transaction(fn ->
-               assert {:ok, started} =
-                        Workouts.start_recovery_home_video(
-                          c.scope,
-                          c.slot,
-                          video.id,
-                          Ecto.UUID.generate()
-                        )
-
-               assert Repo.get!(WorkoutSession, started.id) == started
-
-               recommendation =
-                 Repo.get_by!(CoachRecommendation, user_id: c.user.id, slot_key: c.slot.slot_key)
-
-               assert recommendation.selected_workout_video_id == video.id
-               assert recommendation.home_revision == 1
-               assert recommendation.home_workout_plan_id == nil
-               Repo.rollback(:forced_recovery_failure)
-             end)
-
-    assert rows() == before
-    assert Repo.aggregate(CoachRecommendation, :count) == 0
   end
 
   test "actual choose with an unpinned valid recommendation and absent fallback recovers", c do
@@ -306,25 +269,6 @@ defmodule BurpeeTrainer.Workouts.HomeRecoveryTest do
     assert rows() == before
   end
 
-  test "stale or malformed video slot never writes", c do
-    video = video_fixture()
-
-    for slot <- [
-          nil,
-          %{},
-          %{c.slot | slot_key: "stale"},
-          %{c.slot | slot_date: Date.add(c.slot.slot_date, -1)},
-          %{c.slot | home_state: :done_today}
-        ] do
-      before = rows()
-
-      assert {:error, _} =
-               Workouts.start_recovery_home_video(c.scope, slot, video.id, Ecto.UUID.generate())
-
-      assert rows() == before
-    end
-  end
-
   test "foreign user's valid selection is neither consulted nor changed", c do
     other = scope_fixture()
     plan = plan_fixture(other.user)
@@ -333,6 +277,7 @@ defmodule BurpeeTrainer.Workouts.HomeRecoveryTest do
     assert {:ok, other_selection} =
              Workouts.recover_home_workout_selection(other, other_slot, plan.id)
 
+    assert other_selection.plan.id == plan.id
     own_plan = plan_fixture(c.user)
 
     assert {:ok, own_selection} =

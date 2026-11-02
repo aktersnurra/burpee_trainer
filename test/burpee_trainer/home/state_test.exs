@@ -30,45 +30,6 @@ defmodule BurpeeTrainer.Home.StateTest do
     end
   end
 
-  property "a started session always wins contradictory facts" do
-    check all(facts <- facts_gen()) do
-      facts = %{facts | started_session: %{id: 9}}
-      assert {:resume, %{id: 9}} = State.derive(facts)
-      assert :resume = facts |> State.derive() |> State.primary_action()
-    end
-  end
-
-  test "all five derived states map to their one primary action" do
-    states = [
-      {{:resume, %{id: 1}}, :resume},
-      {{:start, %{plan: %{id: 2}}}, :start},
-      {:choose, :choose},
-      {{:done_today, %{}}, :insights},
-      {{:week_complete, %{}}, :insights}
-    ]
-
-    for {state, action} <- states do
-      assert State.primary_action(state) == action
-    end
-  end
-
-  test "workout needed with a selection starts it" do
-    facts = facts(:workout_needed, nil, %{plan: %{id: 2}})
-    assert {:start, %{plan: %{id: 2}}} = State.derive(facts)
-  end
-
-  test "workout needed without a selection asks to choose" do
-    assert :choose = State.derive(facts(:workout_needed, nil, nil))
-  end
-
-  test "done today and week complete beat a selection" do
-    assert {:done_today, %{today: []}} =
-             State.derive(facts(:done_today, nil, %{plan: %{id: 2}}, %{today: []}))
-
-    assert {:week_complete, %{week: []}} =
-             State.derive(facts(:week_complete, nil, %{plan: %{id: 2}}, %{week: []}))
-  end
-
   defp expected_state(%Facts{started_session: %{} = session}), do: {:resume, session}
 
   defp expected_state(%Facts{slot: %{home_state: :done_today}, results: results}),
@@ -85,7 +46,7 @@ defmodule BurpeeTrainer.Home.StateTest do
   defp expected_action(:choose), do: :choose
   defp expected_action({state, _}) when state in [:done_today, :week_complete], do: :insights
 
-  defp facts(home_state, started, selection, results \\ %{}) do
+  defp facts(home_state, started, selection, results) do
     %Facts{
       slot: %{home_state: home_state},
       started_session: started,

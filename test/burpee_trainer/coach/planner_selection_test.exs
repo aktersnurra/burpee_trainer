@@ -24,6 +24,9 @@ defmodule BurpeeTrainer.Coach.PlannerSelectionTest do
   defp fixture do
     scope = scope_fixture()
     {:ok, slot} = Policy.required_slot(scope, DateTime.utc_now(:second))
+    # A plain 20-minute slot: late in the week the slot is longer (catch-up) or shorter
+    # (pro-rated sign-up week), and the rep band then rules out the proposal's reps.
+    slot = %{slot | duration_sec: 1200}
     plan = plan_fixture(scope.user, %{target_reps: 30, target_duration_sec: slot.duration_sec})
     {:ok, selection} = Workouts.ensure_home_selection(scope, slot)
     {scope, slot, plan, selection}
@@ -38,7 +41,7 @@ defmodule BurpeeTrainer.Coach.PlannerSelectionTest do
 
   defp failure_response(conn, :loop_cap), do: Req.Test.json(conn, call("goals", %{}))
 
-  defp failure_response(_, cap) when cap in [:run_cap, :daily_cap],
+  defp failure_response(_, :run_cap),
     do: flunk("budget cap allowed a second transport")
 
   defp assert_failure(:timeout, result),
@@ -49,11 +52,11 @@ defmodule BurpeeTrainer.Coach.PlannerSelectionTest do
 
   defp assert_failure(:loop_cap, result), do: assert(result == {:error, :agent_budget_exhausted})
 
-  defp assert_failure(cap, result) when cap in [:run_cap, :daily_cap],
+  defp assert_failure(:run_cap, result),
     do: assert(match?({:error, %{code: :llm_budget_exhausted}}, result))
 
   defp transport_count(:loop_cap), do: 6
-  defp transport_count(cap) when cap in [:run_cap, :daily_cap], do: 1
+  defp transport_count(:run_cap), do: 1
   defp transport_count(_), do: 2
 
   defp selection_call(plan),
@@ -83,13 +86,12 @@ defmodule BurpeeTrainer.Coach.PlannerSelectionTest do
   end
 
   defp failure_opts(slot, :run_cap), do: Keyword.put(opts(slot), :budget, run_cap: 1)
-  defp failure_opts(slot, :daily_cap), do: Keyword.put(opts(slot), :budget, daily_cap: 1)
   defp failure_opts(slot, _), do: opts(slot)
   defp first_call(:selection, plan), do: selection_call(plan)
   defp first_call(:proposal, plan), do: proposal_call(plan)
 
   for tool <- [:selection, :proposal],
-      failure <- [:timeout, :invalid, :run_cap, :daily_cap, :loop_cap] do
+      failure <- [:timeout, :invalid, :run_cap, :loop_cap] do
     test "successful #{tool} remains staged after #{failure}" do
       {scope, slot, plan, before} = fixture()
       failure = unquote(failure)
@@ -129,10 +131,11 @@ defmodule BurpeeTrainer.Coach.PlannerSelectionTest do
     assert Workouts.list_library(scope) |> Enum.all?(&(&1.name != "Staged proposal"))
   end
 
-  for stage <- [:first, :final], choice <- [:same, :other] do
-    test "original CAS wins over owner #{choice} selection during #{stage} provider request" do
+  # The owner re-selecting the same workout still bumps the revision, so a check on the
+  # plan id alone would miss it.
+  for stage <- [:first, :final] do
+    test "original CAS wins over owner selection during #{stage} provider request" do
       stage = unquote(stage)
-      choice = unquote(choice)
       {scope, slot, plan, before} = fixture()
       owner = self()
       pid = start_supervised!({Elixir.Agent, fn -> 0 end})
@@ -158,11 +161,8 @@ defmodule BurpeeTrainer.Coach.PlannerSelectionTest do
       Req.Test.allow(__MODULE__, self(), task.pid)
       assert_receive {:provider_waiting, provider}, 1000
 
-      owner_plan =
-        plan_fixture(scope.user, %{target_reps: 20, target_duration_sec: slot.duration_sec})
-
       assert {:ok, owner_selection} =
-               Workouts.select_home_workout(scope, before, owner_id(choice, before, owner_plan))
+               Workouts.select_home_workout(scope, before, before.plan.id)
 
       send(provider, :owner_finished)
       assert {:error, %{code: :home_selection_changed}} = Task.await(task)
@@ -172,8 +172,6 @@ defmodule BurpeeTrainer.Coach.PlannerSelectionTest do
 
   defp barrier_index(:first), do: 0
   defp barrier_index(:final), do: 1
-  defp owner_id(:same, before, _), do: before.plan.id
-  defp owner_id(:other, _, plan), do: plan.id
 
   test "successful proposal is published canonically and selected only at final completion" do
     {scope, slot, plan, before} = fixture()

@@ -5,8 +5,7 @@ defmodule BurpeeTrainer.Workouts.HomeSelection do
     :recommendation_id,
     :home_revision,
     :plan,
-    :recommendation_selection,
-    :pending_draft_id
+    :recommendation_selection
   ]
   defstruct @enforce_keys ++ [:rationale]
 
@@ -15,7 +14,6 @@ defmodule BurpeeTrainer.Workouts.HomeSelection do
           home_revision: non_neg_integer(),
           plan: WorkoutPlan.t(),
           recommendation_selection: CoachRecommendation.selection(),
-          pending_draft_id: pos_integer() | nil,
           rationale: String.t() | nil
         }
 
@@ -30,7 +28,6 @@ defmodule BurpeeTrainer.Workouts.HomeSelection do
       home_revision: r.home_revision,
       plan: plan,
       recommendation_selection: selected,
-      pending_draft_id: r.pending_draft_id,
       rationale: r.rationale
     }
   end

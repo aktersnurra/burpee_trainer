@@ -143,11 +143,10 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
            )
   end
 
-  test "the page is Progress, and old History links land on it", %{conn: conn} do
+  test "the page is Progress", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/progress")
     # Progress is titled by your level; it is still named Progress for screen readers.
     assert has_element?(view, "#home-history-heading[aria-label^='Progress, Level']", "Level")
-    assert {:error, {:live_redirect, %{to: "/progress"}}} = live(conn, "/history")
   end
 
   test "the week grid names weeks that hit the target, and none when none have", %{

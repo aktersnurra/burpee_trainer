@@ -20,14 +20,13 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
 
   @modes ~w[
     published-plan
-    pending-candidate
     available-video
     available-known-count-video
     started-plan-session
     completed-history
     provider-failure
   ]
-  @mode_usage "published-plan|pending-candidate|available-video|available-known-count-video|started-plan-session|completed-history|provider-failure"
+  @mode_usage "published-plan|available-video|available-known-count-video|started-plan-session|completed-history|provider-failure"
 
   @spec run(String.t(), keyword()) :: {:ok, map()} | {:error, term()}
   def run(mode, options \\ [])
@@ -123,46 +122,6 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
          program_json: persisted.program_json,
          content_hash: persisted.content_hash,
          library_url: "/workouts"
-       }}
-    end
-  end
-
-  defp create_mode_fixture(user, "pending-candidate", run_id, options) do
-    now = Keyword.get_lazy(options, :now, fn -> DateTime.utc_now(:second) end)
-
-    with {:ok, initial_slot} <- Policy.required_slot(Scope.for_user(user), now),
-         {:ok, history} <- ensure_weekend_history(user, run_id, initial_slot),
-         {:ok, slot} <- Policy.required_slot(Scope.for_user(user), now),
-         {:ok, recommendation} <-
-           Workouts.ensure_recommendation(Scope.for_user(user), %{
-             slot_key: slot.slot_key,
-             slot_date: slot.slot_date,
-             rationale: "Deterministic pending candidate fixture"
-           }),
-         {:ok, attached} <-
-           ensure_pending_candidate(user, recommendation, run_id, slot) do
-      persisted = Repo.get_by!(CoachRecommendation, id: attached.id, user_id: user.id)
-      draft = Repo.get_by!(WorkoutPlan, id: persisted.pending_draft_id, user_id: user.id)
-
-      {:ok,
-       %{
-         slot_strategy: slot.strategy,
-         slot_completed_sec: slot.completed_sec,
-         candidate_ceiling_reps: candidate_reps(slot),
-         history_session_id: history && history.id,
-         history_user_id: history && history.user_id,
-         history_completed_at: history && history.completed_at,
-         recommendation_id: persisted.id,
-         selected_workout_plan_id: persisted.selected_workout_plan_id,
-         pending_draft_id: draft.id,
-         pending_draft_state: draft.state,
-         pending_draft_user_id: draft.user_id,
-         pending_draft_definition_json: draft.definition_json,
-         pending_draft_program_json: draft.program_json,
-         pending_draft_content_hash: draft.content_hash,
-         slot_key: persisted.slot_key,
-         slot_date: persisted.slot_date,
-         home_url: "/"
        }}
     end
   end
@@ -378,62 +337,6 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
     end
   end
 
-  # The personal best's 20-minute pace held over the whole slot: within Coach.RepCeiling.
-  defp candidate_reps(%{strategy: :catch_up, personal_best: %{reps: reps}} = slot),
-    do: div(reps * slot.duration_sec, 1_200)
-
-  defp candidate_reps(slot), do: max(div(slot.duration_sec, 12), 1)
-
-  defp ensure_weekend_history(user, run_id, %{strategy: :catch_up} = slot) do
-    token = fixture_client_session_id(run_id, "prior-week-pb")
-
-    case Repo.get_by(WorkoutSession, user_id: user.id, client_session_id: token) do
-      %WorkoutSession{} = session ->
-        {:ok, session}
-
-      nil ->
-        with {:ok, plan} <- published_plan(user, "Prior-week PB #{run_id}", 1_200),
-             {:ok, completed_at} <-
-               BurpeeTrainer.UserTime.resolve_local(
-                 Date.add(slot.week_start, -1),
-                 ~T[12:00:00],
-                 user.timezone
-               ) do
-          # The guarded fixture inserts historical immutable identity once, then uses the
-          # normal schema transition. No production clock or immutability guard is changed.
-          Repo.immediate_transaction(fn ->
-            session =
-              %WorkoutSession{
-                user_id: user.id,
-                state: :started,
-                source_kind: :plan,
-                plan_id: plan.id,
-                client_session_id: token,
-                display_name_snapshot: plan.name,
-                workout_type_snapshot: plan.burpee_type,
-                program_snapshot: plan.program_json,
-                content_hash: plan.content_hash,
-                burpee_type: plan.burpee_type,
-                burpee_count_planned: plan.target_reps,
-                duration_sec_planned: plan.target_duration_sec,
-                started_at: DateTime.add(completed_at, -1_200, :second)
-              }
-              |> WorkoutSession.start_changeset()
-              |> Repo.insert!()
-
-            session
-            |> WorkoutSession.completion_changeset(
-              %{"burpee_count_actual" => plan.target_reps, "duration_sec_actual" => 1_200},
-              completed_at
-            )
-            |> Repo.update!()
-          end)
-        end
-    end
-  end
-
-  defp ensure_weekend_history(_user, _run_id, _slot), do: {:ok, nil}
-
   defp ensure_fixture_user(username) do
     case Accounts.get_user_by_username(username) do
       %User{} = user ->
@@ -445,33 +348,6 @@ defmodule BurpeeTrainer.E2E.LibrarySetup do
           {:error, reason} -> {:error, reason}
         end
     end
-  end
-
-  defp ensure_pending_candidate(user, recommendation, run_id, slot) do
-    case recommendation do
-      %CoachRecommendation{pending_draft_id: draft_id} when is_integer(draft_id) ->
-        case Repo.get_by(WorkoutPlan, id: draft_id, user_id: user.id, state: :draft) do
-          %WorkoutPlan{} -> {:ok, recommendation}
-          nil -> attach_pending_candidate(user, recommendation, run_id, slot)
-        end
-
-      %CoachRecommendation{} ->
-        attach_pending_candidate(user, recommendation, run_id, slot)
-    end
-  end
-
-  defp attach_pending_candidate(user, recommendation, run_id, slot) do
-    draft =
-      insert_plan!(
-        user,
-        definition("Pending candidate #{run_id}", slot.duration_sec, candidate_reps(slot)),
-        "Create the deterministic pending candidate",
-        :draft
-      )
-
-    recommendation
-    |> Ecto.Changeset.change(pending_draft_id: draft.id)
-    |> Repo.update()
   end
 
   defp insert_plan!(user, definition_attrs, request_text, state) do

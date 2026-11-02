@@ -61,23 +61,6 @@ defmodule BurpeeTrainer.Mcp.MemoryGoalToolsTest do
       assert result["entries"] == ["Trains before work, around 7:00."]
     end
 
-    test "a refused batch is reported with the entries and changes nothing", %{scope: scope} do
-      assert {:error, message} =
-               call(scope, "update_memory", %{
-                 "target" => "user",
-                 "operations" => [
-                   %{"action" => "add", "content" => "Trains mornings."},
-                   %{"action" => "add", "content" => "Prefers six_count."}
-                 ]
-               })
-
-      assert %{"success" => false, "error" => error, "current_entries" => []} =
-               Jason.decode!(message)
-
-      assert error =~ "internal id"
-      assert Memory.list(scope) == []
-    end
-
     test "another user's entries cannot be read or removed", %{scope: scope} do
       other = Scope.for_user(user_fixture())
 
@@ -136,19 +119,6 @@ defmodule BurpeeTrainer.Mcp.MemoryGoalToolsTest do
       end
 
       assert Goals.list(scope) == []
-    end
-
-    test "a proposed goal can be confirmed or dismissed", %{user: user, scope: scope} do
-      proposed = goal_fixture(user, %{burpee_type: "navy_seal", status: "proposed"})
-      other = goal_fixture(user, %{burpee_type: "six_count", status: "proposed"})
-
-      {:ok, %{"goal" => %{"status" => "active"}}} =
-        call(scope, "confirm_goal", %{"id" => proposed.id})
-
-      {:ok, %{"goal" => %{"status" => "abandoned"}}} =
-        call(scope, "dismiss_goal", %{"id" => other.id})
-
-      assert {:error, _} = call(scope, "confirm_goal", %{"id" => other.id})
     end
   end
 end

@@ -3,7 +3,6 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
 
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
-  alias BurpeeTrainer.Coach.Catalog
   alias BurpeeTrainer.Workouts.Inspection
   alias BurpeeTrainerWeb.{HomeWorkoutRequest, HomeChooser, HomeAuthoring, HomeLive}
 
@@ -13,25 +12,17 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
       |> assign(
         home_selection: nil,
         expanded?: false,
-        alternatives_open?: false,
         chooser_open?: false,
-        swap_preview: nil,
-        filters_open?: false,
         active_tab: :workouts,
-        filters: Catalog.default_filters(socket.assigns.current_level),
         instruction: "",
         authoring_stage: :idle,
         workout_parameters: %HomeWorkoutRequest{},
         creation_key: nil,
-        created_plan: nil,
         pending_request: nil,
         design_turns: [],
         pending_turn: nil,
         previous: nil,
-        edit_sets: nil,
-        edit_steps: nil,
-        new_step: :type,
-        options_open?: false,
+        new_touched: [],
         busy?: false,
         update_id: nil,
         local_error: nil,
@@ -84,30 +75,20 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
     |> assign(
       home_selection: selected,
       authoring_stage: :idle,
-      swap_preview: nil,
       expanded?: expanded?,
       instruction: "",
       pending_request: nil,
       design_turns: [],
       pending_turn: nil,
       previous: nil,
-      edit_sets: nil,
-      edit_steps: nil,
-      new_step: :type,
-      options_open?: false,
+      new_touched: [],
       local_error: nil,
       expanded_groups: MapSet.new(),
-      alternatives_open?: false,
       chooser_open?: false,
       inspection_rows: Inspection.rows(selected.plan),
       start_client_session_id: Ecto.UUID.generate()
     )
     |> HomeAuthoring.adjustment_form("")
-    |> notify_adjustment_reset()
     |> HomeChooser.refresh_alternatives()
-  end
-
-  def notify_adjustment_reset(socket) do
-    if connected?(socket), do: push_event(socket, "home_adjustment_reset", %{}), else: socket
   end
 end

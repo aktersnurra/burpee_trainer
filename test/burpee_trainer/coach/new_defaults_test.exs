@@ -53,9 +53,13 @@ defmodule BurpeeTrainer.Coach.NewDefaultsTest do
       assert NewDefaults.suggested_reps(scope, :six_count, 2_400) == 180
     end
 
-    test "a step is five, never below five" do
-      assert NewDefaults.step_reps(100, :up) == 105
-      assert NewDefaults.step_reps(100, :down) == 95
+    test "a step is five up to fifty and ten from there, never below five" do
+      assert NewDefaults.step_reps(40, :up) == 45
+      assert NewDefaults.step_reps(50, :up) == 60
+      assert NewDefaults.step_reps(100, :up) == 110
+      assert NewDefaults.step_reps(100, :down) == 90
+      assert NewDefaults.step_reps(55, :down) == 50
+      assert NewDefaults.step_reps(50, :down) == 45
       assert NewDefaults.step_reps(5, :down) == 5
     end
   end

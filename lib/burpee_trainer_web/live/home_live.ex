@@ -47,17 +47,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
   end
 
   @impl true
-  def handle_params(%{"history" => "1"}, _uri, socket),
-    do: {:noreply, push_patch(socket, to: ~p"/progress")}
-
-  # History is now Progress; old links still land there.
-  def handle_params(_params, _uri, %{assigns: %{live_action: :history_moved}} = socket),
-    do: {:noreply, push_patch(socket, to: ~p"/progress", replace: true)}
-
-  # The coach speaks on Home now; old Coach links land there.
-  def handle_params(_params, _uri, %{assigns: %{live_action: :coach_moved}} = socket),
-    do: {:noreply, push_patch(socket, to: ~p"/", replace: true)}
-
   def handle_params(_params, _uri, socket) do
     screen = socket.assigns[:live_action] || :home
     previous = socket.assigns.workspace_screen
@@ -300,7 +289,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
 
   def handle_event(event, params, socket)
       when event in [
-             "coach_toggle",
              "coach_message_change",
              "coach_message",
              "coach_goal_confirm",
@@ -321,8 +309,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
       when event in [
              "abort_new_workout",
              "back_new_step",
-             "goto_new_step",
-             "choose_workout_value",
              "change_current_edit"
            ] and
              stage in [:new, :editing] do
@@ -336,7 +322,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
         params,
         %{assigns: %{busy?: true, authoring_stage: :review, pending_turn: turn}} = socket
       )
-      when event in ["abort_new_workout", "back_new_step", "goto_new_step"] and
+      when event in ["abort_new_workout", "back_new_step"] and
              is_binary(turn),
       do: handle_event(event, params, HomeAuthoring.discard_preparation(socket))
 
@@ -350,12 +336,8 @@ defmodule BurpeeTrainerWeb.HomeLive do
       when event in [
              "open_chooser",
              "close_chooser",
-             "toggle_filters",
              "tab",
-             "filter",
-             "reset_filters",
              "select_alternative",
-             "preview_alternative",
              "delete_workout"
            ] do
     HomeChooser.handle_event(event, params, socket)
@@ -368,29 +350,16 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_event(event, params, socket)
       when event in [
              "abort_new_workout",
-             "add_new_request",
-             "adjust_proposal",
              "back_new_step",
-             "back_to_workout_request",
-             "change_adjustment",
              "change_current_edit",
-             "choose_workout_value",
-             "close_options",
-             "confirm_workout_request",
+             "change_new_workout",
              "edit_current_workout",
-             "goto_new_step",
              "new_workout",
-             "next_new_step",
-             "open_options",
              "refine_workout",
              "review_current_edit",
              "run_workout_request",
-             "save_review_to_library",
-             "select_created_workout",
-             "select_proposal_row",
              "send_new_workout",
-             "step_workout_value",
-             "submit_home_action"
+             "step_workout_value"
            ] do
     HomeAuthoring.handle_event(event, params, socket)
   end
@@ -399,16 +368,10 @@ defmodule BurpeeTrainerWeb.HomeLive do
       when event in [
              "close_chooser",
              "delete_workout",
-             "filter",
              "open_chooser",
-             "reset_filters",
              "select_alternative",
-             "preview_alternative",
-             "use_alternative",
              "tab",
-             "toggle_filters",
-             "toggle_group",
-             "toggle_other"
+             "toggle_group"
            ] do
     HomeChooser.handle_event(event, params, socket)
   end
@@ -420,17 +383,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
     a = socket.assigns
 
     if (a.authoring_stage == :idle and a.home_selection) && token == a.start_client_session_id do
-      start_result(socket, Workouts.start_home_workout(a.current_scope, a.home_selection, token))
-    else
-      {:noreply, socket}
-    end
-  end
-
-  def handle_event("start_collapsed", %{"client_session_id" => token}, socket) do
-    a = socket.assigns
-
-    if not is_nil(a.home_selection) and not a.expanded? and
-         token == a.start_client_session_id do
       start_result(socket, Workouts.start_home_workout(a.current_scope, a.home_selection, token))
     else
       {:noreply, socket}
@@ -559,10 +511,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_async({kind, _id} = operation, result, socket)
       when kind in [
              :new_request,
-             :new_plan,
-             :run_plan,
-             :home_revision_request,
-             :home_revision
+             :run_plan
            ] do
     HomeAuthoring.handle_async(operation, result, socket)
   end

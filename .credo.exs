@@ -56,7 +56,6 @@ baseline = %{
     "test/burpee_trainer/mcp/workout_tools_test.exs",
     "test/burpee_trainer/mcp_test.exs",
     "test/burpee_trainer/workouts/home_recovery_test.exs",
-    "test/burpee_trainer/workouts/home_returning_evidence_test.exs",
     "test/burpee_trainer/workouts/home_selection_test.exs",
     "test/burpee_trainer_web/controllers/pose_trace_upload_controller_test.exs",
     "test/burpee_trainer_web/flows/archive_flow_test.exs",
@@ -73,7 +72,6 @@ baseline = %{
     "test/burpee_trainer_web/live/home_live_state_test.exs",
     "test/burpee_trainer_web/live/home_live_test.exs",
     "test/burpee_trainer_web/live/home_returning_mount_test.exs",
-    "test/burpee_trainer_web/live/home_revision_test.exs",
     "test/burpee_trainer_web/live/session_live_test.exs",
     "test/burpee_trainer_web/live/summary_refresh_test.exs",
     "test/burpee_trainer_web/live/video_live_test.exs",
@@ -91,8 +89,7 @@ baseline = %{
     "test/burpee_trainer_web/flows/edit_workout_flow_test.exs",
     "test/burpee_trainer_web/live/history_workspace_test.exs",
     "test/burpee_trainer_web/live/home_live_state_test.exs",
-    "test/burpee_trainer_web/live/home_live_test.exs",
-    "test/burpee_trainer_web/live/home_revision_test.exs"
+    "test/burpee_trainer_web/live/home_live_test.exs"
   ],
   Credo.Check.Readability.MaxLineLength => [
     "lib/burpee_trainer_web/components/home_history_components.ex"
@@ -208,16 +205,13 @@ baseline = %{
     "lib/burpee_trainer/coach/policy.ex",
     "lib/burpee_trainer/coach/workout_request.ex",
     "lib/burpee_trainer/insights/validator.ex",
-    "lib/burpee_trainer/workouts/pace_consistency.ex",
     "test/burpee_trainer/accounts_test.exs",
     "test/burpee_trainer/coach/memory/ops_test.exs",
     "test/burpee_trainer/coach/plan_next_workout_job_test.exs",
-    "test/burpee_trainer/coach/suggestions_test.exs",
     "test/burpee_trainer/e2e_library_setup_test.exs",
     "test/burpee_trainer/history_test.exs",
     "test/burpee_trainer/insights/narrate_job_test.exs",
     "test/burpee_trainer/mcp/workout_tools_test.exs",
-    "test/burpee_trainer/plan_compiler/program_test.exs",
     "test/burpee_trainer/workouts/inspection_test.exs",
     "test/burpee_trainer/workouts/recent_training_sessions_test.exs",
     "test/burpee_trainer_web/flows/planned_next_workout_flow_test.exs",

@@ -5,15 +5,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHash do
   alias BurpeeTrainer.Workouts.Error
 
   @video_keys MapSet.new(["name", "filename", "type", "duration", "count", "format"])
-  @legacy_metadata_keys [:pacing_style, :recovery_model, :policy_version]
-  @source_v2_metadata_keys [
-    :source_version,
-    :source_hash,
-    :pacing_style,
-    :recovery_model,
-    :policy_version,
-    :policy_hash
-  ]
 
   @spec canonical_map(Program.t()) :: map()
   def canonical_map(%Program{} = program) do
@@ -94,21 +85,6 @@ defmodule BurpeeTrainer.PlanCompiler.ProgramHash do
       "definition_hash" => metadata[:definition_hash],
       "pacing_style" => encode_source(metadata[:pacing_style])
     }
-  end
-
-  defp canonical_semantics(%Program{metadata: metadata}), do: canonical_metadata(metadata)
-
-  defp canonical_metadata(metadata) when is_map(metadata) do
-    metadata = normalize_metadata(metadata)
-
-    keys =
-      if metadata[:source_version] == 2, do: @source_v2_metadata_keys, else: @legacy_metadata_keys
-
-    metadata
-    |> Map.take(keys)
-    |> Enum.map(fn {key, value} -> {Atom.to_string(key), encode_source(value)} end)
-    |> Enum.sort_by(fn {key, _value} -> key end)
-    |> Map.new()
   end
 
   defp normalize_metadata(metadata) do

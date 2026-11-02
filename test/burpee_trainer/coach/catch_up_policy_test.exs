@@ -4,7 +4,7 @@ defmodule BurpeeTrainer.Coach.CatchUpPolicyTest do
   alias BurpeeTrainer.Coach.CatchUpPolicy
 
   describe "rolling_pb/3" do
-    test "keeps same-type authoritative exact twenty-minute sessions within the trailing six weeks" do
+    test "keeps same-type prescribed plan twenty-minute sessions within the trailing six weeks, else none" do
       now = ~U[2025-01-15 12:00:00Z]
       six_weeks_ago = DateTime.add(now, -42 * 24 * 60 * 60, :second)
 
@@ -74,6 +74,13 @@ defmodule BurpeeTrainer.Coach.CatchUpPolicyTest do
           plan_id: 8,
           source_kind: :mystery,
           completed_at: DateTime.add(now, -12 * 60 * 60, :second)
+        }),
+        session(%{
+          id: 9,
+          burpee_count_actual: 180,
+          source_kind: :video,
+          video_snapshot: %{"name" => "Follow along"},
+          completed_at: DateTime.add(now, -12 * 60 * 60, :second)
         })
       ]
 
@@ -82,36 +89,11 @@ defmodule BurpeeTrainer.Coach.CatchUpPolicyTest do
       assert pb.reps == 99
       assert pb.burpee_type == :six_count
       assert pb.duration_sec_planned == 1_200
-    end
 
-    test "returns none when no authoritative exact twenty-minute pb exists" do
-      now = ~U[2025-01-15 12:00:00Z]
-
-      sessions = [
-        session(%{
-          id: 1,
-          burpee_type: :six_count,
-          burpee_count_actual: 80,
-          duration_sec_planned: 900,
-          plan_id: 1
-        }),
-        session(%{
-          id: 2,
-          burpee_type: :six_count,
-          burpee_count_actual: 90,
-          duration_sec_planned: 1_200,
-          source_kind: :manual
-        }),
-        session(%{
-          id: 3,
-          burpee_type: :navy_seal,
-          burpee_count_actual: 40,
-          duration_sec_planned: 1_200,
-          plan_id: 3
-        })
-      ]
-
-      assert :none = CatchUpPolicy.rolling_pb(sessions, :six_count, now)
+      assert :none =
+               sessions
+               |> Enum.reject(&(&1.id in [1, 2]))
+               |> CatchUpPolicy.rolling_pb(:six_count, now)
     end
   end
 

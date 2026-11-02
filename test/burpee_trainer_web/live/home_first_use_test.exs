@@ -21,6 +21,7 @@ defmodule BurpeeTrainerWeb.HomeFirstUseTest do
     {:ok, view, _html} = live(conn, ~p"/")
 
     assert has_element?(view, "[data-home-state=start] [data-primary-action=start]")
+    assert has_element?(view, "#home-action[aria-label='Start workout'] .hero-play-solid")
     assert render(view) =~ "Starter Six-Count"
     refute has_element?(view, "#home-bootstrap-form")
   end
@@ -73,25 +74,6 @@ defmodule BurpeeTrainerWeb.HomeFirstUseTest do
 
     assert_push_event(view, "home_chooser_rejected", %{})
     assert has_element?(view, "#home-action")
-  end
-
-  test "Start is the one filled action; its toggles are quiet icons and nothing else is there", %{
-    conn: conn
-  } do
-    {:ok, view, _html} = live(conn, ~p"/")
-    assert has_element?(view, "#home-action.home-primary-action .hero-play-solid")
-
-    for {id, label, icon} <- [
-          {"home-start-camera", "Camera tracking", "hero-video-camera"},
-          {"home-start-warmup", "Warmup", "hero-fire"}
-        ] do
-      assert has_element?(view, "##{id}.home-text-action[aria-label*='#{label}'] .#{icon}") or
-               has_element?(view, "##{id}.home-text-action .#{icon}")
-    end
-
-    # Edit, swap and new are asked for (a swipe, or the handle), not shown.
-    refute has_element?(view, "#home-edit-workout, #home-title-action, #home-new-workout")
-    refute has_element?(view, "#home-ready-recommendation .hero-play, .home-action-label")
   end
 
   test "the workout reads as its shape, beside the best for its burpee type", %{

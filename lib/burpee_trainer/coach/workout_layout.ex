@@ -3,6 +3,25 @@ defmodule BurpeeTrainer.Coach.WorkoutLayout do
 
   alias BurpeeTrainer.Coach.WorkoutRequest
 
+  @max_suggestions 3
+  @max_suggestion_length 60
+
+  @doc """
+  The asks the coach offers under its proposal, from a layout: short, distinct, at most three.
+  A layout without them, or with ones that are not short text, offers none.
+  """
+  @spec suggestions(map()) :: [String.t()]
+  def suggestions(%{"suggestions" => list}) when is_list(list) do
+    list
+    |> Enum.filter(&is_binary/1)
+    |> Enum.map(&String.trim/1)
+    |> Enum.filter(&(&1 != "" and String.length(&1) <= @max_suggestion_length))
+    |> Enum.uniq_by(&String.downcase/1)
+    |> Enum.take(@max_suggestions)
+  end
+
+  def suggestions(_layout), do: []
+
   @doc """
   One rest between two sets: `{"sec": n}` is exactly n seconds after the last rep's beat (0
   starts the next set on the next beat); `{"share": w}` takes a share, by weight, of the
@@ -82,7 +101,7 @@ defmodule BurpeeTrainer.Coach.WorkoutLayout do
     %{
       "type" => "object",
       "additionalProperties" => false,
-      "required" => ["name", "rationale", "phases"],
+      "required" => ["name", "rationale", "phases", "suggestions"],
       "properties" => %{
         "name" => %{
           "type" => "string",
@@ -92,6 +111,13 @@ defmodule BurpeeTrainer.Coach.WorkoutLayout do
         "rationale" => %{
           "type" => "string",
           "description" => BurpeeTrainer.Coach.Rationale.description()
+        },
+        "suggestions" => %{
+          "type" => "array",
+          "maxItems" => @max_suggestions,
+          "description" =>
+            "Up to three changes the athlete is most likely to ask for next about this workout, as they would type them: short imperatives of at most #{@max_suggestion_length} characters, each one the coach can make, and specific to this layout (name the set or the time). For example \"Even out the rests\", \"Add a 1-minute rest at 10:00\", \"Front-load the reps\". Not a change this layout already makes.",
+          "items" => %{"type" => "string"}
         },
         "phases" => %{
           "type" => "array",

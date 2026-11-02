@@ -99,13 +99,6 @@ defmodule BurpeeTrainer.Coach.AgentTest do
              Agent.run(scope_fixture(), :coach_page, "Thursday?", opts)
   end
 
-  test "stops at six calls" do
-    opts = responses(List.duplicate(call("goals", %{}), 6))
-
-    assert {:error, :agent_budget_exhausted} =
-             Agent.run(scope_fixture(), :coach_page, "loop", opts)
-  end
-
   test "planner never executes goal tool and invalid tool arguments are returned without crashing" do
     scope = scope_fixture()
     {:ok, slot} = BurpeeTrainer.Coach.Policy.required_slot(scope, DateTime.utc_now(:second))

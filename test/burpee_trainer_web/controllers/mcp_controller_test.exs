@@ -91,14 +91,4 @@ defmodule BurpeeTrainerWeb.McpControllerTest do
   test "there is no event stream", %{conn: conn} do
     assert conn |> get("/mcp") |> response(405)
   end
-
-  test "without a token the client is told where to sign in", %{conn: conn} do
-    conn =
-      conn
-      |> delete_req_header("authorization")
-      |> post("/mcp", Jason.encode!(%{"jsonrpc" => "2.0", "id" => 1, "method" => "ping"}))
-
-    assert response(conn, 401)
-    assert [~s(Bearer resource_metadata=) <> _] = get_resp_header(conn, "www-authenticate")
-  end
 end

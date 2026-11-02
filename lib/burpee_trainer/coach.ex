@@ -8,7 +8,6 @@ defmodule BurpeeTrainer.Coach do
     AuthoringPrompt,
     WorkoutLayout,
     RestFitter,
-    ProposalEdit,
     WorkoutGuidance,
     WorkoutRequest
   }
@@ -49,21 +48,6 @@ defmodule BurpeeTrainer.Coach do
   do not invent exact ordered set_reps from those approximate preferences. Extract exact ordered
   set_reps only when the user explicitly supplies or asks to preserve that sequence.
   """
-
-  defp revise_home_workout(scope, expected, instruction, opts) do
-    with :ok <- outside_authoring_transaction(),
-         {:ok, text} <- validate_authoring_input(instruction),
-         {:ok, source} <- Workouts.verify_home_selection(scope, expected) do
-      author_attempt(scope, source, text, opts, fn definition ->
-        Workouts.commit_home_revision(
-          scope,
-          expected,
-          definition,
-          text
-        )
-      end)
-    end
-  end
 
   @spec prepare_home_revision(Accounts.Scope.t(), map(), String.t()) ::
           {:ok, map()} | {:error, Error.t()}
@@ -115,31 +99,6 @@ defmodule BurpeeTrainer.Coach do
        do: %{prepared | request: %{request | max_set_reps: max}}
 
   defp carry_max_set(prepared, _max), do: prepared
-
-  @spec confirm_home_revision(Accounts.Scope.t(), map()) ::
-          {:ok, BurpeeTrainer.Workouts.HomeSelection.t()} | {:error, Error.t()}
-  @spec confirm_home_revision(Accounts.Scope.t(), map(), keyword()) ::
-          {:ok, BurpeeTrainer.Workouts.HomeSelection.t()} | {:error, Error.t()}
-  def confirm_home_revision(scope, prepared, opts \\ [])
-
-  def confirm_home_revision(
-        %Accounts.Scope{user: %Accounts.User{id: user_id}} = scope,
-        %{
-          user_id: user_id,
-          scope: %{kind: :revision, expected: expected},
-          request: %WorkoutRequest{} = request,
-          text: text
-        },
-        opts
-      )
-      when is_list(opts) do
-    with {:ok, _source} <- Workouts.verify_home_selection(scope, expected) do
-      revise_home_workout(scope, expected, text, Keyword.put(opts, :confirmed_request, request))
-    end
-  end
-
-  def confirm_home_revision(%Accounts.Scope{}, _prepared, _opts),
-    do: {:error, Error.new(:design_workspace_changed)}
 
   @doc """
   Reads the New form's note into exact sets, fixed pauses and recovery. The fields the
@@ -225,7 +184,7 @@ defmodule BurpeeTrainer.Coach do
         |> Keyword.put(:prepare_review, true)
         |> Keyword.put(:source_reference_messages, reference_messages)
 
-      author_attempt(scope, nil, text, opts, fn canonical ->
+      author_attempt(scope, nil, text, opts, fn canonical, suggestions ->
         with {:ok, definition} <- WorkoutDefinition.new(canonical),
              {:ok, chosen} <- complete_review_request(request, definition) do
           prepared = %{
@@ -235,7 +194,8 @@ defmodule BurpeeTrainer.Coach do
             request: chosen,
             original_request: request,
             source: review_source,
-            text: text
+            text: text,
+            suggestions: suggestions
           }
 
           {:ok, prepared}
@@ -286,38 +246,6 @@ defmodule BurpeeTrainer.Coach do
   end
 
   def approve_plan(%Accounts.Scope{}, _, _), do: {:error, Error.new(:design_workspace_changed)}
-
-  @doc """
-  A number on a reviewed proposal changed by hand: `field` (`:reps` or `:every`) of the sets
-  at `indices` stepped by `dir`, the rests fitted again (`ProposalEdit`). No call is made;
-  the result is checked as a proposal from the coach is. `:error` when it does not fit.
-  """
-  @spec adjust_proposal(map(), [non_neg_integer()], :reps | :every, -1 | 1) ::
-          {:ok, map()} | :error
-  def adjust_proposal(
-        %{definition: %{} = canonical, original_request: %WorkoutRequest{} = base} = prepared,
-        indices,
-        field,
-        dir
-      ) do
-    with {:ok, attrs, base} <- ProposalEdit.apply(canonical, base, indices, field, dir),
-         {:ok, definition} <- WorkoutDefinition.new(attrs),
-         {:ok, _program} <- BurpeeTrainer.PlanCompiler.compile(definition),
-         :ok <- WorkoutRequest.validate_definition(base, definition),
-         {:ok, chosen} <- complete_review_request(base, definition) do
-      {:ok,
-       %{
-         prepared
-         | definition: WorkoutDefinition.canonical_map(definition),
-           request: chosen,
-           original_request: base
-       }}
-    else
-      _ -> :error
-    end
-  end
-
-  def adjust_proposal(_prepared, _indices, _field, _dir), do: :error
 
   @doc "Publish a reviewed workout and select it atomically; never starts a session."
   def approve_and_select_plan(scope, prepared, expected) do
@@ -468,7 +396,10 @@ defmodule BurpeeTrainer.Coach do
            ) do
       case build_definition(Keyword.fetch!(opts, :confirmed_request), proposal) do
         {:ok, definition} ->
-          commit.(WorkoutDefinition.canonical_map(definition))
+          commit.(
+            WorkoutDefinition.canonical_map(definition),
+            WorkoutLayout.suggestions(proposal)
+          )
 
         {:error, _error, detail} ->
           correct_definition(scope, source, text, opts, commit, proposal, detail)
@@ -514,7 +445,10 @@ defmodule BurpeeTrainer.Coach do
            ) do
       case build_definition(Keyword.fetch!(opts, :confirmed_request), corrected) do
         {:ok, definition} ->
-          commit.(WorkoutDefinition.canonical_map(definition))
+          commit.(
+            WorkoutDefinition.canonical_map(definition),
+            WorkoutLayout.suggestions(corrected)
+          )
 
         {:error, error, detail} ->
           {:error, %{error | context: Map.put(error.context, :diagnostic, detail)}}

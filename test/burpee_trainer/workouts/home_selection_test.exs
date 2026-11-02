@@ -153,108 +153,6 @@ defmodule BurpeeTrainer.Workouts.HomeSelectionTest do
     assert Workouts.current_started_session(Scope.for_user(u)) == nil
   end
 
-  test "late candidate and explicit selection preserve each other's identities", %{
-    user: u,
-    slot: slot
-  } do
-    {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
-
-    d =
-      workout_plan_draft_fixture(u, %{
-        target_duration_sec: slot.duration_sec,
-        burpee_type: Atom.to_string(slot.burpee_type),
-        target_reps: 10
-      })
-
-    candidate =
-      Repo.get!(CoachRecommendation, shown.recommendation_id)
-      |> Ecto.Changeset.change(pending_draft_id: d.id)
-      |> Repo.update!()
-
-    {:ok, reopened} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
-    assert reopened.plan.id == shown.plan.id
-    assert reopened.home_revision == shown.home_revision
-    alternative = plan_fixture(u)
-    {:ok, selected} = Workouts.select_home_workout(Scope.for_user(u), reopened, alternative.id)
-
-    assert Repo.get!(CoachRecommendation, selected.recommendation_id).pending_draft_id ==
-             candidate.pending_draft_id
-  end
-
-  test "initial pending draft is pinned and verification detects content changes", %{
-    user: u,
-    slot: slot
-  } do
-    {:ok, r} =
-      Workouts.ensure_recommendation(Scope.for_user(u), Map.take(slot, [:slot_key, :slot_date]))
-
-    draft = workout_plan_draft_fixture(u)
-    r |> Ecto.Changeset.change(pending_draft_id: draft.id) |> Repo.update!()
-    {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
-    assert shown.plan.id == draft.id
-    assert {:ok, ^draft} = Workouts.verify_home_selection(Scope.for_user(u), shown)
-    draft |> Ecto.Changeset.change(name: "Changed content") |> Repo.update!()
-
-    assert {:error, %Error{code: :draft_stale}} =
-             Workouts.verify_home_selection(Scope.for_user(u), shown)
-  end
-
-  for corruption <- [:name, :events] do
-    test "initial pending with corrupt #{corruption} falls back stably", %{user: u, slot: slot} do
-      {:ok, r} =
-        Workouts.ensure_recommendation(Scope.for_user(u), Map.take(slot, [:slot_key, :slot_date]))
-
-      plan = workout_plan_draft_fixture(u)
-      r |> Ecto.Changeset.change(pending_draft_id: plan.id) |> Repo.update!()
-      corrupt = corrupt_plan(plan, unquote(corruption))
-
-      assert {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
-      assert shown.plan.id != plan.id
-      assert shown.plan.origin == :built_in
-      assert :ok = Workouts.verify_plan_content(shown.plan)
-      assert shown.home_revision == 1
-      assert {:ok, ^shown} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
-      assert Repo.reload!(corrupt) == corrupt
-    end
-
-    test "pinned pending with corrupt #{corruption} advances revision and rejects stale Start",
-         %{
-           user: u,
-           slot: slot
-         } do
-      {:ok, r} =
-        Workouts.ensure_recommendation(Scope.for_user(u), Map.take(slot, [:slot_key, :slot_date]))
-
-      plan = workout_plan_draft_fixture(u)
-      r |> Ecto.Changeset.change(pending_draft_id: plan.id) |> Repo.update!()
-      {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
-      assert shown.plan.id == plan.id
-      corrupt = corrupt_plan(plan, unquote(corruption))
-
-      assert {:ok, fallback} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
-      assert fallback.plan.id != plan.id
-      assert fallback.plan.origin == :built_in
-      assert :ok = Workouts.verify_plan_content(fallback.plan)
-      assert fallback.home_revision == shown.home_revision + 1
-      assert {:ok, ^fallback} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
-
-      assert {:error, %Error{code: :home_selection_changed}} =
-               Workouts.start_home_workout(Scope.for_user(u), shown, Ecto.UUID.generate())
-
-      assert Workouts.current_started_session(Scope.for_user(u)) == nil
-      assert Repo.reload!(corrupt) == corrupt
-    end
-  end
-
-  defp corrupt_plan(plan, :name) do
-    plan |> Ecto.Changeset.change(name: "Changed content") |> Repo.update!()
-  end
-
-  defp corrupt_plan(plan, :events) do
-    definition = Map.put(plan.definition_json, "events", ["malformed"])
-    plan |> Ecto.Changeset.change(definition_json: definition) |> Repo.update!()
-  end
-
   test "verification rejects foreign users and an obsolete slot", %{user: u, slot: slot} do
     {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
     assert {:ok, plan} = Workouts.verify_home_selection(Scope.for_user(u), shown)
@@ -269,20 +167,6 @@ defmodule BurpeeTrainer.Workouts.HomeSelectionTest do
 
     assert {:error, %Error{code: :home_selection_changed}} =
              Workouts.verify_home_selection(Scope.for_user(u), shown)
-  end
-
-  test "only the pending draft can be explicitly selected", %{user: u, slot: slot} do
-    {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
-    draft = workout_plan_draft_fixture(u)
-    assert {:error, _} = Workouts.select_home_workout(Scope.for_user(u), shown, draft.id)
-
-    Repo.get!(CoachRecommendation, shown.recommendation_id)
-    |> Ecto.Changeset.change(pending_draft_id: draft.id)
-    |> Repo.update!()
-
-    assert {:ok, selected} = Workouts.select_home_workout(Scope.for_user(u), shown, draft.id)
-    assert selected.plan.id == draft.id
-    assert {:ok, ^draft} = Workouts.verify_home_selection(Scope.for_user(u), selected)
   end
 
   test "wrong-source token and stale pin cannot start", %{user: u, slot: slot} do

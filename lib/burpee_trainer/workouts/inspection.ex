@@ -25,9 +25,6 @@ defmodule BurpeeTrainer.Workouts.Inspection do
       Enum.map(trailing, &row(prefix, [unit([&1])], 1, true))
   end
 
-  @spec flatten([map()]) :: [map()]
-  def flatten(rows), do: Enum.flat_map(rows, & &1.events)
-
   defp units([]), do: []
 
   defp units([work | rest]) do

@@ -155,6 +155,14 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
                run(scope, slot)
              )
 
+    # 110 is within the 10% ceiling, but without positive feedback the decision is to repeat.
+    assert {:error, "Repeat" <> _} =
+             ProposeWorkout.call(
+               scope,
+               args(110, List.duplicate({10, 5.0, 5.0}, 11)),
+               run(scope, slot)
+             )
+
     assert {:error, @over_cap} =
              ProposeWorkout.call(
                scope,

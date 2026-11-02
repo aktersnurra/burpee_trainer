@@ -3,7 +3,7 @@ defmodule BurpeeTrainer.Coach.CatalogTest do
   alias BurpeeTrainer.Coach.Catalog
   alias BurpeeTrainer.Workouts.{WorkoutPlan, WorkoutVideo}
 
-  test "videos order by known level, case-insensitive name and ID" do
+  test "videos order nearest the athlete's level, then by case-insensitive name and ID" do
     videos =
       for {id, name, count} <- [
             {6, "unknown", nil},
@@ -16,7 +16,11 @@ defmodule BurpeeTrainer.Coach.CatalogTest do
         %WorkoutVideo{id: id, name: name, burpee_type: :six_count, burpee_count: count}
       end
 
-    assert Enum.map(Catalog.order_videos(videos), & &1.id) == [1, 2, 3, 4]
+    # 100 reps is level 1C, 150 is 1D.
+    assert Enum.map(Catalog.order_videos(videos, :level_1c), & &1.id) == [1, 2, 3, 4]
+    assert Enum.map(Catalog.order_videos(videos, :level_1d), & &1.id) == [4, 1, 2, 3]
+    # Equally near on either side, the easier comes first.
+    assert Enum.map(Catalog.order_videos(videos, :level_1b), & &1.id) == [1, 2, 3, 4]
   end
 
   test "omitted plans use all deterministic tie breakers" do
@@ -49,9 +53,7 @@ defmodule BurpeeTrainer.Coach.CatalogTest do
            ) == [1, 2, 3, 4, 5, 6]
   end
 
-  test "real current-next defaults and unknown video exclusion" do
-    assert Catalog.default_filters(:level_1c).levels == MapSet.new([:level_1c, :level_1d])
-    assert Catalog.default_filters(:graduated).levels == MapSet.new([:graduated])
+  test "unknown video exclusion and plan levels" do
     assert Catalog.video_level(%WorkoutVideo{burpee_type: :six_count, burpee_count: nil}) == nil
 
     assert Catalog.plan_level(%WorkoutPlan{
@@ -61,7 +63,7 @@ defmodule BurpeeTrainer.Coach.CatalogTest do
            }) == :level_2
   end
 
-  test "filtering preserves the coach-ranked subsequence" do
+  test "the coach's ranking leads, unknown and repeated IDs dropped" do
     plans =
       for {id, type, reps} <- [{1, :six_count, 100}, {2, :navy_seal, 40}, {3, :six_count, 150}],
           do: %WorkoutPlan{
@@ -81,7 +83,5 @@ defmodule BurpeeTrainer.Coach.CatalogTest do
       )
 
     assert Enum.map(ranked, & &1.id) == [2, 3, 1]
-    filters = %{types: MapSet.new([:six_count]), levels: MapSet.new([:level_1c, :level_1d])}
-    assert Enum.map(Catalog.filter(ranked, filters, &Catalog.plan_level/1), & &1.id) == [3, 1]
   end
 end

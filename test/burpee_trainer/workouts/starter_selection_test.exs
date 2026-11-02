@@ -23,13 +23,4 @@ defmodule BurpeeTrainer.Workouts.StarterSelectionTest do
       assert BurpeeTrainer.Levels.level_for_count(type, selection.plan.target_reps) == :level_1a
     end
   end
-
-  test "completing a workout does not downgrade the fallback to a short session", %{user: user} do
-    session_from_plan_fixture(user, plan_fixture(user))
-    {:ok, slot} = Policy.required_slot(Scope.for_user(user), DateTime.utc_now(:second))
-    {:ok, selection} = Workouts.ensure_home_selection(Scope.for_user(user), slot)
-    assert selection.plan.origin == :built_in
-    assert selection.plan.burpee_type == slot.burpee_type
-    assert selection.plan.target_duration_sec == 1200
-  end
 end

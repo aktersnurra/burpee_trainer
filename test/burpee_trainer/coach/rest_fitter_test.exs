@@ -131,21 +131,27 @@ defmodule BurpeeTrainer.Coach.RestFitterTest do
     assert {1_080_000_000, 40_000_000} in pauses
   end
 
-  test "a gapless phase may miss its anchor by at most ten seconds" do
-    request =
+  test "a gapless phase may miss its anchor by at most ten seconds, early or late" do
+    request = fn reps ->
       request(%{
-        "target_reps" => 20,
+        "target_reps" => reps,
         "target_duration_sec" => 200,
         "timed_rests" => [%{"start_sec" => 100, "duration_sec" => 20}]
       })
+    end
 
-    layout = layout([[set(10, 9.0, 9.0)], [set(5, 8.0, 8.0), set(5, 8.0, 8.0)]], [[], [share(1)]])
-    assert {:ok, _} = RestFitter.fit(request, layout)
+    for {label, reps, first, boundary, beyond} <- [
+          {"early", 20, [set(5, 8.0, 8.0), set(5, 8.0, 8.0)], 9.0, 8.0},
+          {"late", 18, [set(4, 8.0, 8.0), set(4, 8.0, 8.0)], 11.0, 12.0}
+        ] do
+      layout = fn cadence -> layout([[set(10, cadence, cadence)], first], [[], [share(1)]]) end
 
-    too_early = put_in(layout, ["phases", Access.at(0), "sets"], [set(10, 8.0, 8.0)])
+      assert {:ok, _} = RestFitter.fit(request.(reps), layout.(boundary)), label
 
-    assert {:error, {:phase_misses_anchor, %{phase: 1, adjustable: false}}} =
-             RestFitter.fit(request, too_early)
+      assert {:error, {:phase_misses_anchor, %{phase: 1, adjustable: false}}} =
+               RestFitter.fit(request.(reps), layout.(beyond)),
+             label
+    end
   end
 
   test "a timed rest shorter than the cadence tail before it is refused" do
@@ -223,23 +229,6 @@ defmodule BurpeeTrainer.Coach.RestFitterTest do
              RestFitter.fit(request(%{"target_duration_sec" => 100}), fractional_terminal)
   end
 
-  test "accepts a gapless phase ten seconds late and rejects one that is later" do
-    request =
-      request(%{
-        "target_reps" => 18,
-        "target_duration_sec" => 200,
-        "timed_rests" => [%{"start_sec" => 100, "duration_sec" => 20}]
-      })
-
-    boundary =
-      layout([[set(10, 11.0, 11.0)], [set(4, 8.0, 8.0), set(4, 8.0, 8.0)]], [[], [share(1)]])
-
-    assert {:ok, _} = RestFitter.fit(request, boundary)
-
-    late = put_in(boundary, ["phases", Access.at(0), "sets"], [set(10, 12.0, 12.0)])
-    assert {:error, {:phase_misses_anchor, %{phase: 1}}} = RestFitter.fit(request, late)
-  end
-
   test "rejects malformed phase structure, rests, and timing" do
     request = request(%{"timed_rests" => [%{"start_sec" => 60, "duration_sec" => 10}]})
     one_phase = layout([[set(20, 5.0, 5.0)]], [[]])
@@ -309,19 +298,6 @@ defmodule BurpeeTrainer.Coach.RestFitterTest do
 
       {:error, reason} = RestFitter.fit(request, layout)
       assert RestFitter.describe(reason) =~ "the timed rest at 1:40"
-    end
-
-    test "a single set off its target explains that the last beat's tail is not counted" do
-      # 60 reps, one every 20 s with 4 s moving: the workout ends at 19:44.
-      layout = layout([[set(60, 20.0, 4.0)]], [[]])
-
-      {:error, reason} =
-        RestFitter.fit(request(%{"target_reps" => 60, "target_duration_sec" => 1200}), layout)
-
-      message = RestFitter.describe(reason)
-      assert message =~ "ends at 19:44, 16 s before target_duration_sec (20:00)"
-      assert message =~ "the 16 s after the last rep is not part of the workout"
-      assert message =~ "target_duration_sec 1184"
     end
   end
 

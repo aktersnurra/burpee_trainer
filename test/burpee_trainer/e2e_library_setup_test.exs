@@ -2,8 +2,7 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
   use ExUnit.Case, async: false
 
   alias BurpeeTrainer.Accounts.User
-  alias BurpeeTrainer.{PlanCompiler, PlanCompiler.ProgramHash}
-  alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
+  alias BurpeeTrainer.PlanCompiler.ProgramHash
   alias BurpeeTrainer.TestSupport.IsolatedMigrationRepo
 
   alias BurpeeTrainer.Workouts.{
@@ -18,7 +17,6 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
   @script "scripts/e2e/library_setup.exs"
   @modes ~w[
     published-plan
-    pending-candidate
     available-video
     available-known-count-video
     started-plan-session
@@ -133,10 +131,6 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
 
     assert reports["available-video"]["video_snapshot"]["count"] == nil
     assert reports["available-known-count-video"]["video_snapshot"]["count"] == 10
-    pending = reports["pending-candidate"]
-    assert pending["slot_date"] == Date.to_iso8601(Date.utc_today())
-    assert String.starts_with?(pending["slot_key"], pending["slot_date"] <> ":")
-
     available = reports["available-video"]
     video_client_session_id = Ecto.UUID.generate()
 
@@ -229,44 +223,6 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     stop_supervised(IsolatedMigrationRepo)
   end
 
-  @tag timeout: :infinity
-  test "weekend candidates use owned prior-week PB without crediting the current week", %{
-    database: database
-  } do
-    env = fixture_env(database) ++ [{"E2E_LIBRARY_SETUP_ONLY", "1"}]
-    assert_mix_ok!(["ecto.create", "--quiet"], env)
-    assert_mix_ok!(["ecto.migrate", "--quiet"], env)
-
-    for {day, now} <- [{"saturday", "2026-09-05 12:00:00Z"}, {"sunday", "2026-09-06 12:00:00Z"}] do
-      script = """
-      Code.require_file(#{inspect(@script)})
-      {:ok, report} = BurpeeTrainer.E2E.LibrarySetup.run("pending-candidate", run_id: "weekend-#{day}", now: ~U[#{now}])
-      {:ok, ^report} = BurpeeTrainer.E2E.LibrarySetup.run("pending-candidate", run_id: "weekend-#{day}", now: ~U[#{now}])
-      IO.puts("WEEKEND=" <> Jason.encode!(report))
-      """
-
-      {output, status} =
-        System.cmd("mix", ["run", "-e", script], env: env, stderr_to_stdout: true)
-
-      assert status == 0, output
-      report = output |> report_line!("WEEKEND=") |> Jason.decode!()
-      assert report["slot_strategy"] == "catch_up"
-      assert report["slot_completed_sec"] == 0
-      assert report["history_user_id"] == report["user_id"]
-      assert report["history_session_id"] > 0
-      assert String.starts_with?(report["history_completed_at"], "2026-08-30")
-
-      assert report["pending_draft_definition_json"]["target_reps"] ==
-               report["candidate_ceiling_reps"]
-
-      assert run_cleanup!(report["user_id"], env)["deleted"]["sessions"] == 1
-      assert run_cleanup!(report["user_id"], env)["status"] == "already_absent"
-      start_isolated_repo!(database)
-      refute IsolatedMigrationRepo.get(WorkoutSession, report["history_session_id"])
-      stop_supervised(IsolatedMigrationRepo)
-    end
-  end
-
   test "fixture entrypoint refuses an ordinary test database before creating a user" do
     {output, status} =
       System.cmd("mix", ["run", "--no-start", @script, "--", "published-plan"],
@@ -278,69 +234,61 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     assert output =~ "requires the disposable adaptive E2E database"
   end
 
-  test "runtime refuses an outside tmp database before touching its bytes or starting the app" do
-    outside = "/var/tmp/adaptive-home-coach-e2e-outside-#{System.unique_integer([:positive])}.db"
-    marker = "outside-must-remain"
-    original_bytes = create_sentinel_database!(outside, marker)
-    on_exit(fn -> clear_database_paths!(outside) end)
-
-    {output, status} = run_fixture_process("published-plan", outside)
-
-    assert status == 4
-    assert output =~ "invalid_disposable_database_path"
-    assert output =~ ~s("application_started":false)
-    assert File.read!(outside) == original_bytes
-    assert_sentinel_database_unchanged!(outside, marker)
-  end
-
-  test "runtime refuses a symlink database target before touching target bytes" do
+  test "runtime refuses outside, symlinked, or symlink-parented databases before touching bytes" do
     suffix = System.unique_integer([:positive])
-    target = "/tmp/e2e-target-sentinel-#{suffix}.db"
-    link = "/tmp/adaptive-home-coach-e2e-symlink-#{suffix}.db"
-    marker = "symlink-target-must-remain"
-    original_bytes = create_sentinel_database!(target, marker)
-    File.ln_s!(target, link)
 
-    on_exit(fn ->
-      File.rm(link)
-      clear_database_paths!(target)
-    end)
+    # Each case returns the path handed to the fixture and the real file it must leave alone.
+    cases = [
+      {"outside tmp",
+       fn ->
+         outside = "/var/tmp/adaptive-home-coach-e2e-outside-#{suffix}.db"
+         on_exit(fn -> clear_database_paths!(outside) end)
+         {outside, outside}
+       end},
+      {"symlink target",
+       fn ->
+         target = "/tmp/e2e-target-sentinel-#{suffix}.db"
+         link = "/tmp/adaptive-home-coach-e2e-symlink-#{suffix}.db"
+         File.ln_s!(target, link)
 
-    {output, status} = run_fixture_process("published-plan", link)
+         on_exit(fn ->
+           File.rm(link)
+           clear_database_paths!(target)
+         end)
 
-    assert status == 4
-    assert output =~ "invalid_disposable_database_path"
-    assert output =~ ~s("application_started":false)
-    assert File.read!(target) == original_bytes
-    assert_sentinel_database_unchanged!(target, marker)
-    assert File.lstat!(link).type == :symlink
-  end
+         {link, target}
+       end},
+      {"symlinked parent",
+       fn ->
+         real_parent = "/tmp/e2e-real-parent-#{suffix}"
+         linked_parent = "/tmp/e2e-linked-parent-#{suffix}"
+         basename = "adaptive-home-coach-e2e-linked-#{suffix}.db"
+         File.mkdir_p!(real_parent)
+         File.ln_s!(real_parent, linked_parent)
 
-  test "runtime refuses an alternate symlinked parent before touching target bytes" do
-    suffix = System.unique_integer([:positive])
-    real_parent = "/tmp/e2e-real-parent-#{suffix}"
-    linked_parent = "/tmp/e2e-linked-parent-#{suffix}"
-    basename = "adaptive-home-coach-e2e-linked-#{suffix}.db"
-    real_target = Path.join(real_parent, basename)
-    linked_target = Path.join(linked_parent, basename)
-    marker = "linked-parent-target-must-remain"
-    File.mkdir_p!(real_parent)
-    original_bytes = create_sentinel_database!(real_target, marker)
-    File.ln_s!(real_parent, linked_parent)
+         on_exit(fn ->
+           File.rm(linked_parent)
+           clear_database_paths!(Path.join(real_parent, basename))
+           File.rmdir(real_parent)
+         end)
 
-    on_exit(fn ->
-      File.rm(linked_parent)
-      clear_database_paths!(real_target)
-      File.rmdir(real_parent)
-    end)
+         {Path.join(linked_parent, basename), Path.join(real_parent, basename)}
+       end}
+    ]
 
-    {output, status} = run_fixture_process("published-plan", linked_target)
+    for {label, arrange} <- cases do
+      {database, target} = arrange.()
+      marker = "#{label} must remain"
+      original_bytes = create_sentinel_database!(target, marker)
 
-    assert status == 4
-    assert output =~ "invalid_disposable_database_path"
-    assert output =~ ~s("application_started":false)
-    assert File.read!(real_target) == original_bytes
-    assert_sentinel_database_unchanged!(real_target, marker)
+      {output, status} = run_fixture_process("published-plan", database)
+
+      assert status == 4, label
+      assert output =~ "invalid_disposable_database_path"
+      assert output =~ ~s("application_started":false)
+      assert File.read!(target) == original_bytes
+      assert_sentinel_database_unchanged!(target, marker)
+    end
   end
 
   test "runtime always validates the actual tmp root and ignores override variables" do
@@ -403,7 +351,8 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
   end
 
   @tag timeout: :infinity
-  test "induced failure compensates the exact user and global video lane", %{database: database} do
+  test "induced failure compensates a fresh fixture and leaves a committed one byte-for-byte",
+       %{database: database} do
     env = fixture_env(database)
     assert_mix_ok!(["ecto.create", "--quiet"], env)
     assert_mix_ok!(["ecto.migrate", "--quiet"], env)
@@ -428,15 +377,7 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
 
     stop_supervised(IsolatedMigrationRepo)
 
-    report = run_mode!("available-video", env)
-    assert report["video_id"] > 0
-  end
-
-  @tag timeout: :infinity
-  test "failed rerun leaves a committed fixture byte-for-byte unchanged", %{database: database} do
-    env = fixture_env(database)
-    assert_mix_ok!(["ecto.create", "--quiet"], env)
-    assert_mix_ok!(["ecto.migrate", "--quiet"], env)
+    assert run_mode!("available-video", env)["video_id"] > 0
 
     report = run_mode!("completed-history", env)
     _repo_pid = start_isolated_repo!(database)
@@ -695,53 +636,6 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     }
   end
 
-  test "fixture entrypoint rejects unknown modes" do
-    source = File.read!(@script)
-    assert source =~ Enum.join(@modes, "|")
-
-    {output, status} =
-      System.cmd("mix", ["run", "--no-start", @script, "--", "unknown"],
-        env: [{"MIX_ENV", "test"}],
-        stderr_to_stdout: true
-      )
-
-    assert status != 0
-    assert output =~ "unsupported fixture mode"
-  end
-
-  test "canonical setup, verification, and cleanup scripts consume final fixture contracts" do
-    setup = File.read!("scripts/e2e/setup.exs")
-    verify = File.read!("scripts/e2e/verify.exs")
-    cleanup = File.read!("scripts/e2e/cleanup.exs")
-
-    assert setup =~ "library_setup.exs"
-    assert setup =~ "started-plan-session"
-    refute setup =~ "defining" <> " legacy workout"
-
-    for field <-
-          ~w[
-            plan_id workout_video_id display_name_snapshot workout_type_snapshot program_snapshot
-            video_snapshot completed_at
-            burpee_count_planned duration_sec_planned note_pre note_post mood context_low_energy
-            context_high_energy context_heat_affected primary_limiter preference_feedback
-            capture_mode cadence_ms target_pace_sec pace_consistency pose_capture_run_status
-            pose_capture_chunk_count pose_capture_chunk_indexes pose_capture_chunk_digests
-          ] do
-      assert verify =~ field
-    end
-
-    for source <- [verify, cleanup] do
-      assert source =~ "adaptive_e2e_fixture"
-      assert source =~ "adaptive-home-coach-e2e-"
-    end
-
-    assert cleanup =~ "recommendations:"
-    assert cleanup =~ "drafts:"
-    assert cleanup =~ "videos:"
-    assert cleanup =~ ~S|~r/^e2e_workout_[0-9a-f]{16}$/|
-    assert cleanup =~ ~S|owned_video_filename = "e2e-available-#{user.username}.mp4"|
-  end
-
   defp insert_completed_pose_evidence!(completed) do
     started_at = ~U[2026-08-31 00:00:00Z]
 
@@ -876,33 +770,6 @@ defmodule BurpeeTrainer.E2ELibrarySetupTest do
     assert plan.definition_json == report["definition_json"]
     assert plan.program_json == report["program_json"]
     assert plan.content_hash == report["content_hash"]
-  end
-
-  defp assert_persisted_report!("pending-candidate", report) do
-    recommendation =
-      IsolatedMigrationRepo.get!(CoachRecommendation, report["recommendation_id"])
-
-    assert recommendation.user_id == report["user_id"]
-    assert recommendation.selected_workout_plan_id == report["selected_workout_plan_id"]
-    assert recommendation.pending_draft_id == report["pending_draft_id"]
-    assert recommendation.slot_key == report["slot_key"]
-    assert Date.to_iso8601(recommendation.slot_date) == report["slot_date"]
-
-    draft = IsolatedMigrationRepo.get!(WorkoutPlan, report["pending_draft_id"])
-    assert draft.user_id == report["user_id"]
-    assert draft.user_id == report["pending_draft_user_id"]
-    assert Atom.to_string(draft.state) == report["pending_draft_state"]
-    assert draft.definition_json == report["pending_draft_definition_json"]
-    assert draft.program_json == report["pending_draft_program_json"]
-    assert draft.content_hash == report["pending_draft_content_hash"]
-
-    {:ok, definition} = WorkoutDefinition.new(draft.definition_json)
-    {:ok, program} = PlanCompiler.compile(definition)
-    assert draft.burpee_type == definition.burpee_type
-    assert draft.target_reps == definition.target_reps
-    assert draft.target_duration_sec == definition.target_duration_sec
-    assert draft.program_json == ProgramHash.canonical_map(program)
-    assert draft.content_hash == ProgramHash.hash(program)
   end
 
   defp assert_persisted_report!(mode, report)

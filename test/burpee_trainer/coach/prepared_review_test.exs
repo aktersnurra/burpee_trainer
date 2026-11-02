@@ -127,175 +127,86 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
     assert :ok = WorkoutRequest.validate_definition(request, definition)
   end
 
-  test "one infeasible layout is corrected once and then prepared", %{user: user} do
-    bad = LayoutFixtures.layout([[{10, 15.0, 15.0}]], "Too slow")
+  test "an invalid layout is corrected once and then prepared", %{user: user} do
     good = LayoutFixtures.layout([[{10, 12.0, 12.0}]], "Corrected")
-    provider(self(), [bad, good])
-    {:ok, request} = request([])
+    {:ok, even} = request([])
 
-    assert {:ok, prepared} =
-             Coach.prepare_plan(Scope.for_user(user), "10 reps in 2 minutes", request)
+    {:ok, unbroken} = request([], %{"pacing_style" => "unbroken"})
 
-    assert prepared.definition["name"] == "Corrected"
-    assert_receive :provider_call
-    assert_receive :provider_call
-    refute_received :provider_call
+    for {label, bad, request} <- [
+          {"infeasible", LayoutFixtures.layout([[{10, 15.0, 15.0}]], "Too slow"), even},
+          {"schema", %{"name" => nil, "rationale" => "bad", "phases" => good["phases"]}, even},
+          {"confirmed reps", LayoutFixtures.layout([[{9, 12.0, 12.0}]], "Wrong reps"), even},
+          {"compiler", LayoutFixtures.layout([[{10, 12.0, 11.0}]], "Uneven unbroken"), unbroken}
+        ] do
+      provider(self(), [bad, good])
+
+      assert {:ok, prepared} =
+               Coach.prepare_plan(Scope.for_user(user), "10 reps in 2 minutes", request,
+                 workspace_key: label
+               ),
+             label
+
+      assert prepared.definition["name"] == "Corrected", label
+      assert prepared.definition["target_reps"] == 10, label
+      assert_receive :provider_call
+      assert_receive :provider_call
+      refute_received :provider_call, label
+    end
   end
 
-  test "schema and confirmed-rep validation failures are corrected without changing constraints",
+  test "a layout still invalid after its one correction stops after two calls without a plan",
        %{user: user} do
-    good = LayoutFixtures.layout([[{10, 12.0, 12.0}]], "Correct")
-    schema_bad = %{"name" => nil, "rationale" => "bad", "phases" => good["phases"]}
-    provider(self(), [schema_bad, good])
-    {:ok, request} = request([])
+    slow = LayoutFixtures.layout([[{5, 11.0, 11.0}, {5, 11.0, 11.0}]], "Slow")
+    {:ok, optional} = request([])
 
-    assert {:ok, prepared} =
-             Coach.prepare_plan(Scope.for_user(user), "10 reps in 2 minutes", request,
-               workspace_key: "schema-correction"
-             )
+    {:ok, required} = request([], %{"recovery" => "required"})
 
-    assert prepared.definition["target_reps"] == 10
-    assert_receive :provider_call
-    assert_receive :provider_call
-    refute_received :provider_call
-
-    wrong_reps = LayoutFixtures.layout([[{9, 12.0, 12.0}]], "Wrong reps")
-    provider(self(), [wrong_reps, good])
-
-    assert {:ok, prepared} =
-             Coach.prepare_plan(Scope.for_user(user), "10 reps in 2 minutes", request,
-               workspace_key: "rep-correction"
-             )
-
-    assert prepared.definition["target_reps"] == 10
-    assert_receive :provider_call
-    assert_receive :provider_call
-    refute_received :provider_call
-  end
-
-  test "invalid corrected layout stops after two calls without publishing a plan", %{user: user} do
-    provider(self(), [%{}, %{}])
-    {:ok, request} = request([])
     before = Repo.aggregate(WorkoutPlan, :count)
 
-    assert {:error, %{code: :infeasible_workout_definition, context: %{diagnostic: diagnostic}}} =
-             Coach.prepare_plan(Scope.for_user(user), "10 reps in 2 minutes", request)
+    for {bad, request, code} <- [
+          {%{}, optional, :infeasible_workout_definition},
+          # The default movement pace is checked against the confirmed request.
+          {slow, required, :invalid_workout_definition}
+        ] do
+      provider(self(), [bad, bad])
 
-    assert is_binary(diagnostic)
-    assert_receive :provider_call
-    assert_receive :provider_call
-    refute_received :provider_call
+      assert {:error, %{code: ^code, context: %{diagnostic: diagnostic}}} =
+               Coach.prepare_plan(Scope.for_user(user), "10 reps in 2 minutes", request)
+
+      assert is_binary(diagnostic)
+
+      if code == :invalid_workout_definition,
+        do: assert(diagnostic =~ "movement_pace_outside_default")
+
+      assert_receive :provider_call
+      assert_receive :provider_call
+      refute_received :provider_call
+    end
+
     assert Repo.aggregate(WorkoutPlan, :count) == before
   end
 
-  test "compiler-invalid layout is corrected once", %{user: user} do
-    compiler_bad = LayoutFixtures.layout([[{10, 12.0, 11.0}]], "Uneven unbroken")
-    good = LayoutFixtures.layout([[{10, 12.0, 12.0}]], "Compiler corrected")
-    provider(self(), [compiler_bad, good])
-
-    {:ok, request} =
-      WorkoutRequest.new(%{
-        "burpee_type" => "six_count",
-        "target_reps" => 10,
-        "target_duration_sec" => 120,
-        "pacing_style" => "unbroken",
-        "recovery" => "optional",
-        "timed_rests" => [],
-        "requested_pace_sec" => nil
-      })
-
-    assert {:ok, prepared} =
-             Coach.prepare_plan(Scope.for_user(user), "unbroken ten reps", request)
-
-    assert prepared.definition["name"] == "Compiler corrected"
-    assert_receive :provider_call
-    assert_receive :provider_call
-    refute_received :provider_call
-  end
-
-  test "default movement pace rejection uses the confirmed request and is corrected only once", %{
-    user: user
-  } do
-    slow = LayoutFixtures.layout([[{5, 11.0, 11.0}, {5, 11.0, 11.0}]], "Slow")
-    provider(self(), [slow, slow])
-
-    {:ok, request} =
-      WorkoutRequest.new(%{
-        "burpee_type" => "six_count",
-        "target_reps" => 10,
-        "target_duration_sec" => 120,
-        "pacing_style" => "even",
-        "recovery" => "required",
-        "timed_rests" => [],
-        "requested_pace_sec" => nil
-      })
-
-    assert {:error, %{code: :invalid_workout_definition, context: %{diagnostic: diagnostic}}} =
-             Coach.prepare_plan(Scope.for_user(user), "ten reps please", request)
-
-    assert diagnostic =~ "movement_pace_outside_default"
-    assert_receive :provider_call
-    assert_receive :provider_call
-    refute_received :provider_call
-  end
-
-  test "edit-source correction forwards instruction and immutable source reference on both calls",
+  test "an edit-source correction keeps the source reference and leaves the source untouched",
        %{user: user} do
     original = plan_fixture(user, %{request_text: "original source instruction"})
     original_definition = original.definition_json
     original_hash = original.content_hash
-    instruction = "Keep the source character; my free note says settle into measured recovery."
     bad = LayoutFixtures.layout([[{10, 15.0, 15.0}]], "Infeasible edit")
     good = LayoutFixtures.layout([[{10, 12.0, 12.0}]], "Corrected edit")
     provider(self(), [bad, good])
     {:ok, request} = request([])
 
     assert {:ok, prepared} =
-             Coach.prepare_plan(Scope.for_user(user), instruction, request,
+             Coach.prepare_plan(Scope.for_user(user), "Keep the source character.", request,
                workspace_key: "edit-source-correction",
                edit_source: %{id: original.id, content_hash: original_hash}
              )
 
     assert prepared.source == %{"plan_id" => original.id, "content_hash" => original_hash}
     assert_receive :provider_call
-    assert_receive {:provider_request, first}
     assert_receive :provider_call
-    assert_receive {:provider_request, second}
     refute_received :provider_call
-
-    for envelope <- [first, second] do
-      messages = envelope["messages"]
-
-      design =
-        Enum.find_value(messages, fn message ->
-          case Jason.decode(message["content"]) do
-            {:ok, %{"scope" => "workout_design"} = payload} -> payload
-            _ -> nil
-          end
-        end)
-
-      assert design["active_attempt"]["instruction"] == instruction
-
-      source =
-        Enum.find_value(messages, fn message ->
-          case Jason.decode(message["content"]) do
-            {:ok, %{"scope" => "edit_workout_source"} = payload} -> payload
-            _ -> nil
-          end
-        end)
-
-      assert source["definition"] == original_definition
-
-      confirmed =
-        Enum.find_value(messages, fn message ->
-          case Jason.decode(message["content"]) do
-            {:ok, %{"scope" => "confirmed_workout_request"} = payload} -> payload
-            _ -> nil
-          end
-        end)
-
-      assert confirmed["request"] == WorkoutRequest.to_map(request)
-    end
 
     assert %{definition_json: ^original_definition, content_hash: ^original_hash} =
              Repo.get!(WorkoutPlan, original.id)
@@ -312,8 +223,8 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
     refute_received :provider_call
   end
 
-  defp request(rests) do
-    WorkoutRequest.new(%{
+  defp request(rests, overrides \\ %{}) do
+    %{
       "burpee_type" => "six_count",
       "target_reps" => 10,
       "target_duration_sec" => 120,
@@ -321,7 +232,9 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
       "recovery" => "optional",
       "timed_rests" => rests,
       "requested_pace_sec" => nil
-    })
+    }
+    |> Map.merge(overrides)
+    |> WorkoutRequest.new()
   end
 
   defp provider(parent, responses) do
@@ -329,7 +242,6 @@ defmodule BurpeeTrainer.Coach.PreparedReviewTest do
 
     ReqStub.default(fn request ->
       send(parent, :provider_call)
-      send(parent, {:provider_request, Jason.decode!(request.body)})
 
       response =
         Agent.get_and_update(responses, fn

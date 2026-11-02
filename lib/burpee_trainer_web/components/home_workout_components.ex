@@ -1,6 +1,5 @@
 defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   use BurpeeTrainerWeb, :html
-  alias BurpeeTrainerWeb.CreationParameters
 
   defp open_chooser do
     JS.set_attribute({"inert", ""},
@@ -18,185 +17,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     )
     |> JS.focus(to: "#home-summary")
     |> JS.push("close_chooser")
-  end
-
-  attr(:request, :map, required: true)
-  attr(:editable, :boolean, default: false)
-
-  def request_confirmation(assigns) do
-    ~H"""
-    <section
-      id="home-request-confirmation"
-      phx-mounted={JS.focus(to: "#home-request-confirm")}
-      aria-labelledby="home-request-heading"
-      class="home-review"
-    >
-      <h2 id="home-request-heading" class="home-review-heading">Review</h2>
-      <dl class="home-review-values">
-        <div class="rounded-lg bg-stone-100 p-3">
-          <dt class="text-stone-500">Reps</dt>
-          <dd id="home-request-reps" class="mt-1 font-semibold text-stone-900">
-            {@request.target_reps}
-          </dd>
-        </div>
-        <div class="rounded-lg bg-stone-100 p-3">
-          <dt class="text-stone-500">Duration</dt>
-          <dd id="home-request-duration" class="mt-1 font-semibold text-stone-900">
-            {duration_label(@request.target_duration_sec)}
-          </dd>
-        </div>
-        <div class="rounded-lg bg-stone-100 p-3">
-          <dt class="text-stone-500">Movement</dt>
-          <dd id="home-request-movement" class="mt-1 font-semibold text-stone-900">
-            {if(@request.burpee_type == "six_count", do: "Six-count", else: "Navy SEAL")}
-          </dd>
-        </div>
-        <div class="rounded-lg bg-stone-100 p-3">
-          <dt class="text-stone-500">Sets</dt>
-          <dd id="home-request-style" class="mt-1 font-semibold text-stone-900">
-            {if(@request.pacing_style == "unbroken", do: "Unbroken within sets", else: "Even")}
-          </dd>
-        </div>
-      </dl>
-      <p id="home-request-recovery" class="mt-4 text-sm text-stone-700">
-        <%= case @request.recovery do %>
-          <% "required" -> %>
-            Recovery between sets
-          <% "forbidden" -> %>
-            No rests
-          <% "optional" -> %>
-            Recovery as needed
-        <% end %>
-      </p>
-      <p :if={@request.requested_pace_sec} id="home-request-pace" class="mt-2 text-sm text-stone-700">
-        Requested movement pace: {@request.requested_pace_sec} seconds per rep
-      </p>
-      <div :if={@request.timed_rests != []} id="home-request-timed-rests" class="mt-4">
-        <p class="text-sm font-medium text-stone-900">Timed rests</p>
-        <ul class="mt-2 space-y-2 text-sm text-stone-700">
-          <li
-            :for={{rest, index} <- Enum.with_index(@request.timed_rests)}
-            id={"home-request-rest-#{index}"}
-          >
-            {rest.duration_sec} seconds beginning at {elapsed_clock(rest.start_sec)}
-          </li>
-        </ul>
-      </div>
-      <div class="home-review-actions home-review-actions-split">
-        <button
-          :if={@editable}
-          id="home-request-abort"
-          type="button"
-          phx-click={JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")}
-          class="home-text-action home-icon-action"
-          aria-label="Cancel"
-          title="Cancel"
-        >
-          <.icon name="hero-x-mark" class="size-5" />
-        </button>
-        <div class="home-review-actions-group">
-          <button
-            :if={@editable}
-            id="home-request-edit"
-            type="button"
-            phx-click={JS.push("edit_workout_request") |> JS.focus(to: "#home-review-reps")}
-            class="home-text-action home-icon-action"
-            aria-label="Edit"
-            title="Edit"
-          >
-            <.icon name="hero-pencil-square" class="size-5" />
-          </button>
-          <button
-            :if={!@editable}
-            id="home-request-back"
-            type="button"
-            phx-click="back_to_workout_request"
-            class="home-text-action home-icon-action"
-            aria-label="Edit"
-            title="Edit"
-          >
-            <.icon name="hero-pencil-square" class="size-5" />
-          </button>
-          <button
-            id="home-request-confirm"
-            type="button"
-            phx-click="confirm_workout_request"
-            class="home-primary-action home-icon-action"
-            aria-label="Approve"
-            title="Approve"
-          >
-            <.icon name="hero-check" class="size-5" />
-          </button>
-        </div>
-      </div>
-    </section>
-    """
-  end
-
-  defp elapsed_clock(seconds),
-    do:
-      "#{div(seconds, 60)}:#{seconds |> rem(60) |> Integer.to_string() |> String.pad_leading(2, "0")}"
-
-  attr(:prefix, :string, default: "home-request")
-  attr(:busy, :boolean, default: false)
-  attr(:authoring, :boolean, default: true)
-  attr(:confirm, :string, default: "confirm_workout_request")
-  attr(:cancel, :string, default: "abort_new_workout")
-  attr(:confirm_label, :string, default: "Use workout")
-
-  def review_actions(assigns) do
-    ~H"""
-    <div class="home-review-actions home-review-actions-split">
-      <button
-        id={@prefix <> "-abort"}
-        type="button"
-        phx-click={@cancel}
-        class="home-text-action home-icon-action"
-        aria-label="Cancel review"
-        title="Cancel"
-        disabled={@busy}
-      >
-        <.icon name="hero-x-mark" class="size-5" />
-      </button>
-      <div class="home-review-actions-group">
-        <button
-          :if={@authoring}
-          id={@prefix <> "-edit"}
-          type="button"
-          phx-click="edit_workout_request"
-          class="home-text-action home-icon-action"
-          aria-label="Edit workout"
-          title="Edit"
-          disabled={@busy}
-        >
-          <.icon name="hero-pencil-square" class="size-5" />
-        </button>
-        <button
-          :if={@authoring}
-          id={@prefix <> "-save"}
-          type="button"
-          phx-click="save_review_to_library"
-          class="home-text-action home-icon-action"
-          aria-label="Save to library"
-          title="Save to library"
-          disabled={@busy}
-        >
-          <.icon name="hero-bookmark" class="size-5" />
-        </button>
-        <button
-          id={@prefix <> "-confirm"}
-          type="button"
-          phx-click={@confirm}
-          class="home-primary-action home-icon-action"
-          aria-label={@confirm_label}
-          title={@confirm_label}
-          disabled={@busy}
-        >
-          <.icon name="hero-check" class="size-5" />
-        </button>
-      </div>
-    </div>
-    """
   end
 
   @start_choices %{
@@ -231,8 +51,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   attr(:state, :map, required: true)
 
-  # Today's workout. Swipe right to swap it; swipe up to edit it or make a new one (the
-  # buttons do the same). Edit and New take Home's place as a chat: `HomeStudioComponents`.
+  # Today's workout. Swipe right to swap it (the drawer's button does the same); Edit and New are
+  # a button each, and take Home's place as a chat: `HomeStudioComponents`.
   def workspace(assigns) do
     ~H"""
     <section id="home-ready-recommendation" data-expanded={to_string(@state.expanded?)}>
@@ -268,31 +88,12 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                     aria-expanded={to_string(@state.expanded?)}
                     aria-controls="home-expansion-content"
                   >
-                    <span class="home-workout-name">
-                      <.changed
-                        value={hero_name(@state)}
-                        was={
-                          if swap_review?(@state),
-                            do: hero_name(@state),
-                            else: @state.home_selection.plan.name
-                        }
-                      />
-                    </span>
+                    <span class="home-workout-name">{@state.home_selection.plan.name}</span>
                   </button>
                 </h1>
               </div>
-              <span :if={swap_video?(@state)} class="home-workout-totals">
-                {duration_label(@state.swap_preview.source.duration_sec)} · Video
-              </span>
-              <span :if={!swap_video?(@state)} class="home-workout-totals">
-                <.changed
-                  value={duration_label(hero_totals(@state).target_duration_sec)}
-                  was={duration_label(hero_was(@state).target_duration_sec)}
-                /> ·
-                <.changed
-                  value={"#{hero_totals(@state).target_reps}"}
-                  was={"#{hero_was(@state).target_reps}"}
-                /> reps
+              <span class="home-workout-totals">
+                {duration_label(@state.home_selection.plan.target_duration_sec)} · {@state.home_selection.plan.target_reps} reps
               </span>
             </div>
             <p
@@ -348,58 +149,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 expanded={@state.expanded_groups}
               />
               <div id={"home-editor-#{@state.home_selection.home_revision}"}>
-                <section
-                  :if={@state.authoring_stage == :choosing}
-                  id="home-swap-review"
-                  class="home-review"
-                  aria-label="Review workout"
-                  phx-mounted={JS.focus(to: "#home-swap-confirm")}
-                >
-                  <.inspection
-                    :if={@state.swap_preview.kind == "plan"}
-                    rows={@state.review_inspection_rows}
-                    expanded={@state.expanded_groups}
-                  />
-                  <.review_actions
-                    prefix="home-swap"
-                    authoring={false}
-                    confirm="use_alternative"
-                    confirm_label={
-                      if @state.swap_preview.kind == "video", do: "Start video", else: "Use workout"
-                    }
-                  />
-                </section>
-                <.request_confirmation
-                  :if={@state.pending_request && @state.authoring_stage == :idle}
-                  request={@state.pending_request.request}
-                />
                 <p id="home-adjustment-error" role="status" class="home-local-message">
                   {@state.local_error}
                 </p>
               </div>
             </section>
           </div>
-          <%!-- Edit and New wait until the workout is opened: a swipe up, or this handle. Swap is
-               the swipe right, the left drawer. --%>
-          <div
-            :if={
-              @state.authoring_stage == :idle and @state.expanded? and not @state.options_open? and
-                not @state.chooser_open?
-            }
-            class="home-grab-area"
-          >
-            <button
-              id="home-grab"
-              type="button"
-              class="home-grab"
-              phx-click="open_options"
-              aria-label="Edit, swap or new workout"
-              title="Edit, swap or new workout"
-            >
-              <span class="home-grab-bar"></span>
-            </button>
-          </div>
-          <.options_sheet :if={@state.options_open?} state={@state} />
+          <.corner :if={@state.authoring_stage == :idle and not @state.chooser_open?} />
           <.chooser state={@state} />
         <% end %>
       </div>
@@ -407,42 +163,44 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     """
   end
 
-  attr(:state, :map, required: true)
-
-  # Swiped up from the workout: what to do with it, in two choices.
-  defp options_sheet(assigns) do
+  # The drawer, Edit and New, one tap each: at the top-left corner on a wide screen, as in the
+  # Claude app, and along the bottom edge on a phone, within the thumb's reach.
+  defp corner(assigns) do
     ~H"""
-    <div id="home-options-backdrop" phx-click="close_options"></div>
-    <div
-      id="home-options-sheet"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Edit, swap or make a new workout"
-      phx-window-keydown="close_options"
-      phx-key="Escape"
-      phx-mounted={JS.focus()}
-      tabindex="-1"
-      data-no-swipe
-    >
-      <span class="home-sheet-grip" aria-hidden="true"></span>
+    <nav class="home-corner" aria-label="Workout">
       <button
-        id="home-options-edit"
+        id="home-corner-swap"
         type="button"
-        class="home-option"
-        phx-click="edit_current_workout"
+        class="home-corner-action"
+        phx-click={open_chooser()}
+        aria-label="Choose a workout"
+        title="Choose a workout"
+        aria-haspopup="dialog"
+        aria-controls="home-alternatives-panel"
       >
-        <.icon name="hero-pencil-square" class="size-6" />
-        <span class="home-option-title">Edit this workout</span>
+        <.icon name="hero-bars-3" class="size-5" />
       </button>
-      <button id="home-options-swap" type="button" class="home-option" phx-click="open_chooser">
-        <.icon name="hero-arrows-right-left" class="size-6" />
-        <span class="home-option-title">Swap workout</span>
+      <button
+        id="home-corner-edit"
+        type="button"
+        class="home-corner-action"
+        phx-click="edit_current_workout"
+        aria-label="Edit this workout"
+        title="Edit this workout"
+      >
+        <.icon name="hero-pencil-square" class="size-5" />
       </button>
-      <button id="home-options-new" type="button" class="home-option" phx-click="new_workout">
-        <.icon name="hero-plus" class="size-6" />
-        <span class="home-option-title">New workout</span>
+      <button
+        id="home-corner-new"
+        type="button"
+        class="home-corner-action"
+        phx-click="new_workout"
+        aria-label="New workout"
+        title="New workout"
+      >
+        <.icon name="hero-plus" class="size-5" />
       </button>
-    </div>
+    </nav>
     """
   end
 
@@ -450,20 +208,25 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   def chooser(assigns) do
     ~H"""
-    <div :if={@state.chooser_open?} id="home-chooser-backdrop" phx-click={close_chooser()}></div>
+    <%!-- The backdrop mounts with each opening, however it was opened (a button, the sheet, a
+         swipe), and takes focus into the drawer. Escape listens only while it is open. --%>
+    <div
+      :if={@state.chooser_open?}
+      id="home-chooser-backdrop"
+      phx-click={close_chooser()}
+      phx-mounted={JS.focus(to: "#home-chooser-close")}
+    >
+    </div>
     <div
       id="home-alternatives-panel"
       hidden={!@state.chooser_open?}
       role="dialog"
       aria-modal="true"
       aria-label="Choose a workout"
-      phx-window-keydown={close_chooser()}
-      phx-key="Escape"
+      phx-window-keydown={@state.chooser_open? && close_chooser()}
+      phx-key={@state.chooser_open? && "Escape"}
     >
-      <.focus_wrap
-        id="home-chooser-focus"
-        phx-mounted={@state.chooser_open? && JS.focus(to: "#home-chooser-close")}
-      >
+      <.focus_wrap id="home-chooser-focus">
         <header class="home-chooser-header">
           <button
             id="home-chooser-close"
@@ -500,69 +263,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               {if tab == :workouts, do: "Workouts", else: "Videos"}
             </button>
           </div>
-          <button
-            id="home-filter-toggle"
-            class="home-text-action home-icon-action"
-            type="button"
-            phx-click="toggle_filters"
-            aria-expanded={to_string(@state.filters_open?)}
-            aria-controls="home-filters"
-            aria-label="Filter"
-            title="Filter"
-          >
-            <.icon name="hero-adjustments-horizontal" class="size-5" />
-          </button>
-        </div>
-        <div :if={@state.filters_open?} id="home-filters">
-          <div role="group" aria-label="Workout type">
-            <button
-              :for={type <- [:six_count, :navy_seal]}
-              id={"home-type-#{type}"}
-              type="button"
-              phx-click="filter"
-              phx-value-kind="type"
-              phx-value-filter={type}
-              aria-pressed={to_string(MapSet.member?(@state.filters.types, type))}
-            >
-              {CreationParameters.type_label(Atom.to_string(type))}
-            </button>
-          </div>
-          <div class="home-filter-level-heading">
-            <span>Levels</span>
-            <button
-              id="home-filter-reset"
-              type="button"
-              phx-click="reset_filters"
-              class="home-icon-action"
-              aria-label="Reset filters"
-              title="Reset filters"
-            >
-              <.icon name="hero-arrow-path" class="size-5" />
-            </button>
-          </div>
-          <div role="group" aria-label="Catalog level" aria-describedby="home-current-level">
-            <button
-              :for={level <- Enum.reverse(BurpeeTrainer.Levels.all_levels())}
-              id={"home-level-#{level}"}
-              type="button"
-              phx-click="filter"
-              phx-value-kind="level"
-              phx-value-filter={level}
-              aria-pressed={to_string(MapSet.member?(@state.filters.levels, level))}
-            >
-              {level_label(level)}
-            </button>
-          </div>
-          <p id="home-current-level" class="sr-only">
-            {BurpeeTrainerWeb.Fmt.level(@state.current_level)} is your current level.
-          </p>
         </div>
         <p
           :if={@state.alternatives_empty?}
           id="home-alternatives-empty"
           class="home-local-message"
         >
-          No matching {if(@state.active_tab == :videos, do: "videos", else: "workouts")}. Try changing the filters.
+          No {if(@state.active_tab == :videos, do: "videos", else: "workouts")} yet.
         </p>
         <div id="home-alternatives" phx-update="stream">
           <.alternative
@@ -633,7 +340,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           |> JS.remove_attribute("inert",
             to: "#home-summary, .home-workout-actions, #home-expansion-content"
           )
-          |> JS.push("preview_alternative")
+          |> JS.push("select_alternative")
         }
         phx-value-id={@item.source_id}
         phx-value-kind={@item.kind}
@@ -698,13 +405,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     doc: "rows of the current workout; changed cells are marked"
   )
 
-  attr(:editable, :boolean,
-    default: false,
-    doc: "a tap on a set's row selects it for a hand edit (`select_proposal_row`)"
-  )
-
-  attr(:selected, :list, default: [], doc: "the set numbers selected for a hand edit")
-
   def inspection(assigns) do
     show_move? = show_move?(assigns.rows)
 
@@ -757,23 +457,9 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             <%!-- A tap anywhere on a group row toggles it; the button keeps keyboard and screen-reader operation. --%>
             <tr
               id={"#{row.id}-event-#{hd(hd(row.units).paired).index}"}
-              class={[
-                row.count > 1 && "home-group-row",
-                (@editable and row.kind != :recovery) && "home-editable-row",
-                selected?(@rows, row, @selected) && "home-selected-row"
-              ]}
-              phx-click={
-                cond do
-                  @editable and row.kind != :recovery -> "select_proposal_row"
-                  row.count > 1 -> "toggle_group"
-                  true -> nil
-                end
-              }
-              phx-value-index={(@editable and row.kind != :recovery) && first_index(row)}
-              phx-value-id={(not @editable and row.count > 1) && row.id}
-              aria-selected={
-                (@editable and row.kind != :recovery) && to_string(selected?(@rows, row, @selected))
-              }
+              class={row.count > 1 && "home-group-row"}
+              phx-click={row.count > 1 && "toggle_group"}
+              phx-value-id={row.count > 1 && row.id}
             >
               <th scope="row" class={changed?(@changes, row.id, :label) && "home-changed"}>
                 <button
@@ -871,39 +557,11 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   attr(:value, :string, required: true)
   attr(:was, :string, required: true)
 
-  # A value Review changed reads marked; an unchanged one reads plain.
-  defp changed(assigns) do
-    ~H"""
-    <mark :if={@value != @was} class="home-changed">{@value}</mark><span :if={@value == @was}>{@value}</span>
-    """
-  end
-
   defp shape(plan), do: BurpeeTrainer.Workouts.Shape.describe(plan.definition_json)
 
   # The athlete's best for this burpee type, per 20 minutes, to read today's reps against.
   defp best(state),
     do: state |> Map.get(:home_bests, %{}) |> Map.get(state.home_selection.plan.burpee_type)
-
-  defp hero_name(state) do
-    if swap_review?(state),
-      do: state.swap_preview.source.name,
-      else: state.home_selection.plan.name
-  end
-
-  defp hero_totals(state) do
-    if swap_review?(state) and state.swap_preview.kind == "plan",
-      do: state.swap_preview.source,
-      else: state.home_selection.plan
-  end
-
-  # What the hero is marked against. A swap is another workout, so it reads plain.
-  defp hero_was(state),
-    do: if(swap_review?(state), do: hero_totals(state), else: state.home_selection.plan)
-
-  defp swap_review?(state),
-    do: state.authoring_stage == :choosing and not is_nil(state.swap_preview)
-
-  defp swap_video?(state), do: swap_review?(state) and state.swap_preview.kind == "video"
 
   defp shared_units(row), do: Enum.take(row.units, div(length(row.units), row.count))
 
@@ -962,8 +620,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   defp row_label(_rows, %{kind: :recovery}), do: "Recovery"
   defp row_label(rows, row), do: set_range(rows, row)
 
-  defp first_index(row), do: hd(hd(row.units).paired).index
-
   @doc "A row's sets by number, as the table labels them: `5`, or `1–4` for a group."
   def set_range(rows, row) do
     case set_numbers(rows, row) do
@@ -976,12 +632,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   @doc "The numbers of a row's sets, 1 for the workout's first."
   def set_numbers(rows, row),
     do: row.units |> Enum.filter(&work/1) |> Enum.map(&set_number(rows, &1))
-
-  defp selected?(_rows, _row, selected) when selected in [nil, []], do: false
-  defp selected?(rows, row, selected), do: Enum.any?(set_numbers(rows, row), &(&1 in selected))
-
-  @doc "The row whose first event is at `index`, if any."
-  def row_at(rows, index), do: Enum.find(rows, &(first_index(&1) == index))
 
   defp set_number(rows, unit) do
     rows
@@ -1012,8 +662,4 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   defp progress_percent(slot),
     do: number(min(100, max(0, slot.completed_sec * 100 / slot.weekly_target_sec)))
-
-  # Filter chips use the short form: "1A", "Graduated".
-  defp level_label(level),
-    do: level |> BurpeeTrainerWeb.Fmt.level() |> String.replace_prefix("Level ", "")
 end

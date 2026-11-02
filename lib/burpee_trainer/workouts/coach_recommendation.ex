@@ -20,7 +20,6 @@ defmodule BurpeeTrainer.Workouts.CoachRecommendation do
     belongs_to(:user, User)
     belongs_to(:selected_workout_plan, WorkoutPlan)
     belongs_to(:selected_workout_video, WorkoutVideo)
-    belongs_to(:pending_draft, WorkoutPlan)
 
     timestamps(type: :utc_datetime)
   end
@@ -33,8 +32,7 @@ defmodule BurpeeTrainer.Workouts.CoachRecommendation do
       :slot_date,
       :rationale,
       :selected_workout_plan_id,
-      :selected_workout_video_id,
-      :pending_draft_id
+      :selected_workout_video_id
     ])
     |> validate_required([:user_id, :slot_key, :slot_date])
     |> validate_selection()
@@ -43,7 +41,6 @@ defmodule BurpeeTrainer.Workouts.CoachRecommendation do
     )
     |> foreign_key_constraint(:selected_workout_plan_id)
     |> foreign_key_constraint(:selected_workout_video_id)
-    |> foreign_key_constraint(:pending_draft_id)
     |> check_constraint(:selected_workout_plan_id,
       name: :coach_recommendations_selection_check
     )

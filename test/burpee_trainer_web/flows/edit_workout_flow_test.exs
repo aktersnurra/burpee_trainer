@@ -116,43 +116,31 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     %{view: view, user: user, selected: selected}
   end
 
-  test "swiping up offers Edit and New; Edit opens a chat that begins with today's workout",
+  test "Home offers Swap, Edit and New a tap each; Edit opens a chat that begins with today's workout",
        %{view: view, selected: selected} do
-    # Closed, the workout offers only the swap swipe; edit and new wait until it is opened.
-    refute has_element?(view, "#home-grab")
-    view |> element("#home-summary") |> render_click()
+    # One tap each, with the workout opened or not, named for anyone who cannot see the icons.
+    assert has_element?(
+             view,
+             "nav[aria-label='Workout'] #home-corner-swap[aria-label='Choose a workout']"
+           )
 
-    # The swipe up is invisible, so the opened workout has a handle for it; both lead to the same sheet.
-    assert has_element?(view, "#home-grab[aria-label='Edit, swap or new workout']")
-    view |> element("#home-grab") |> render_click()
-    assert has_element?(view, "#home-options-sheet")
-    refute has_element?(view, "#home-grab")
-    render_hook(view, "close_options", %{})
-    # The swipe is the hook's event, the same one the buttons lead to.
-    render_hook(view, "open_options", %{})
-    assert has_element?(view, "#home-options-sheet #home-options-edit", "Edit this workout")
-    assert has_element?(view, "#home-options-sheet #home-options-new", "New workout")
-    assert has_element?(view, "#home-options-sheet #home-options-swap", "Swap workout")
+    assert has_element?(view, "#home-corner-edit[aria-label='Edit this workout']")
+    assert has_element?(view, "#home-corner-new[aria-label='New workout']")
 
-    # Swap opens the list and takes the sheet away; nothing needed the workout opened first.
-    view |> element("#home-options-swap") |> render_click()
-    refute has_element?(view, "#home-options-sheet")
+    view |> element("#home-corner-swap") |> render_click()
     assert has_element?(view, "#home-alternatives-panel:not([hidden])")
+    # The drawer covers Home, and its buttons with it.
+    refute has_element?(view, "#home-corner-edit")
     render_click(view, "close_chooser", %{})
-    render_hook(view, "open_options", %{})
 
-    render_hook(view, "close_options", %{})
-    refute has_element?(view, "#home-options-sheet")
-    render_hook(view, "open_options", %{})
-    view |> element("#home-options-edit") |> render_click()
-    refute has_element?(view, "#home-options-sheet")
+    view |> element("#home-corner-edit") |> render_click()
 
     # The studio takes Home's place: the coach's first message is today's workout.
     assert has_element?(view, "#home-studio h1#home-authoring-heading", "Edit workout")
     assert has_element?(view, "#studio-thread #studio-source", selected.plan.name)
     assert has_element?(view, "#studio-source #home-inspection table")
     assert has_element?(view, "#studio-thread", "What would you like to change?")
-    refute has_element?(view, "#home-workout-hero, .home-workout-actions, #home-grab")
+    refute has_element?(view, "#home-workout-hero, .home-workout-actions, #home-corner-edit")
 
     # The box is docked, named by its placeholder; the label is for screen readers.
     assert has_element?(view, "#home-chat-dock #home-edit-form")
@@ -253,9 +241,10 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert_receive {:edit_planning_waiting, planner}, 1_000
     assert has_element?(view, "#home-update-loading[role=status] .studio-spinner")
     assert has_element?(view, "#home-request-abort:not([disabled])")
-    # The message stays on screen with the loader, and the box waits for the answer.
+    # The message moves into the thread with the loader; the box empties and waits for the answer.
     assert has_element?(view, "#home-design-ask", instruction)
     assert has_element?(view, "#home-edit-instruction[disabled]")
+    refute has_element?(view, "#home-edit-instruction", instruction)
     refute has_element?(view, "#home-edit-review")
     assert Repo.aggregate(WorkoutPlan, :count) == count
     send(planner, :release_plan)
@@ -279,7 +268,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#home-edit-review #home-inspection table")
     assert has_element?(view, "#home-edit-review td.home-changed.home-prescription-reps", "75")
 
-    # Edit refines by talking, so there is no way back to a form; Run and Save sit under the card.
+    # Edit refines by talking, so there is no way back to a form; Run sits under the card, and
+    # nothing saves a proposal without running it.
     refute has_element?(view, "#home-request-edit")
 
     assert has_element?(
@@ -288,7 +278,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
              "Run"
            )
 
-    assert has_element?(view, "#home-edit-review #home-request-save", "Save")
+    refute has_element?(view, "#home-request-save")
     refute has_element?(view, "#home-chat-dock #home-request-run")
 
     assert has_element?(view, "#home-edit-review .home-prescription-reps", "75")
@@ -409,8 +399,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#studio-proposal .studio-card-totals", "160 reps")
     refute has_element?(view, "#home-edit-instruction", "Increase")
 
-    view |> element("#home-request-save") |> render_click()
-    render_async(view)
+    view |> element("#home-request-run") |> render_click()
+    assert_redirect(view, 2_000)
 
     assert [saved] =
              Enum.filter(
@@ -445,55 +435,6 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     # What was typed is still there to send again.
     assert has_element?(view, "#home-edit-instruction:not([disabled])", "Increase to 999 reps")
     assert has_element?(view, "#home-request-run:not([disabled])")
-  end
-
-  test "a set's numbers change by hand with no call; the rests keep the length, Run takes it",
-       %{view: view} do
-    view |> element("#home-summary") |> render_click()
-    open_edit(view)
-
-    view
-    |> form("#home-edit-form", home_adjustment: %{instruction: "Increase to 150 reps"})
-    |> render_submit()
-
-    render_async(view)
-    assert has_element?(view, "#studio-proposal .studio-card-totals", "150 reps")
-    flush_provider_requests()
-
-    # A tap on the first set's row selects it; its reps step down by one.
-    view
-    |> element("#studio-proposal tr.home-editable-row[phx-value-index='0']")
-    |> render_click()
-
-    assert has_element?(view, "#studio-hand-edit", "Set 1")
-    assert has_element?(view, "#studio-hand-reps", "75")
-    view |> element("#studio-hand-reps-down") |> render_click()
-
-    assert has_element?(view, "#studio-hand-reps", "74")
-    assert has_element?(view, "#studio-proposal .studio-card-totals", "149 reps")
-    assert has_element?(view, "#studio-proposal .studio-card-totals", "20 min")
-    # What changed from the proposal before reads marked.
-    assert has_element?(view, "#studio-proposal .studio-chip-changed", "149 reps")
-    assert has_element?(view, "#studio-proposal td.home-changed", "74")
-    # The selection stays the set that was picked, step after step.
-    view |> element("#studio-hand-reps-down") |> render_click()
-    assert has_element?(view, "#studio-hand-edit", "Set 1")
-    assert has_element?(view, "#studio-hand-reps", "73")
-    assert has_element?(view, "#studio-proposal .studio-card-totals", "148 reps")
-    view |> element("#studio-hand-reps-up") |> render_click()
-    assert has_element?(view, "#studio-hand-reps", "74")
-    refute_received {:provider_request, _}
-
-    view |> element("#home-request-save") |> render_click()
-    render_async(view)
-
-    assert [saved] =
-             Enum.filter(
-               Workouts.list_library(Scope.for_user(Repo.one!(Accounts.User))),
-               &(&1.target_reps == 149)
-             )
-
-    assert saved.target_duration_sec == 1_200
   end
 
   defp provider_requests(acc \\ []) do

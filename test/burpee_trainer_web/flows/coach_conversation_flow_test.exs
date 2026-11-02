@@ -18,7 +18,7 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
 
     assert has_element?(
              view,
-             "#home-done-today[data-expanded=false] ~ #home-done-expansion #home-coach-panel"
+             "#home-done-today ~ #home-coach-panel"
            )
 
     view
@@ -60,44 +60,6 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     assert :sys.get_state(view.pid).socket.assigns.coach_thread
            |> Enum.map(&{&1.message, &1.reply}) ==
              [{"Can Thursday be mornings?", "Yes."}, {"Make it shorter", "15 minutes."}]
-  end
-
-  test "a message is sent to the coach", %{conn: conn} do
-    {:ok, view, _} = live(conn, ~p"/")
-
-    view
-    |> form("#home-coach-message-form", coach_message: %{text: "Make the next one harder"})
-    |> render_submit()
-
-    render_async(view)
-    # No provider in tests: the send happened and the coach says it is unavailable.
-    assert has_element?(view, "#home-coach-reply", "Coach unavailable")
-    # There is no notebook to edit: the coach keeps its memory itself.
-    refute has_element?(view, "#home-coach-notebook")
-  end
-
-  test "goal confirmation is scoped and admits a new summary", %{conn: conn, scope: scope} do
-    assert {:ok, %{"goal_id" => id}} =
-             BurpeeTrainer.Coach.Tools.ProposeGoal.call(
-               scope,
-               %{
-                 "burpee_type" => "six_count",
-                 "burpee_count_target" => 150,
-                 "date_target" => Date.to_iso8601(Date.add(Date.utc_today(), 42))
-               },
-               %{}
-             )
-
-    {:ok, view, _} = live(conn, ~p"/")
-    assert has_element?(view, "#home-coach-goal-#{id}[data-status=proposed]")
-    view |> element("#home-coach-goal-#{id}-confirm") |> render_click()
-    # A confirmed goal leaves Coach's list for the header above it, so it reads once.
-    refute has_element?(view, "#home-coach-goal-#{id}")
-    # A confirmed goal leads Progress.
-    render_patch(view, ~p"/progress")
-    assert has_element?(view, "#progress-gauge-six_count[data-kind=goal]", "of 150")
-    render_patch(view, ~p"/")
-    assert summary_jobs() == 1
   end
 
   test "real provider tool conversation proposes a goal, replies, then confirms in the same screen",
@@ -182,21 +144,24 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     assert [goal] = BurpeeTrainer.Goals.list(scope)
     assert goal.status == :proposed
     assert has_element?(view, "#home-coach-goal-#{goal.id}[data-status=proposed]")
+    # The turn queued its own summary; clear it so the confirmation's is the one counted.
+    clear_summary_jobs()
     view |> element("#home-coach-goal-#{goal.id}-confirm") |> render_click()
+    # A confirmed goal leaves Coach's list for the header above it, so it reads once.
     refute has_element?(view, "#home-coach-goal-#{goal.id}")
     # A confirmed goal leads Progress.
     render_patch(view, ~p"/progress")
     assert has_element?(view, "#progress-gauge-six_count[data-kind=goal]", "of 150")
     render_patch(view, ~p"/")
     assert BurpeeTrainer.Repo.reload!(goal).status == :active
+    assert summary_jobs() == 1
   end
 
-  defp summary_jobs do
-    import Ecto.Query
+  defp summary_jobs, do: BurpeeTrainer.Repo.aggregate(summary_job_query(), :count)
+  defp clear_summary_jobs, do: BurpeeTrainer.Repo.delete_all(summary_job_query())
 
-    BurpeeTrainer.Repo.aggregate(
-      from(job in Oban.Job, where: job.worker == "BurpeeTrainer.Coach.SummaryJob"),
-      :count
-    )
+  defp summary_job_query do
+    import Ecto.Query
+    from(job in Oban.Job, where: job.worker == "BurpeeTrainer.Coach.SummaryJob")
   end
 end

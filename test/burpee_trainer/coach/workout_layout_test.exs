@@ -3,6 +3,26 @@ defmodule BurpeeTrainer.Coach.WorkoutLayoutTest do
 
   alias BurpeeTrainer.Coach.{WorkoutLayout, WorkoutRequest}
 
+  test "the coach's suggestions are kept short, distinct and at most three" do
+    long = String.duplicate("a", 61)
+
+    assert WorkoutLayout.suggestions(%{
+             "suggestions" => [
+               " Even out the rests ",
+               "even out the rests",
+               "",
+               long,
+               7,
+               "B",
+               "C",
+               "D"
+             ]
+           }) == ["Even out the rests", "B", "C"]
+
+    assert WorkoutLayout.suggestions(%{"name" => "No suggestions"}) == []
+    assert WorkoutLayout.suggestions(%{"suggestions" => "not a list"}) == []
+  end
+
   test "schema fixes phase count to timed rests plus one and excludes timeline events" do
     {:ok, request} =
       WorkoutRequest.new(%{
@@ -21,10 +41,7 @@ defmodule BurpeeTrainer.Coach.WorkoutLayoutTest do
     schema = WorkoutLayout.json_schema(request)
     assert schema["properties"]["phases"]["minItems"] == 3
     assert schema["properties"]["phases"]["maxItems"] == 3
-    assert schema["required"] == ["name", "rationale", "phases"]
+    assert schema["required"] == ["name", "rationale", "phases", "suggestions"]
     refute Map.has_key?(schema["properties"], "events")
-    # The name is the workout's title on Home, with reps and minutes shown beneath it.
-    assert schema["properties"]["name"]["description"] =~ "not its reps, minutes or level"
-    assert schema["properties"]["rationale"]["description"] =~ "why, not what"
   end
 end

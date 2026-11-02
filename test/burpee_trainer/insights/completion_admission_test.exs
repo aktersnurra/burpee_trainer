@@ -8,9 +8,8 @@ defmodule BurpeeTrainer.Insights.CompletionAdmissionTest do
 
   @workers [PlanNextWorkoutJob, NarrateJob, SummaryJob]
 
-  for worker <- @workers do
-    @worker worker
-    test "failed #{@worker} admission still saves the completion and admits the other job" do
+  test "a failed admission of any one job still saves the completion and admits the others" do
+    for worker <- @workers do
       scope = scope_fixture()
 
       goal =
@@ -25,11 +24,10 @@ defmodule BurpeeTrainer.Insights.CompletionAdmissionTest do
 
       plan = plan_fixture(scope.user)
       {:ok, started} = Workouts.start_plan(scope, plan.id, Ecto.UUID.generate())
-      worker = Oban.Worker.to_string(@worker)
 
       Ecto.Adapters.SQL.query!(
         Repo,
-        "CREATE TEMP TRIGGER refuse_owned_admission BEFORE INSERT ON oban_jobs WHEN NEW.worker = '#{worker}' BEGIN SELECT RAISE(ABORT, 'CHECK constraint failed: attempt_range'); END",
+        "CREATE TEMP TRIGGER refuse_owned_admission BEFORE INSERT ON oban_jobs WHEN NEW.worker = '#{Oban.Worker.to_string(worker)}' BEGIN SELECT RAISE(ABORT, 'CHECK constraint failed: attempt_range'); END",
         []
       )
 
@@ -46,16 +44,20 @@ defmodule BurpeeTrainer.Insights.CompletionAdmissionTest do
           send(self(), {:completed, session})
         end)
 
+      Ecto.Adapters.SQL.query!(Repo, "DROP TRIGGER refuse_owned_admission", [])
+
       assert_received {:completed, session}
       assert session.state == :completed
       assert Workouts.get_session(scope, started.id).state == :completed
       assert Repo.get!(BurpeeTrainer.Goals.Goal, goal.id).status == :achieved
       assert log =~ "completion_job_not_admitted"
 
-      other = Enum.reject(@workers, &(&1 == @worker))
+      admitted =
+        for job <- Repo.all(Oban.Job), job.args["user_id"] == scope.user.id, do: job.worker
 
-      assert Enum.sort(Enum.map(Repo.all(Oban.Job), & &1.worker)) ==
-               Enum.sort(Enum.map(other, &Oban.Worker.to_string/1))
+      assert Enum.sort(admitted) ==
+               Enum.sort(for other <- @workers, other != worker, do: Oban.Worker.to_string(other)),
+             inspect(worker)
     end
   end
 

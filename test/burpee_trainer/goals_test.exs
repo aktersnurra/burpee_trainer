@@ -7,13 +7,6 @@ defmodule BurpeeTrainer.GoalsTest do
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Goals.Goal
 
-  test "scope_fixture wraps the persisted fixture user" do
-    scope = scope_fixture()
-
-    assert %Scope{user: user} = scope
-    assert Repo.get!(BurpeeTrainer.Accounts.User, user.id).id == user.id
-  end
-
   test "a goal is reps in a 20-minute session, whatever duration is given" do
     user = user_fixture()
 

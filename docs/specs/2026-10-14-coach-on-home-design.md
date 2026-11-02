@@ -12,7 +12,7 @@ needs, and Progress is always one tap away on the week strip.
 ## The coach speaks when the day is done
 
 Before training there is nothing to talk about; changing the workout is Edit's job. Once
-the day is done, Home shows the result, and its title opens it like the workout day's:
+the day is done, Home shows the result with the coach open under it, nothing to tap:
 
 ```
           Six-count

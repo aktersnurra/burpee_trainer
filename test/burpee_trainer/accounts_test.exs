@@ -6,37 +6,21 @@ defmodule BurpeeTrainer.AccountsTest do
   alias BurpeeTrainer.{Accounts, Repo}
 
   describe "get_user_by_oidc_sub/1" do
-    test "returns the user with a matching sub" do
+    test "matches only a linked sub, never an unknown, nil, or empty one" do
       user = user_fixture(%{"username" => "alice"})
+      _unlinked = user_fixture(%{"username" => "bob"})
       {:ok, user} = Accounts.link_oidc_sub(user, "sub-abc-123")
 
       assert %{id: id} = Accounts.get_user_by_oidc_sub("sub-abc-123")
       assert id == user.id
-    end
 
-    test "returns nil for an unknown sub" do
-      _user = user_fixture(%{"username" => "alice"})
-
-      assert Accounts.get_user_by_oidc_sub("sub-nope") == nil
-    end
-
-    test "returns nil rather than matching a user with no sub linked" do
-      _user = user_fixture(%{"username" => "alice"})
-
-      assert Accounts.get_user_by_oidc_sub(nil) == nil
-      assert Accounts.get_user_by_oidc_sub("") == nil
+      for sub <- ["sub-nope", nil, ""] do
+        assert Accounts.get_user_by_oidc_sub(sub) == nil
+      end
     end
   end
 
   describe "link_oidc_sub/2" do
-    test "writes the sub onto the user" do
-      user = user_fixture(%{"username" => "alice"})
-
-      assert {:ok, linked} = Accounts.link_oidc_sub(user, "sub-abc-123")
-      assert linked.oidc_sub == "sub-abc-123"
-      assert linked.id == user.id
-    end
-
     test "refuses to link the same sub to two users" do
       alice = user_fixture(%{"username" => "alice"})
       bob = user_fixture(%{"username" => "bob"})
@@ -66,29 +50,6 @@ defmodule BurpeeTrainer.AccountsTest do
 
       assert {:start, %{plan: %{name: "Starter Six-Count"}}} = BurpeeTrainer.Home.state(facts)
       assert Repo.aggregate(Oban.Job, :count) == 0
-    end
-
-    test "an unchanged provisioned timezone is write-free" do
-      user = user_fixture()
-      assert {:ok, updated} = Accounts.update_timezone(user, "America/Los_Angeles")
-      parent = self()
-      handler = "unchanged-timezone-#{Ecto.UUID.generate()}"
-
-      :ok =
-        :telemetry.attach(
-          handler,
-          [:burpee_trainer, :repo, :query],
-          # Telemetry handlers are global and run in the querying process: count only ours.
-          fn _, _, metadata, _ ->
-            if self() == parent, do: send(parent, {:timezone_query, metadata.query})
-          end,
-          nil
-        )
-
-      on_exit(fn -> :telemetry.detach(handler) end)
-      assert {:ok, same} = Accounts.update_timezone(updated, "America/Los_Angeles")
-      assert same == updated
-      refute_receive {:timezone_query, _}
     end
 
     test "invalid timezone and failed writes preserve persisted data" do

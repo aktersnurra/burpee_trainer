@@ -35,12 +35,6 @@ defmodule BurpeeTrainerWeb.HomeLiveStateTest do
     assert Repo.reload!(started) == started
   end
 
-  test "first use renders the starter's Start as the one primary action" do
-    socket = mount_home(user_fixture())
-    assert_primary(render_home(socket), "start", "start", "home-action")
-    assert socket.assigns.home_selection.plan.name == "Starter Six-Count"
-  end
-
   test "choose is reachable through legitimate missing fallback and opens chooser" do
     user = user_fixture()
     complete(user, DateTime.add(@now, -90 * 86400), 1200)
@@ -66,16 +60,6 @@ defmodule BurpeeTrainerWeb.HomeLiveStateTest do
     complete(user, DateTime.add(@now, -86400), 4800)
     socket = mount_home(user)
     assert_primary(render_home(socket), "week_complete", "insights", "home-history-toggle")
-  end
-
-  test "invalid timezone renders the real error and no fabricated state or primary" do
-    user = %{user_fixture() | timezone: "Invalid/Zone"}
-    socket = mount_home(user)
-    html = render_home(socket) |> LazyHTML.from_fragment()
-    assert LazyHTML.query(html, "#home-unavailable") |> Enum.count() == 1
-    assert LazyHTML.query(html, "[data-primary-action]") |> Enum.empty?()
-    refute Map.has_key?(socket.assigns, :home_facts) and socket.assigns.home_facts != nil
-    assert socket.assigns.home_state == nil
   end
 
   defp assert_primary(html, state, action, id) do

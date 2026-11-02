@@ -9,19 +9,15 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
   A design is a conversation: each follow-up is read against the proposal on screen, and
   the proposals it replaces stay as `design_turns`, oldest first. Nothing in a refinement
   falls back to the workout the design started from. `previous` is the proposal the one on
-  screen replaced, so what changed reads marked; a number changed by hand (`edit_sets`, the
-  set numbers selected, and `edit_steps`, which steps they allow) replaces it in place.
+  screen replaced, so what changed reads marked.
 
   Work in flight is identified by `update_id`. A result is applied only while it is the
   one in flight, so a late answer to a discarded or superseded request changes nothing.
   """
 
-  @type stage :: :idle | :new | :editing | :review | :saved | :choosing
-  @type new_step :: :type | :style | :duration | :reps | :pace | :ready
+  @type stage :: :idle | :new | :editing | :review
 
-  @type command ::
-          {:cancel_async, {:new_request, reference()}}
-          | :refresh_alternatives
+  @type command :: {:cancel_async, {:new_request, reference()}}
 
   @type t :: %__MODULE__{}
 
@@ -31,16 +27,12 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     editing_source: nil,
     workout_parameters: nil,
     creation_key: nil,
-    created_plan: nil,
     pending_request: nil,
     review_inspection_rows: [],
     instruction: "",
     design_turns: [],
     pending_turn: nil,
     previous: nil,
-    edit_sets: nil,
-    edit_steps: nil,
-    new_step: :type,
     busy?: false,
     update_id: nil,
     local_error: nil
@@ -72,15 +64,11 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     {%{open(m, :editing, params, key) | editing_source: source, instruction: ""}, []}
   end
 
-  # New asks one question at a time. Going back to an earlier one drops the proposal made
-  # from the answers, and the work still in flight for it.
-  def update(%__MODULE__{authoring_stage: :new} = m, {:new_step, step}),
-    do: {%{m | new_step: step}, []}
-
-  def update(%__MODULE__{authoring_stage: stage} = m, {:new_step_reopened, step})
+  # Back to New's form drops the proposal made from it, and the work still in flight for it.
+  def update(%__MODULE__{authoring_stage: stage} = m, :new_reopened)
       when stage in [:new, :review] and is_nil(m.editing_source) do
     {discarded, commands} = discard(m)
-    {%{discarded | authoring_stage: :new, new_step: step}, commands}
+    {%{discarded | authoring_stage: :new}, commands}
   end
 
   def update(%__MODULE__{} = m, :aborted) do
@@ -89,7 +77,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     {%{
        discarded
        | authoring_stage: :idle,
-         created_plan: nil,
          # Only New takes the workout away; Edit keeps it in view, so nothing returns.
          authoring_returned?: is_nil(m.editing_source)
      }, commands}
@@ -107,12 +94,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
 
   def update(%__MODULE__{} = m, :preparation_discarded), do: discard(m)
 
-  def update(%__MODULE__{authoring_stage: :saved} = m, :created_selected),
-    do: {%{m | authoring_stage: :idle, created_plan: nil}, []}
-
-  def update(%__MODULE__{} = m, :request_reopened),
-    do: {%{m | pending_request: nil, local_error: nil}, []}
-
   # Work starting: a new request supersedes what was in flight.
 
   def update(%__MODULE__{} = m, {:review_started, id, text}) do
@@ -126,9 +107,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
         {:refine_started, id, text}
       ),
       do: {%{m | busy?: true, update_id: id, pending_turn: text, local_error: nil}, []}
-
-  def update(%__MODULE__{} = m, {:adjustment_started, id, text}),
-    do: {%{m | busy?: true, update_id: id, instruction: text, local_error: nil}, []}
 
   def update(%__MODULE__{} = m, {:confirm_started, id}),
     do: {%{m | busy?: true, update_id: id, local_error: nil}, []}
@@ -144,37 +122,11 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
            pending_request: prepared,
            workout_parameters: params,
            previous: snapshot(m),
-           edit_sets: nil,
-           edit_steps: nil,
            design_turns: superseded(m),
            instruction: m.pending_turn || m.instruction,
            pending_turn: nil
        }, []}
     end)
-  end
-
-  # A row of the proposal selected for a hand edit; selecting it again lets it go.
-  def update(
-        %__MODULE__{authoring_stage: :review, pending_request: %{}, busy?: false} = m,
-        {:row_selected, sets, steps}
-      ) do
-    if m.edit_sets == sets,
-      do: {%{m | edit_sets: nil, edit_steps: nil}, []},
-      else: {%{m | edit_sets: sets, edit_steps: steps, local_error: nil}, []}
-  end
-
-  def update(
-        %__MODULE__{authoring_stage: :review, pending_request: %{}, busy?: false} = m,
-        {:proposal_adjusted, prepared, rows, steps}
-      ) do
-    {%{
-       m
-       | pending_request: prepared,
-         review_inspection_rows: rows,
-         previous: snapshot(m),
-         edit_steps: steps,
-         local_error: nil
-     }, []}
   end
 
   # A refinement that fails leaves the proposal it was refining on screen.
@@ -185,20 +137,12 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     end)
   end
 
-  def update(%__MODULE__{} = m, {:plan_saved, id, plan}) do
-    settle(m, id, fn m ->
-      {%{m | authoring_stage: :saved, pending_request: nil, created_plan: plan},
-       [:refresh_alternatives]}
-    end)
-  end
-
   def update(%__MODULE__{} = m, {:plan_selected, id}) do
     settle(m, id, fn m ->
       {%{
          m
          | authoring_stage: :idle,
            pending_request: nil,
-           created_plan: nil,
            editing_source: nil,
            authoring_returned?: true
        }, []}
@@ -207,23 +151,6 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
 
   def update(%__MODULE__{} = m, {:plan_failed, id, message}),
     do: settle(m, id, &{%{&1 | local_error: message}, []})
-
-  def update(%__MODULE__{} = m, {:revision_prepared, id, prepared}),
-    do: settle(m, id, &{%{&1 | pending_request: prepared, local_error: nil}, []})
-
-  def update(%__MODULE__{} = m, {:revision_prepare_failed, id, message}),
-    do: settle(m, id, &{%{&1 | pending_request: nil, local_error: message}, []})
-
-  def update(%__MODULE__{} = m, {:revision_applied, id}), do: settle(m, id, &{&1, []})
-
-  def update(%__MODULE__{} = m, {:revision_blocked, id, message}),
-    do: settle(m, id, &{%{&1 | local_error: message}, []})
-
-  def update(%__MODULE__{} = m, {:revision_failed, id, message}) do
-    settle(m, id, fn m ->
-      {%{m | pending_request: nil, local_error: message}, [:refresh_alternatives]}
-    end)
-  end
 
   def update(%__MODULE__{} = m, _event), do: {m, []}
 
@@ -235,11 +162,9 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
         editing_source: nil,
         workout_parameters: params,
         creation_key: key,
-        created_plan: nil,
         pending_request: nil,
         design_turns: [],
         pending_turn: nil,
-        new_step: :type,
         local_error: nil
     }
   end
@@ -258,9 +183,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
         local_error: nil,
         design_turns: [],
         pending_turn: nil,
-        previous: nil,
-        edit_sets: nil,
-        edit_steps: nil
+        previous: nil
     }
 
   # The proposal on screen, as what the next one is read against.
