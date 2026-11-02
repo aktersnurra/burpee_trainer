@@ -81,4 +81,6 @@ import_config "#{config_env()}.exs"
 config :burpee_trainer, Oban,
   engine: Oban.Engines.Lite,
   repo: BurpeeTrainer.Repo,
-  queues: [coach: 2]
+  queues: [coach: 2],
+  # Monday 00:00 UTC, the start of the owner's week (their timezone is UTC).
+  plugins: [{Oban.Plugins.Cron, crontab: [{"0 0 * * 1", BurpeeTrainer.Coach.WeekStartJob}]}]

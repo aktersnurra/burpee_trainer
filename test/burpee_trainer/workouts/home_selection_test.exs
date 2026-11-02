@@ -83,7 +83,9 @@ defmodule BurpeeTrainer.Workouts.HomeSelectionTest do
         burpee_type: Atom.to_string(slot.burpee_type)
       })
 
-  test "a day without training keeps the previous day's workout", %{user: u, slot: slot} do
+  test "a day without training keeps the previous day's workout", %{user: u} do
+    # Mid-week: a new week plans afresh.
+    {:ok, slot} = Policy.required_slot(Scope.for_user(u), ~U[2026-11-04 12:00:00Z])
     plan = fitting_plan(u, slot)
     chose_yesterday(u, slot, plan, :owner)
 
@@ -108,6 +110,15 @@ defmodule BurpeeTrainer.Workouts.HomeSelectionTest do
     {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(u), slot)
     assert shown.plan.origin == :built_in
     assert Workouts.planned_by(Scope.for_user(u), slot) == nil
+  end
+
+  test "a new week does not keep last week's workout, so it can be planned afresh", %{user: u} do
+    {:ok, monday} = Policy.required_slot(Scope.for_user(u), ~U[2026-11-02 12:00:00Z])
+    chose_yesterday(u, monday, fitting_plan(u, monday), :coach)
+
+    {:ok, shown} = Workouts.ensure_home_selection(Scope.for_user(u), monday)
+    assert shown.plan.origin == :built_in
+    assert Workouts.planned_by(Scope.for_user(u), monday) == nil
   end
 
   test "a previous workout that no longer fits the slot is not kept", %{user: u, slot: slot} do
