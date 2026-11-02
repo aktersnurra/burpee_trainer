@@ -69,12 +69,19 @@ defmodule BurpeeTrainer.Coach.NewDefaultsTest do
       assert NewDefaults.default_pace(:six_count, 100, 1_200) == 4.5
       assert NewDefaults.default_pace(:navy_seal, 50, 1_200) == 8.0
       assert NewDefaults.default_pace(:six_count, 250, 1_200) == 4.0
+      # Never faster than the graduated level: 325 six-count or 150 Navy SEALs in 20 minutes.
+      assert NewDefaults.default_pace(:six_count, 300, 1_200) == 3.7
+      assert NewDefaults.default_pace(:navy_seal, 200, 1_200) == 8.0
     end
 
-    test "a step is half a second, never below half a second" do
-      assert NewDefaults.step_pace(4.5, :up) == 5.0
-      assert NewDefaults.step_pace(4.5, :down) == 4.0
-      assert NewDefaults.step_pace(0.5, :down) == 0.5
+    test "a step is half a second, never faster than the graduated level" do
+      assert NewDefaults.min_pace(:six_count) == 3.7
+      assert NewDefaults.min_pace(:navy_seal) == 8.0
+      assert NewDefaults.step_pace(4.5, :up, :six_count) == 5.0
+      assert NewDefaults.step_pace(4.5, :down, :six_count) == 4.0
+      assert NewDefaults.step_pace(4.0, :down, :six_count) == 3.7
+      assert NewDefaults.step_pace(3.7, :down, :six_count) == 3.7
+      assert NewDefaults.step_pace(8.5, :down, :navy_seal) == 8.0
     end
 
     test "the reps that fit are the ones whose movement fits the duration" do
@@ -84,10 +91,18 @@ defmodule BurpeeTrainer.Coach.NewDefaultsTest do
   end
 
   describe "set size" do
-    test "steps of five below the total, then no limit, which is the start" do
+    test "steps of five below the total, then no limit" do
       assert NewDefaults.set_sizes(30) == [5, 10, 15, 20, 25, nil]
       assert NewDefaults.set_sizes(31) == [5, 10, 15, 20, 25, 30, nil]
       assert NewDefaults.set_sizes(5) == [nil]
+    end
+
+    test "starts at the step nearest a tenth of the reps" do
+      assert NewDefaults.default_set_size(150) == 15
+      assert NewDefaults.default_set_size(100) == 10
+      assert NewDefaults.default_set_size(70) == 5
+      assert NewDefaults.default_set_size(30) == 5
+      assert NewDefaults.default_set_size(5) == nil
     end
 
     test "a step tightens or loosens along the list and stops at its ends" do

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-03 — New's set size and pace bounds
+
+- **Max set** (unbroken) starts at a tenth of the reps on the five-rep grid (15 for 150) and follows the reps until set by hand, instead of starting at no limit and stepping down from the top.
+- **Pace** is never faster than the graduated level, 20 minutes over its count: 3.7 s/rep six-count (325), 8 s/rep Navy SEAL (150), when typed, stepped, suggested or carried across a change of type. Reps can't exceed what the duration holds at that pace.
+
 ## 2026-11-02 — The coach plans each new week
 
 - **Week start**: at the start of each local week the coach ranks the week's first workout afresh from history and goals (`Coach.WeekStartJob`, from cron at Monday 00:00 UTC). Before, a week was planned only after a session, or if Home happened to be open at midnight, so a week that started after days without training opened on the beginner starter.

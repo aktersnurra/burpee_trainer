@@ -121,18 +121,38 @@ defmodule BurpeeTrainerWeb.NewWorkoutFormTest do
     assert step(form, "pace", :down, scope).params.pace == 4.0
   end
 
-  test "a set's size starts unlimited, tightens by five, and goes when the beat is even", %{
+  test "nothing goes faster than the graduated level: the pace stops, the reps give way", %{
     scope: scope
   } do
-    form =
-      NewWorkoutForm.open(params(%{pacing_style: "unbroken"}), scope, nil)
-      |> change("reps", "60", scope)
+    form = NewWorkoutForm.open(params(), scope, nil)
+    assert change(form, "pace", "3", scope).params.pace == 3.7
+    assert step(change(form, "pace", "3.7", scope), "pace", :down, scope).params.pace == 3.7
 
-    assert form.params.max_set_reps == nil
-    tight = step(form, "sets", :down, scope)
-    assert tight.params.max_set_reps == 55
-    assert step(tight, "sets", :up, scope).params.max_set_reps == nil
-    assert change(form, "sets", "20", scope).params.max_set_reps == 20
+    # 325 six-count burpees in 20 minutes is the most; at 3.7 s/rep, 324 fit.
+    fastest = form |> change("pace", "3.7", scope) |> change("reps", "400", scope)
+    assert fastest.params.reps == 324
+
+    navy = form |> change("pace", "4", scope) |> change("burpee_type", "navy_seal", scope)
+    assert navy.params.pace == 8.0
+    assert navy.params.reps <= 150
+  end
+
+  test "a set's size follows the reps until set, steps by five, and goes when the beat is even",
+       %{scope: scope} do
+    form =
+      NewWorkoutForm.open(params(), scope, nil)
+      |> change("reps", "150", scope)
+      |> change("pacing_style", "unbroken", scope)
+
+    assert form.params.max_set_reps == 15
+    assert change(form, "reps", "100", scope).params.max_set_reps == 10
+    assert step(form, "sets", :down, scope).params.max_set_reps == 10
+    assert step(form, "sets", :up, scope).params.max_set_reps == 20
+
+    form = change(form, "reps", "60", scope)
+    set = change(form, "sets", "20", scope)
+    assert set.params.max_set_reps == 20
+    assert change(set, "reps", "100", scope).params.max_set_reps == 20
     assert change(change(form, "sets", "20", scope), "sets", "", scope).params.max_set_reps == nil
     # A limit at or above the reps is no limit.
     assert change(form, "sets", "60", scope).params.max_set_reps == nil

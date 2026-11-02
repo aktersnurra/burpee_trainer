@@ -324,6 +324,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         at_max_reps?: params.reps >= NewDefaults.max_reps(params.pace, seconds),
         sets_at_min?: params.max_set_reps == hd(set_sizes),
         at_max_pace?: params.reps * (params.pace + 0.5) > seconds,
+        min_pace: NewDefaults.min_pace(String.to_existing_atom(params.burpee_type)),
         budget: split(params, params.pace),
         more: more_summary(params)
       )
@@ -405,7 +406,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
             value={format_pace(@params.pace)}
             step="0.1"
             inputmode="decimal"
-            down?={@params.pace > 0.5}
+            down?={@params.pace > @min_pace}
             up?={not @at_max_pace?}
           />
         </div>
