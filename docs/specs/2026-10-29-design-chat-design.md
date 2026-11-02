@@ -60,12 +60,12 @@ Two even sets with a breather.      ← the proposal arrives as a card
 
 ## New: one form
 
-New opens on one form, in the column the chat that follows it takes: burpee type as a choice of
-two side by side, then duration and reps, each a number to type with a round button either side
-that moves it by a step (held, it keeps stepping: the `HoldRepeat` hook). Style (a choice of two),
-for unbroken sets the most reps in one set, and pace fold under a **More** row
-whose summary reads them; most workouts leave them as suggested. Folded, they are still in the
-form and sent. Then an optional note and **Create workout**. Back from the form leaves; there is no close
+New opens on one form of big numbers, in the column the chat that follows it takes: burpee
+type as two words, then duration and reps, each a large centred number to type with a plain
+button either side that moves it by a step (held, it keeps stepping: the `HoldRepeat` hook).
+Style (a choice of two), for unbroken sets the most reps in one set, pace and an optional note
+fold under one **More** line whose summary reads them; most workouts leave them as suggested.
+Folded, they are still in the form and sent. **Create workout** sits at the foot. Back from the form leaves; there is no close
 button. `NewWorkoutForm` (pure but for the suggested reps) holds the rules; `Coach.NewDefaults`
 holds what each value starts from.
 

@@ -70,6 +70,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         id={@back_id}
         type="button"
         class="studio-back"
+        data-vt="back"
         aria-label={@back_label}
         title="Back"
         phx-click={
@@ -112,7 +113,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       />
     </li>
     <li :if={not @asked?} class="studio-msg studio-coach">
-      <p class="studio-text">What would you like to change?</p>
+      <p class="studio-text studio-prompt">What would you like to change?</p>
     </li>
     <.proposal_thread :if={@asked?} state={@state} />
     """
@@ -303,7 +304,8 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   attr(:state, :map, required: true)
 
-  # Everything New asks, on one screen: what is chosen is sent with an optional note.
+  # Everything New asks, on one screen: the burpee as two words, duration and reps as big
+  # numbers, the rest folded under More; Create sits at the foot, within the thumb's reach.
   defp new_form(assigns) do
     params = assigns.state.workout_parameters
     remaining = assigns.state.slot && assigns.state.slot.remaining_sec
@@ -332,19 +334,21 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     ~H"""
     <form
       id="studio-new-form"
-      class="studio-form"
+      class="studio-form studio-form-hero"
       phx-change="change_new_workout"
       phx-submit="send_new_workout"
       novalidate
     >
-      <div class="studio-fields">
-        <.segment
-          field="burpee_type"
-          label="Burpee"
-          value={@params.burpee_type}
-          options={[{"Six-count", "six_count"}, {"Navy SEAL", "navy_seal"}]}
-        />
+      <.segment
+        field="burpee_type"
+        label="Burpee"
+        value={@params.burpee_type}
+        options={[{"Six-count", "six_count"}, {"Navy SEAL", "navy_seal"}]}
+        hero
+      />
+      <div class="studio-hero-numbers">
         <.number
+          hero
           field="duration"
           label="Duration"
           unit="min"
@@ -355,6 +359,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           hint={@remaining && "#{div(@remaining, 60)} min left this week"}
         />
         <.number
+          hero
           field="reps"
           label="Reps"
           unit="reps"
@@ -363,25 +368,27 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           up?={not @at_max_reps?}
           hint={@budget}
         />
-        <%!-- What most workouts leave as suggested, folded under one row that shows it. The
-             fields stay in the form while folded, so what they hold is always sent. --%>
-        <button
-          id="studio-more"
-          type="button"
-          class="studio-row studio-more"
-          aria-expanded="false"
-          aria-controls="studio-more-fields"
-          phx-click={
-            JS.toggle(to: "#studio-more-fields")
-            |> JS.toggle_attribute({"aria-expanded", "true", "false"})
-          }
-        >
-          <span class="studio-row-label">More</span>
-          <span id="studio-more-summary" class="studio-more-summary">
-            {@more}<.icon name="hero-chevron-down" class="studio-more-chevron size-4" />
-          </span>
-        </button>
-        <div id="studio-more-fields" class="studio-more-fields" style="display: none">
+      </div>
+      <%!-- What most workouts leave as suggested, folded under one line that shows it. The
+           fields stay in the form while folded, so what they hold is always sent. --%>
+      <button
+        id="studio-more"
+        type="button"
+        class="studio-more"
+        aria-expanded="false"
+        aria-controls="studio-more-fields"
+        phx-click={
+          JS.toggle(to: "#studio-more-fields", display: "grid")
+          |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+        }
+      >
+        <span class="sr-only">More: </span>
+        <span id="studio-more-summary" class="studio-more-summary">
+          {@more}<.icon name="hero-chevron-down" class="studio-more-chevron size-4" />
+        </span>
+      </button>
+      <div id="studio-more-fields" class="studio-more-fields" style="display: none">
+        <div class="studio-fields">
           <.segment
             field="pacing_style"
             label="Style"
@@ -410,17 +417,17 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
             up?={not @at_max_pace?}
           />
         </div>
-      </div>
-      <div class="studio-note">
-        <label for="studio-note" class="studio-note-label">Anything else? (optional)</label>
-        <textarea
-          id="studio-note"
-          name="new[note]"
-          rows="2"
-          maxlength="300"
-          placeholder="e.g. front-load the reps"
-          phx-debounce="300"
-        >{@params.note}</textarea>
+        <div class="studio-note">
+          <label for="studio-note" class="studio-note-label">Anything else? (optional)</label>
+          <textarea
+            id="studio-note"
+            name="new[note]"
+            rows="2"
+            maxlength="300"
+            placeholder="e.g. front-load the reps"
+            phx-debounce="300"
+          >{@params.note}</textarea>
+        </div>
       </div>
       <p :if={@state.local_error} id="home-adjustment-error" role="status" class="studio-error">
         {@state.local_error}
@@ -440,12 +447,14 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   attr(:label, :string, required: true)
   attr(:value, :string, required: true)
   attr(:options, :list, required: true)
+  attr(:hero, :boolean, default: false)
 
-  # A choice of two, side by side; the chosen one is filled.
+  # A choice of two, side by side; the chosen one is filled. As the hero, two words, the
+  # chosen one in ink.
   defp segment(assigns) do
     ~H"""
-    <fieldset class="studio-row">
-      <legend class="studio-row-label">{@label}</legend>
+    <fieldset class={if @hero, do: "studio-hero-segment", else: "studio-row"}>
+      <legend class={if @hero, do: "sr-only", else: "studio-row-label"}>{@label}</legend>
       <div class="studio-segment">
         <label :for={{text, value} <- @options} class="studio-segment-option">
           <input
@@ -473,14 +482,15 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   attr(:down?, :boolean, required: true)
   attr(:up?, :boolean, required: true)
   attr(:hint, :string, default: nil)
+  attr(:hero, :boolean, default: false)
 
   # A number to type, or to move a step at a time with the buttons beside it; held, a button
   # keeps stepping (the HoldRepeat hook). A value typed is sent when the typing pauses or the
   # field is left.
   defp number(assigns) do
     ~H"""
-    <div class="studio-row">
-      <label for={"studio-#{@field}"} class="studio-row-label">
+    <div class={if @hero, do: "studio-hero-number", else: "studio-row"}>
+      <label for={"studio-#{@field}"} class={if @hero, do: "sr-only", else: "studio-row-label"}>
         {@label}<span class="sr-only">, {@spoken_unit || @unit}</span>
       </label>
       <div id={"studio-#{@field}-stepper"} class="studio-number" phx-hook="HoldRepeat">
