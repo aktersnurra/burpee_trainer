@@ -16,6 +16,10 @@ defmodule BurpeeTrainer.Accounts do
   @spec get_user(integer) :: User.t() | nil
   def get_user(id), do: Repo.get(User, id)
 
+  @doc "Every user, for work the server does on its own schedule."
+  @spec list_users() :: [User.t()]
+  def list_users, do: Repo.all(User)
+
   @doc """
   Fetch a user by username, returning nil if not found.
   """

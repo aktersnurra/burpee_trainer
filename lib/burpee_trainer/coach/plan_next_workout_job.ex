@@ -1,7 +1,8 @@
 defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
   @moduledoc """
   Durable planning for an eligible slot. Planning follows events, never a visit: a completed
-  or logged session plans the next day at its local boundary, and Retry plans now.
+  or logged session plans the next day at its local boundary, a new week plans its first
+  day (`Coach.WeekStartJob`), and Retry plans now.
   """
   use Oban.Worker,
     queue: :coach,
@@ -80,6 +81,18 @@ defmodule BurpeeTrainer.Coach.PlanNextWorkoutJob do
       :ok
     else
       state when state in [:week_complete, :done_today] -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc "Admits planning for `slot` unless a job for it was ever admitted, whatever its outcome."
+  @spec admit_once(Scope.t(), Policy.slot()) :: :ok | {:error, term()}
+  def admit_once(%Scope{} = scope, %{slot_key: key}) do
+    %{"user_id" => scope.user.id, "slot_key" => key}
+    |> new(unique: [keys: [:user_id, :slot_key], period: :infinity, states: :all])
+    |> Oban.insert()
+    |> case do
+      {:ok, _job} -> :ok
       {:error, reason} -> {:error, reason}
     end
   end

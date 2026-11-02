@@ -116,13 +116,16 @@ defmodule BurpeeTrainer.Workouts do
     end)
   end
 
-  # A day without training keeps the latest earlier choice while it still fits the slot, so
-  # the next day's Home neither falls back nor plans again.
+  # A day without training keeps the latest earlier choice of its week while it still fits
+  # the slot, so the next day's Home neither falls back nor plans again. A new week starts
+  # afresh: `Coach.WeekStartJob` plans it.
   defp previous_choice(user, slot, %CoachRecommendation{home_revision: 0}) do
     with %CoachRecommendation{planned_by: by} = previous when not is_nil(by) <-
            Repo.one(
              from(r in CoachRecommendation,
-               where: r.user_id == ^user.id and r.slot_date < ^slot.slot_date,
+               where:
+                 r.user_id == ^user.id and r.slot_date < ^slot.slot_date and
+                   r.slot_date >= ^slot.week_start,
                order_by: [desc: r.slot_date, desc: r.id],
                limit: 1
              )

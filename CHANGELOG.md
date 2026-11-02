@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-02 — The coach plans each new week
+
+- **Week start**: at the start of each local week the coach ranks the week's first workout afresh from history and goals (`Coach.WeekStartJob`, from cron at Monday 00:00 UTC). Before, a week was planned only after a session, or if Home happened to be open at midnight, so a week that started after days without training opened on the beginner starter.
+- **Carry-over stays within a week**: a day without training still keeps the coach's earlier choice, but only from the same week, so last week's workout no longer stands in for the new week's plan.
+
 ## 2026-11-02 — Fewer taps, less to maintain
 
 - **Desktop**: wide screens get icon buttons for the drawer, Edit and New at the top-left corner; at 1024px and up the drawer is a sidebar and the page re-centres beside it. The studio's composer follows the Claude app (a rounded card, a filled send arrow, a 680px column) and the working animation sits centred on its label.
