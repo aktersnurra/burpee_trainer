@@ -221,7 +221,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     assert unchanged.plan.id == selected.plan.id
   end
 
-  test "going back to the form drops the proposal made from it", %{
+  test "back from a proposal keeps it: saved, today's workout on Home, not started", %{
     view: view,
     user: user,
     selected: selected
@@ -231,16 +231,20 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     render_async(view, 2_000)
     assert has_element?(view, "#home-request-run")
 
-    # Back is to the form it was made from, without the proposal, and back again leaves.
-    view |> element("#studio-back") |> render_click()
-    refute has_element?(view, "#home-request-run, #studio-proposal")
-    assert has_element?(view, "#studio-create")
-    assert shown(view, "reps") == "10"
+    name =
+      view
+      |> element("#studio-proposal .studio-card-name")
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.text()
 
-    view |> element("#home-request-abort") |> render_click()
-    assert has_element?(view, "#home-inspection")
-    assert {:ok, unchanged} = Workouts.verify_home_selection(Scope.for_user(user), selected)
-    assert unchanged.id == selected.plan.id
+    view |> element("#home-request-keep[aria-label='Keep this workout']") |> render_click()
+    refute has_element?(view, "#home-studio")
+    assert has_element?(view, "#home-summary", String.trim(name))
+
+    {:ok, kept} = Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
+    refute kept.plan.id == selected.plan.id
+    assert kept.plan.state == :published
     assert Workouts.current_started_session(Scope.for_user(user)) == nil
   end
 

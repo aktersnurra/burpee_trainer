@@ -139,7 +139,6 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#home-studio h1#home-authoring-heading", "Edit workout")
     assert has_element?(view, "#studio-thread #studio-source", selected.plan.name)
     assert has_element?(view, "#studio-source #home-inspection table")
-    assert has_element?(view, "#studio-thread", "What would you like to change?")
     refute has_element?(view, "#home-workout-hero, .home-workout-actions, #home-corner-edit")
 
     # The box is docked, named by its placeholder; the label is for screen readers.
@@ -156,7 +155,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     refute has_element?(view, "#home-chat-actions")
 
     # Back leaves without a change.
-    assert has_element?(view, "#home-request-abort[aria-label='Cancel edit'] .hero-chevron-left")
+    assert has_element?(view, "#home-request-abort[aria-label='Cancel edit'] .hero-chevron-down")
     view |> element("#home-request-abort") |> render_click()
     refute has_element?(view, "#home-studio")
     assert has_element?(view, ".home-workout-actions #home-action")

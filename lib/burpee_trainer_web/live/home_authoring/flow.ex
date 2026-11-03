@@ -149,6 +149,17 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     end)
   end
 
+  # A proposal kept on the way out: it is today's workout now, back on Home.
+  def update(%__MODULE__{authoring_stage: :review, busy?: false} = m, :kept) do
+    {%{
+       m
+       | authoring_stage: :idle,
+         pending_request: nil,
+         editing_source: nil,
+         authoring_returned?: true
+     }, []}
+  end
+
   def update(%__MODULE__{} = m, {:plan_failed, id, message}),
     do: settle(m, id, &{%{&1 | local_error: message}, []})
 

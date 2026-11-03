@@ -8,12 +8,26 @@
   --text-display: 28px;
   --text-body: 16px;
   --text-small: 13px;
+  /* Colour: one ink, one muted, one hairline, one fill for quiet buttons, on every view. */
+  --ink: #262722;
+  --ink-soft: #55534c;
+  --muted: #696b65;
+  --line: #d6d7d0;
+  --fill: var(--color-base-300);
+  --fill-hover: #e6e3db;
+  --focus: #5e615b;
+  --bubble: #e9e5dc;
+  --changed: #a77b5d;
+  /* Where every view's top row sits, and the one height of a filled pill. */
+  --top: 32px;
+  --pill-h: 48px;
   --motion-quick: 180ms;
   --motion-settle: 360ms;
   --motion-stagger: 80ms;
   --ease-out: cubic-bezier(.22, 1, .36, 1);
   --ease-in-out: cubic-bezier(.4, 0, .2, 1);
 }
+@media (min-width: 601px) { :root { --top: 48px; } }
 /* Home, History and Coach share one page: no nested gutters, the theme background. */
 .session-surface:has(> :is(#home-page, #history-page, #login-page) :is(.adaptive-home, .studio)) {
   padding: 0;
@@ -26,11 +40,7 @@
   max-width: 410px;
   margin-inline: auto;
   padding: calc(26px + env(safe-area-inset-top)) var(--gutter) 34px;
-  color: #1d1d1b;
   font: 400 var(--text-body) / 1.55 var(--font-sans);
-  --home-muted: #736f68;
-  --home-line: #d8d5ce;
-  --home-surface: var(--color-base-100);
 }
 .adaptive-home button {
   cursor: pointer;
@@ -40,7 +50,7 @@
   display: none;
 }
 #home-week-progress {
-  color: var(--home-muted);
+  color: var(--muted);
   font-size: var(--text-small);
 }
 .home-progress-labels {
@@ -57,13 +67,13 @@
 }
 #home-week-track {
   height: 2px;
-  background: var(--home-line);
+  background: var(--line);
   margin-top: 8px;
 }
 #home-week-fill {
   display: block;
   height: 100%;
-  background: #20201e;
+  background: var(--ink);
 }
 .home-summary {
   display: block;
@@ -86,14 +96,14 @@
   letter-spacing: -0.9px;
 }
 button.home-summary:hover .home-workout-name {
-  color: #55534c;
+  color: var(--ink-soft);
 }
 .home-workout-totals {
   display: block;
   margin-top: 11px;
   font-size: var(--text-body);
   font-weight: 400;
-  color: #68645e;
+  color: var(--muted);
 }
 .home-expansion {
   display: grid;
@@ -129,14 +139,14 @@ button.home-summary:hover .home-workout-name {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #24231e;
+  color: var(--ink);
   font: 400 var(--text-body) / 1.6 var(--font-sans);
   resize: none;
   overflow-y: hidden;
   box-shadow: none;
 }
 #home-adjustment::placeholder {
-  color: #817c72;
+  color: var(--muted);
   opacity: 1;
 }
 .home-action {
@@ -154,7 +164,7 @@ button.home-summary:hover .home-workout-name {
 }
 .home-local-message {
   margin-block: 8px;
-  color: var(--home-muted);
+  color: var(--muted);
   font-size: var(--text-small);
   line-height: 1.5;
 }
@@ -162,7 +172,7 @@ button.home-summary:hover .home-workout-name {
   margin: 0;
 }
 .adaptive-home :is(button, textarea):focus-visible {
-  outline: 2px solid #5e615b;
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 .adaptive-home #home-adjustment:focus-visible { outline: none; }
@@ -181,7 +191,7 @@ button.home-summary:hover .home-workout-name {
   text-align: right;
   vertical-align: middle;
   overflow-wrap: anywhere;
-  border-bottom: 1px solid var(--home-line);
+  border-bottom: 1px solid var(--line);
 }
 #home-inspection tbody > tr {
   height: 52px;
@@ -191,7 +201,7 @@ button.home-summary:hover .home-workout-name {
 }
 #home-inspection thead th {
   white-space: nowrap;
-  color: var(--home-muted);
+  color: var(--muted);
 }
 #home-inspection :is(th, td):first-child {
   width: 28%;
@@ -216,7 +226,7 @@ button.home-summary:hover .home-workout-name {
   white-space: nowrap;
 }
 #home-inspection:focus-visible {
-  outline: 2px solid #5e615b;
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 /* The row itself takes the tap. No overlay from the button: iOS Safari does not contain an
@@ -225,7 +235,7 @@ button.home-summary:hover .home-workout-name {
   cursor: pointer;
 }
 .adaptive-home .home-group-toggle:focus-visible {
-  outline: 2px solid #5e615b;
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 .home-group-row:hover {
@@ -243,13 +253,13 @@ button.home-summary:hover .home-workout-name {
   width: 10px;
   height: 10px;
   flex-shrink: 0;
-  color: #807a6f;
+  color: var(--muted);
   transition: transform var(--motion-quick) ease;
 }
 .home-group-toggle .home-chevron {
   width: 14px;
   height: 14px;
-  color: #625e56;
+  color: var(--muted);
 }
 [aria-expanded="true"] > .home-chevron {
   transform: rotate(180deg);
@@ -263,24 +273,24 @@ button.home-summary:hover .home-workout-name {
 }
 .adaptive-home [role="tablist"] {
   display: flex;
-  gap: 22px;
+  gap: 24px;
 }
 .adaptive-home [role="tab"] {
   min-height: 44px;
   padding: 10px 0;
   font-size: var(--text-body);
-  color: var(--home-muted);
-  border-bottom: 1px solid transparent;
+  color: var(--muted);
+  border-bottom: 1.5px solid transparent;
 }
 .adaptive-home [role="tab"][aria-selected="true"] {
-  color: #1d1d1b;
-  border-bottom-color: #6d665b;
+  color: var(--ink);
+  border-bottom-color: var(--ink);
 }
 .home-alternative-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  border-bottom: 1px solid var(--home-line);
+  border-bottom: 1px solid var(--line);
 }
 .home-alternative-row .home-alternative {
   flex: 1;
@@ -291,13 +301,13 @@ button.home-summary:hover .home-workout-name {
   display: block;
   width: 100%;
   min-height: 44px;
-  padding: 16px 0;
+  padding: 14px 0;
   text-align: left;
-  border-bottom: 1px solid #ddd7cd;
+  border-bottom: 1px solid var(--line);
   overflow-wrap: anywhere;
 }
 .home-alternative:hover .home-alternative-name {
-  color: #55534c;
+  color: var(--ink-soft);
 }
 .home-alternative-name,
 .home-alternative-metadata {
@@ -306,7 +316,7 @@ button.home-summary:hover .home-workout-name {
 .home-alternative-metadata {
   margin-top: 3px;
   font-size: var(--text-small);
-  color: var(--home-muted);
+  color: var(--muted);
 }
 #home-update-loading {
   display: grid;
@@ -316,8 +326,8 @@ button.home-summary:hover .home-workout-name {
 .home-loading-animation {
   width: 2rem;
   height: 2rem;
-  border: 2px solid var(--home-line);
-  border-top-color: #1d1d1b;
+  border: 2px solid var(--line);
+  border-top-color: var(--ink);
   border-radius: 50%;
   animation: home-loading 900ms linear infinite;
 }
@@ -388,7 +398,7 @@ button.home-summary:hover .home-workout-name {
 .home-history-more {
   min-width: 44px;
   min-height: 44px;
-  border: 1px solid var(--home-line);
+  border: 1px solid var(--line);
   border-radius: 0.75rem;
   display: inline-flex;
   align-items: center;
@@ -400,26 +410,26 @@ button.home-summary:hover .home-workout-name {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0.25rem;
   padding: 0.25rem;
-  border: 1px solid var(--home-line);
+  border: 1px solid var(--line);
   border-radius: 0.875rem;
 }
 .home-history-period {
   min-height: 44px;
   border-radius: 0.625rem;
   padding: 0.5rem 0.25rem;
-  color: var(--home-muted);
+  color: var(--muted);
   font-size: var(--text-small);
   font-weight: 600;
 }
 .home-history-period[aria-pressed="true"] {
-  background: #8d3d25;
+  background: var(--focus);
   color: white;
 }
 .home-history-trend,
 .home-history-session-card > td {
-  border: 1px solid var(--home-line);
+  border: 1px solid var(--line);
   border-radius: 1rem;
-  background: color-mix(in srgb, var(--home-surface) 92%, white);
+  background: color-mix(in srgb, var(--color-base-100) 92%, white);
 }
 .home-history-trend {
   padding: 1rem;
@@ -430,8 +440,8 @@ button.home-summary:hover .home-workout-name {
 .home-history-plot-area {
   position: relative;
   height: 9rem;
-  border-bottom: 1px solid var(--home-line);
-  border-left: 1px solid var(--home-line);
+  border-bottom: 1px solid var(--line);
+  border-left: 1px solid var(--line);
 }
 .home-history-svg {
   position: absolute;
@@ -439,7 +449,7 @@ button.home-summary:hover .home-workout-name {
   width: 100%;
   height: 100%;
   overflow: visible;
-  color: #8d3d25;
+  color: var(--focus);
 }
 .home-history-point {
   position: absolute;
@@ -455,11 +465,11 @@ button.home-summary:hover .home-workout-name {
   width: 0.625rem;
   height: 0.625rem;
   border-radius: 999px;
-  background: #8d3d25;
+  background: var(--focus);
 }
 .home-history-trend-empty,
 .home-history-empty {
-  color: var(--home-muted);
+  color: var(--muted);
   font-size: var(--text-small);
 }
 .home-history-table-region {
@@ -506,14 +516,14 @@ button.home-summary:hover .home-workout-name {
 }
 .home-history-session-type {
   margin-top: 0.5rem;
-  color: var(--home-muted);
+  color: var(--muted);
   font-size: var(--text-small);
 }
 .home-history-period:focus-visible,
 .home-history-more:focus-visible,
 .home-history-session-toggle:focus-visible,
 .home-history-point:focus-visible {
-  outline: 2px solid #8d3d25;
+  outline: 2px solid var(--focus);
   outline-offset: 3px;
 }
 @media (min-width: 640px) {
@@ -532,30 +542,27 @@ button.home-summary:hover .home-workout-name {
   max-width: 390px;
   min-height: 100svh;
   margin: 0 auto;
-  padding: calc(32px + env(safe-area-inset-top)) 30px 75px;
-  color: #262722;
+  padding: calc(var(--top) + env(safe-area-inset-top)) 30px 75px;
+  color: var(--ink);
   font-family: var(--font-sans);
-  --home-muted: #696b65;
-  --home-line: #d6d7d0;
-  --home-surface: var(--color-base-100);
 }
 #home-progress-history { max-width: 100%; }
-#home-week-track { background: var(--home-line); }
-#home-week-fill { background: #262722; }
+#home-week-track { background: var(--line); }
+#home-week-fill { background: var(--ink); }
 #home-ready-recommendation, .home-result { max-width: 100%; margin-inline: auto; }
 #home-ready-recommendation:has(.home-hero), #home-done-today, #home-week-complete { margin-top: clamp(65px, 12vh, 150px); }
-#home-done-today, #home-week-complete { padding-bottom: 23px; border-bottom: 1px solid var(--home-line); }
+#home-done-today, #home-week-complete { padding-bottom: 23px; border-bottom: 1px solid var(--line); }
 .home-result .home-state-heading { margin-top: 14px; font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
-.home-result-meta { margin-top: 14px; color: var(--home-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
-.home-eyebrow { margin-bottom: 14px; color: var(--home-muted); font-size: var(--text-small); }
-.home-hero { padding-bottom: 23px; border-bottom: 1px solid var(--home-line); }
+.home-result-meta { margin-top: 14px; color: var(--muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.home-eyebrow { margin-bottom: 14px; color: var(--muted); font-size: var(--text-small); }
+.home-hero { padding-bottom: 23px; border-bottom: 1px solid var(--line); }
 .home-hero-main { display: flex; align-items: center; justify-content: space-between; gap: 20px; max-width: 640px; }
 .home-hero h1 { min-width: 0; }
 .home-summary, .home-summary-expanded { width: auto; margin: 0; padding: 0; text-align: left; }
 .home-workout-name { font: 400 var(--text-title)/1.08 var(--font-sans); letter-spacing: -.045em; text-wrap: balance; }
-.home-workout-totals { margin-top: 12px; color: var(--home-muted); font-size: var(--text-small); }
-.home-title-action { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 10px; border-radius: 5px; color: #24231e; transition: background var(--motion-quick), color var(--motion-quick); }
-.home-title-action:hover, .home-action:hover { background: #efefeb; opacity: 1; }
+.home-workout-totals { margin-top: 12px; color: var(--muted); font-size: var(--text-small); }
+.home-title-action { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 10px; border-radius: 5px; color: var(--ink); transition: background var(--motion-quick), color var(--motion-quick); }
+.home-title-action:hover, .home-action:hover { background: var(--fill); opacity: 1; }
 .home-expansion { margin-top: 0; }
 #home-inspection { max-width: 640px; padding-top: 26px; }
 #home-inspection table { font-variant-numeric: tabular-nums; }
@@ -564,7 +571,7 @@ button.home-summary:hover .home-workout-name {
 @media (min-width: 601px) {
   .adaptive-home {
     max-width: 1040px;
-    padding: 48px clamp(30px, 4vw, 64px) 80px;
+    padding: var(--top) clamp(30px, 4vw, 64px) 80px;
   }
   #home-ready-recommendation, .home-result, #home-history, #home-coach-panel { max-width: 640px; }
 }
@@ -573,30 +580,30 @@ button.home-summary:hover .home-workout-name {
 .home-chooser-header button { min-width: 44px; min-height: 44px; display: grid; place-items: center; }
 .home-loading-animation { width: 142px; height: 142px; border: 0; border-radius: 0; animation: none; object-fit: contain; }
 .home-state-heading { font: 400 var(--text-title)/1.12 var(--font-sans); letter-spacing: -.9px; }
-.home-resume-action { display: inline-flex; align-items: center; gap: 10px; margin-top: 24px; border-bottom: 1px solid #262722; font-size: var(--text-body); }
-.home-resume-action:hover { color: #55534c; }
+.home-resume-action { display: inline-flex; align-items: center; gap: 10px; margin-top: 24px; border-bottom: 1px solid var(--ink); font-size: var(--text-body); }
+.home-resume-action:hover { color: var(--ink-soft); }
 .home-history { max-width: 100%; margin: 0 auto; overflow: visible; }
 
 .home-history-streak-line { white-space: nowrap; }
 .home-history-streak-line strong { font: 600 var(--text-display)/1 var(--font-sans); letter-spacing: -.02em; }
-.home-history-periods { display: flex; gap: 26px; padding: 0; margin-top: 20px; border: 0; border-radius: 0; }
-.home-history-period { border-radius: 0; min-height: 33px; padding: 0 0 12px; font-weight: 400; font-size: var(--text-body); }
-.home-history-period[aria-pressed='true'] { background: transparent; color: #262722; border-bottom: 1.5px solid #262722; }
+.home-history-periods { display: flex; gap: 24px; padding: 0; margin-top: 20px; border: 0; border-radius: 0; }
+.home-history-period { border-radius: 0; min-height: 44px; padding: 10px 0; font-weight: 400; font-size: var(--text-body); border-bottom: 1.5px solid transparent; }
+.home-history-period[aria-pressed='true'] { background: transparent; color: var(--ink); border-bottom-color: var(--ink); }
 #home-history-weekly { margin-top: 24px; }
 #home-history-weekly h2, .home-history-sessions-heading { font-size: var(--text-body); font-weight: 600; }
-.home-history-week-count { margin-top: 8px; color: var(--home-muted); font-size: var(--text-small); }
+.home-history-week-count { margin-top: 8px; color: var(--muted); font-size: var(--text-small); }
 /* Minutes each day, as GitHub draws commits: a column a week, Monday on top, month names over
    the weeks that start them, a tick under each week that reached its target. Columns are at most
    24px; a long period scrolls sideways and opens at the newest week (rtl scroller, ltr grid). */
 .home-history-calendar-scroll { margin-top: 12px; overflow-x: auto; direction: rtl; scrollbar-width: none; }
 .home-history-calendar-scroll::-webkit-scrollbar { display: none; }
 .home-history-calendar { direction: ltr; display: grid; grid-auto-flow: column; grid-template-rows: 16px repeat(7, auto) 4px; grid-template-columns: 30px; grid-auto-columns: minmax(10px, 24px); gap: 3px; width: max-content; min-width: 100%; justify-content: start; }
-.home-history-calendar-label { align-self: center; color: var(--home-muted); font-size: 11px; line-height: 1; }
-.home-history-month { overflow: visible; white-space: nowrap; color: var(--home-muted); font-size: 11px; line-height: 16px; }
+.home-history-calendar-label { align-self: center; color: var(--muted); font-size: 11px; line-height: 1; }
+.home-history-month { overflow: visible; white-space: nowrap; color: var(--muted); font-size: 11px; line-height: 16px; }
 .home-history-day-cell { aspect-ratio: 1; border-radius: 3px; }
-.home-history-day-future { background: transparent; box-shadow: inset 0 0 0 1px var(--home-line); }
+.home-history-day-future { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
 .home-history-week-mark { border-radius: 2px; }
-.home-history-week-met { background: #262722; }
+.home-history-week-met { background: var(--ink); }
 .home-history-tone-0 { background: #e9ebe8; }
 .home-history-tone-1 { background: #dce9eb; }
 .home-history-tone-2 { background: #bed9de; }
@@ -605,29 +612,33 @@ button.home-summary:hover .home-workout-name {
 .home-history-tone-5 { background: #245b70; }
 .home-history-trend { margin-top: 36px; padding: 0; border: 0; background: transparent; }
 .home-history-trend-heading { display: flex; align-items: center; justify-content: space-between; min-height: 36px; }
-.home-history-plot { display: grid; grid-template-columns: 29px minmax(0, 1fr); gap: 10px; margin-top: 20px; padding: 0; }
-.home-history-plot:has(.home-history-trend-axis-right) { grid-template-columns: 29px minmax(0, 1fr) 29px; }
-.home-history-plot .home-history-trend-axis-right { grid-column: 3; grid-row: 1; text-align: left; }
-.home-history-plot .home-history-trend-axis-left { grid-column: 1; grid-row: 1; }
-.home-history-plot .home-history-plot-area { grid-column: 2; grid-row: 1; }
+/* One small chart per type, its name above it in its colour, its scale on the left. */
+.home-history-plot { display: grid; grid-template-columns: 29px minmax(0, 1fr); column-gap: 10px; margin-top: 20px; padding: 0; }
+.home-history-plot + .home-history-plot { margin-top: 28px; }
+.home-history-plot-label { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin: 0 0 6px; color: var(--muted); font-size: var(--text-small); }
+.home-history-plot-label::before { content: ""; width: 14px; border-top: 2px solid; }
+.home-history-plot-label.progress-key-six-count::before { border-color: var(--series-six-count); }
+.home-history-plot-label.progress-key-navy-seal::before { border-top-style: dashed; border-color: var(--series-navy-seal); }
+.home-history-plot .home-history-trend-axis { grid-column: 1; color: var(--muted); }
+.home-history-plot .home-history-plot-area { grid-column: 2; }
 
-.home-history-trend-axis { position: relative; height: 120px; font-size: var(--text-small); text-align: right; font-variant-numeric: tabular-nums; }
+.home-history-trend-axis { position: relative; height: 96px; font-size: var(--text-small); text-align: right; font-variant-numeric: tabular-nums; }
 .home-history-trend-axis span { position: absolute; inset-inline: 0; transform: translateY(-50%); line-height: 1; }
-.home-history-plot-area { height: 120px; border: 0; background: none; }
-.home-history-grid { stroke: var(--home-line); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.home-history-plot-area { height: 96px; border: 0; background: none; }
+.home-history-grid { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .home-history-grid.home-history-goal-line { stroke: #8a877f; stroke-dasharray: 3 3; }
 .home-history-svg { color: var(--series-six-count); }
-.home-history-point span { width: 8px; height: 8px; border: 1.5px solid var(--series-six-count); border-radius: 0; background: var(--home-surface); }
+.home-history-point span { width: 8px; height: 8px; border: 1.5px solid var(--series-six-count); border-radius: 0; background: var(--color-base-100); }
 .home-history-point-navy-seal span { border-color: var(--series-navy-seal); }
 .home-history-sessions-heading { margin-top: 44px; }
 .home-history-table { table-layout: auto; }
-.home-history-session-card > td { padding: 7px 0; margin-top: 0; border: 0; border-top: 1px solid var(--home-line); border-radius: 0; background: transparent; }
+.home-history-session-card > td { padding: 7px 0; margin-top: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
 @media (max-width: 600px) { .adaptive-home { padding-inline: var(--gutter); } }
 @media (prefers-reduced-motion: reduce) { .home-title-action, .home-loading-animation { transition: none; animation: none; } }
 .home-history-line-six-count { color: var(--series-six-count); }
 .home-history-line-navy-seal { color: var(--series-navy-seal); }
-.home-history-point-six-count span { background: var(--home-surface); border-color: var(--series-six-count); }
-.home-history-point-navy-seal span { background: var(--home-surface); border-color: var(--series-navy-seal); border-radius: 0; }
+.home-history-point-six-count span { background: var(--color-base-100); border-color: var(--series-six-count); }
+.home-history-point-navy-seal span { background: var(--color-base-100); border-color: var(--series-navy-seal); border-radius: 0; }
 #home-history-empty { margin-top: 24px; }
 /* The approved density view swaps its chart and session list in the same place. */
 #home-history-trend, #home-history-sessions-panel { max-width: 640px; }
@@ -645,13 +656,13 @@ button.home-summary:hover .home-workout-name {
 }
 .home-history-session-columns span:nth-child(n+2), .home-history-session-reps, .home-history-session-time { text-align: right; }
 .home-history-sessions-panel .home-history-session-card > td { padding: 0; border-top: 0; }
-.home-history-sessions-panel .home-history-session-toggle { min-height: 44px; padding: 13px 0; border-bottom: 1px solid var(--home-line); }
+.home-history-sessions-panel .home-history-session-toggle { min-height: 44px; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .home-history-session-summary { min-width: 0; }
 .home-history-session-name { display: block; font-weight: 550; }
-.home-history-session-summary small { display: block; margin-top: 3px; color: var(--home-muted); font-size: var(--text-small); }
+.home-history-session-summary small { display: block; margin-top: 3px; color: var(--muted); font-size: var(--text-small); }
 .home-history-session-reps, .home-history-session-time { font-size: var(--text-body); font-variant-numeric: tabular-nums; }
 #home-done-today { border-bottom: 0; }
-.home-coach-panel { width: 100%; max-width: 640px; margin: 32px auto 0; padding-top: 24px; border-top: 1px solid var(--home-line); text-align: left; }
+.home-coach-panel { width: 100%; max-width: 640px; margin: 32px auto 0; padding-top: 24px; border-top: 1px solid var(--line); text-align: left; }
 /* History and Coach start where Home's top row does, so Back never moves between screens. */
 .screen-heading { margin: 16px 0 0; font: 600 var(--text-display)/1.2 var(--font-sans); letter-spacing: -0.02em; }
 /* Focus lands on the heading when a screen opens, for screen readers; it is not a control. */
@@ -668,14 +679,15 @@ button.home-summary:hover .home-workout-name {
 #home-coach-goals { margin-top: 28px; }
 /* Coach's message is a New form row: the label above an underlined field that grows with its text. */
 .home-authoring-form.coach-message-form { margin-top: 8px; }
-.coach-guidance-status { margin-top: 9px; color: var(--home-muted); font-size: var(--text-small); }
+.coach-guidance-status { margin-top: 9px; color: var(--muted); font-size: var(--text-small); }
 .coach-guidance-status:empty { display: none; }
 .history-coach-entry { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: var(--text-body); }
 .history-coach-entry p { flex: 1; }
 /* History header: facts at a glance, then the coach summary as the way into Coach. */
+.history-next-level { margin: 8px 0 0; color: var(--muted); font-size: var(--text-small); line-height: 1.5; text-wrap: pretty; }
 .history-header { margin-top: 8px; }
-.history-coach-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 0; color: #262722; font-size: var(--text-body); line-height: 1.5; text-decoration: none; }
-.coach-summary-loading { display: inline-flex; align-items: center; gap: 10px; color: var(--home-muted); font-size: var(--text-small); }
+.history-coach-summary { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 14px 0; color: var(--ink); font-size: var(--text-body); line-height: 1.5; text-decoration: none; }
+.coach-summary-loading { display: inline-flex; align-items: center; gap: 10px; color: var(--muted); font-size: var(--text-small); }
 .coach-summary-loader { width: 40px; height: 40px; object-fit: contain; }
 
 /* Approved title-led Home: stable actions, quiet inline authoring. */
@@ -689,7 +701,7 @@ button.home-summary:hover .home-workout-name {
 #home-ready-recommendation .home-workout-name { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
 #home-ready-recommendation .home-workout-totals { font-size: var(--text-body); }
 /* The shape and the athlete's best: one quiet line, numbers aligned for a glance. */
-.home-shape { margin: 6px 0 0; color: var(--home-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; text-align: center; }
+.home-shape { margin: 6px 0 0; color: var(--muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; text-align: center; }
 .home-best { white-space: nowrap; }
 #home-ready-recommendation .home-hero-main { display: block; }
 #home-ready-recommendation .home-summary { width: 100%; margin: 0; padding: 0; text-align: center; }
@@ -703,33 +715,34 @@ button.home-summary:hover .home-workout-name {
 .home-workout-actions #home-start-camera { grid-column: 1; grid-row: 1; }
 .home-workout-actions #home-start-warmup { grid-column: 3; grid-row: 1; }
 .home-start-choice { position: relative; min-width: 44px; padding-inline: 14px; }
-.home-start-choice[aria-pressed="true"] { color: #262722; background: var(--color-base-200); }
+.home-start-choice[aria-pressed="true"] { color: var(--ink); background: var(--color-base-200); }
 .home-start-choice[aria-pressed="false"]::after { content: ""; position: absolute; left: 50%; top: 50%; width: 24px; height: 1.5px; background: currentColor; transform: translate(-50%, -50%) rotate(-45deg); pointer-events: none; }
 .home-workout-actions #home-title-action { grid-column: 2; grid-row: 2; }
 .home-workout-actions #home-action { padding-inline: 36px; }
 #home-ready-recommendation .home-expansion { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease, visibility 0s linear var(--motion-settle); }
 #home-ready-recommendation .home-expansion[data-open="true"] { transition: grid-template-rows var(--motion-settle) var(--ease-out), opacity var(--motion-settle) ease var(--motion-stagger), visibility 0s; }
 .home-authoring-form { margin-top: 14px; }
-.home-text-action, .home-primary-action { min-height: 44px; padding: 0 20px; border-radius: 999px; font: 500 var(--text-body)/1 var(--font-sans); }
-.home-text-action { background: transparent; border: 0; color: var(--home-muted); }
-.home-text-action:hover { color: #262722; }
-.home-primary-action { background: #262722; border: 1px solid #262722; color: var(--color-base-100); }
-.home-primary-action:hover { opacity: .85; }
+.home-text-action { min-height: 44px; padding: 0 20px; border-radius: 999px; font: 500 var(--text-body)/1 var(--font-sans); }
+.home-text-action { background: transparent; border: 0; color: var(--muted); }
+.home-text-action:hover { color: var(--ink); }
+/* The one filled pill: every view's way on (Play, Resume, Approve, Sign in, Run, Create). */
+.home-primary-action, .studio-pill.studio-pill-primary { min-height: var(--pill-h); padding: 0 24px; border: 0; border-radius: 999px; background: var(--ink); color: var(--color-base-100); font: 500 var(--text-body)/1 var(--font-sans); }
+.home-primary-action:hover, .studio-pill.studio-pill-primary:hover:not(:disabled) { background: var(--ink); opacity: .85; }
 :is(.home-text-action, .home-primary-action):disabled { opacity: .4; cursor: default; }
 /* Every row of the New form: label left, value right, one height and one value size. */
-.home-authoring-form .fieldset { min-height: 60px; padding: 12px 0; margin: 0; border-bottom: 1px solid var(--home-line); font: inherit; display: flex; align-items: center; }
+.home-authoring-form .fieldset { min-height: 60px; padding: 12px 0; margin: 0; border-bottom: 1px solid var(--line); font: inherit; display: flex; align-items: center; }
 .home-authoring-form .fieldset > label { flex: 1; }
 .home-authoring-form .fieldset label { display: grid; grid-template-columns: 1fr 1.4fr; gap: 12px; align-items: center; }
-.home-authoring-form .label { padding: 0; color: var(--home-muted); font-size: var(--text-body); }
+.home-authoring-form .label { padding: 0; color: var(--muted); font-size: var(--text-body); }
 .home-authoring-form .fieldset label:has(.input-unit):not(:has(input:placeholder-shown)) { grid-template-columns: 1fr 1.4fr auto; }
-.home-authoring-form .input-unit { color: var(--home-muted); font-size: var(--text-small); }
+.home-authoring-form .input-unit { color: var(--muted); font-size: var(--text-small); }
 .home-authoring-form label:has(input:placeholder-shown) .input-unit { display: none; }
 /* Pauses and Note stack: label above, a full-width field that grows with its text. */
 .home-authoring-form .fieldset label:has(textarea) { grid-template-columns: 1fr; gap: 4px; }
 /* The focused field underlines its row instead of drawing a box past the column edge. */
-.home-authoring-form .fieldset:focus-within { box-shadow: inset 0 -2px 0 #262722; }
+.home-authoring-form .fieldset:focus-within { box-shadow: inset 0 -2px 0 var(--ink); }
 .home-authoring-form input[type="hidden"] { display: none; }
-.adaptive-home :is(input, select):focus-visible { outline: 2px solid #5e615b; outline-offset: 3px; }
+.adaptive-home :is(input, select):focus-visible { outline: 2px solid var(--focus); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
   #home-ready-recommendation:has(.home-hero), #home-ready-recommendation .home-expansion, #home-ready-recommendation .home-expansion[data-open="true"] { transition: none; }
 }
@@ -738,13 +751,13 @@ button.home-summary:hover .home-workout-name {
 /* Streak and level: two numbers side by side, each with its word on the same baseline. */
 .home-history-status { display: flex; gap: 40px; margin-top: 32px; }
 .home-history-streak-line { display: flex; align-items: baseline; gap: 8px; }
-.home-history-streak-line span { color: var(--home-muted); font-size: var(--text-body); }
+.home-history-streak-line span { color: var(--muted); font-size: var(--text-body); }
 /* The progress row keeps the column's edges on wide screens, on Home and History alike. */
 @media (min-width: 601px) { #history-progress, #home-progress-history { max-width: 640px; margin-inline: auto; } }
 /* Sign in sits where Home's workout does, with the app's one primary button. */
 .login { max-width: 354px; margin: clamp(120px, calc(39svh - 110px), 280px) auto 0; text-align: center; }
 .login .screen-heading { margin: 0; }
-.login-note { margin-top: 8px; color: var(--home-muted); font-size: var(--text-small); }
+.login-note { margin-top: 8px; color: var(--muted); font-size: var(--text-small); }
 .login-action { display: inline-flex; align-items: center; margin-top: 28px; text-decoration: none; }
 
 /* Quiet words that sit at a row's right edge line up with the column, not with their padding. */
@@ -752,8 +765,8 @@ button.home-summary:hover .home-workout-name {
 /* The density readout sits under its heading like the streak and level pair. */
 .home-history-trend-readout { margin-top: 12px; }
 /* Points are dots: six-count filled ink, navy seal an open ring. */
-.adaptive-home .home-history-point span { width: 9px; height: 9px; border-radius: 999px; border: 2px solid var(--home-surface); background: var(--series-six-count); outline: 1px solid var(--series-six-count); }
-.adaptive-home .home-history-point-navy-seal span { background: var(--home-surface); outline: 1.5px solid var(--series-navy-seal); }
+.adaptive-home .home-history-point span { width: 9px; height: 9px; border-radius: 999px; border: 2px solid var(--color-base-100); background: var(--series-six-count); outline: 1px solid var(--series-six-count); }
+.adaptive-home .home-history-point-navy-seal span { background: var(--color-base-100); outline: 1.5px solid var(--series-navy-seal); }
 /* View switches sit at the heading's right edge and look like the period tabs. */
 .home-workout-actions[inert] { opacity: .45; transition: opacity var(--motion-quick) ease; }
 #home-alternatives-panel .home-chooser-header h2 { font: 600 var(--text-body)/1.4 var(--font-sans); letter-spacing: 0; }
@@ -763,42 +776,42 @@ button.home-summary:hover .home-workout-name {
 /* New's title takes the workout title's place: centred, at the title size. */
 /* Review marks what Edit changed: ink weight and a clay underline, nothing louder. */
 :is(.adaptive-home, .studio) mark.home-changed { background: transparent; color: inherit; }
-:is(.adaptive-home, .studio) .home-changed { font-weight: 600; color: #262722; text-decoration: underline 2px #a77b5d; text-underline-offset: 4px; }
+:is(.adaptive-home, .studio) .home-changed { font-weight: 600; color: var(--ink); text-decoration: underline 2px var(--changed); text-underline-offset: 4px; }
 :is(.adaptive-home, .studio) td.home-changed, :is(.adaptive-home, .studio) th.home-changed { text-decoration: none; }
-:is(.adaptive-home, .studio) td.home-changed span, :is(.adaptive-home, .studio) th.home-changed > span { text-decoration: underline 2px #a77b5d; text-underline-offset: 4px; }
+:is(.adaptive-home, .studio) td.home-changed span, :is(.adaptive-home, .studio) th.home-changed > span { text-decoration: underline 2px var(--changed); text-underline-offset: 4px; }
 /* New's title lands exactly where the open workout's title was. */
 #home-ready-recommendation[data-expanded="true"]:has(#home-authoring-heading) { margin-top: 56px; }
 /* The status row opens the page under its heading; the period tabs then open the record. */
 .home-history-periods { margin-top: 36px; }
 /* A finished day reads like the workout did: centred in Home's column, at the hero's height. */
 #home-done-today, #home-week-complete { max-width: 354px; margin: clamp(65px, 12vh, 150px) auto 0; padding: 0; border: 0; text-align: center; }
-#home-done-today .home-result-meta, #home-week-complete .home-result-meta { margin-top: 12px; color: var(--home-muted); font-size: var(--text-body); }
-.home-result-insight { max-width: 354px; margin: 20px auto 0; color: #262722; font-size: var(--text-body); line-height: 1.5; text-align: center; }
+#home-done-today .home-result-meta, #home-week-complete .home-result-meta { margin-top: 12px; color: var(--muted); font-size: var(--text-body); }
+.home-result-insight { max-width: 354px; margin: 20px auto 0; color: var(--ink); font-size: var(--text-body); line-height: 1.5; text-align: center; }
 /* Progress groups breathe evenly: status, goals, coach. */
 /* Progress: the coach's look back, then one gauge per burpee type, side by side. */
-.history-header .history-coach-summary { display: block; margin-top: 24px; padding: 0; color: #262722; font-size: var(--text-body); line-height: 1.6; }
-.progress-gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--home-line); }
+.history-header .history-coach-summary { display: block; margin-top: 24px; padding: 0; color: var(--ink); font-size: var(--text-body); line-height: 1.6; }
+.progress-gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 32px; padding-top: 24px; border-top: 1px solid var(--line); }
 .progress-gauge { display: flex; flex-direction: column; min-width: 0; }
 .progress-gauge p { margin: 0; }
-.progress-gauge-type, .progress-gauge-label { color: var(--home-muted); font-size: var(--text-small); }
-.adaptive-home .progress-gauge-number { margin-top: 8px; color: #262722; font: 600 48px/1 var(--font-sans); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.progress-gauge-type, .progress-gauge-label { color: var(--muted); font-size: var(--text-small); }
+.adaptive-home .progress-gauge-number { margin-top: 8px; color: var(--ink); font: 600 48px/1 var(--font-sans); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
 .adaptive-home .progress-gauge-number.progress-gauge-met { color: #6f7d55; }
 .progress-gauge[data-kind="none"] .progress-gauge-number { color: #a8a49c; }
 .progress-gauge-label { margin-top: 8px; }
-.progress-gauge-detail { margin-top: 4px; color: var(--home-muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.progress-gauge-detail { margin-top: 4px; color: var(--muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
 .progress-gauge-chart { min-height: 52px; margin-top: 16px; }
-.progress-gauge-meter { height: 4px; overflow: hidden; border-radius: 999px; background: #dcd8d0; }
-.progress-gauge-meter span { display: block; height: 100%; border-radius: inherit; background: #262722; transition: width var(--motion-settle) var(--ease-out); }
+.progress-gauge-meter { height: 4px; overflow: hidden; border-radius: 999px; background: var(--line); }
+.progress-gauge-meter span { display: block; height: 100%; border-radius: inherit; background: var(--ink); transition: width var(--motion-settle) var(--ease-out); }
 .progress-gauge-meter.progress-gauge-met span { background: #6f7d55; }
 .progress-course { margin: 0; }
 .progress-course svg { display: block; width: 100%; height: 32px; overflow: visible; }
-.progress-course-caption { margin-top: 8px; color: var(--home-muted); font-size: var(--text-small); }
-.progress-course-caption.progress-course-on { color: #262722; }
-.adaptive-home .progress-gauge-set { align-self: flex-start; min-height: 44px; padding: 0; color: #262722; font-size: var(--text-small); text-decoration: underline; text-underline-offset: 3px; }
+.progress-course-caption { margin-top: 8px; color: var(--muted); font-size: var(--text-small); }
+.progress-course-caption.progress-course-on { color: var(--ink); }
+.adaptive-home .progress-gauge-set { align-self: flex-start; min-height: 44px; padding: 0; color: var(--ink); font-size: var(--text-small); text-decoration: underline; text-underline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { .progress-gauge-meter span { transition: none; } }
-.home-result-status { color: var(--home-muted); }
+.home-result-status { color: var(--muted); }
 .home-history-delete-ask { margin-top: 12px; }
-.home-history-delete-ask p { color: #262722; font-size: var(--text-body); }
+.home-history-delete-ask p { color: var(--ink); font-size: var(--text-body); }
 /* Progress leads with one headline: the number at 64px, one line saying what, a thin bar. */
 .home-history-header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 #history-level { color: inherit; font: inherit; white-space: nowrap; }
@@ -807,14 +820,14 @@ button.home-summary:hover .home-workout-name {
 /* The coach, open: the last exchange behind a thin rule, one-tap replies, then the field. */
 /* The course: weekly bests climbing to the target, the rest of the way dashed. */
 /* Coach is its own screen: the note leads, then the last exchange, the replies, the field. */
-.coach-note { margin: 0 0 24px; color: #262722; font-size: var(--text-body); line-height: 1.6; }
+.coach-note { margin: 0 0 24px; color: var(--ink); font-size: var(--text-body); line-height: 1.6; }
 .coach-note .coach-summary-text { font-size: inherit; }
 
 /* One colour per burpee type, for its line, its points, its axis and its key. */
 :root { --series-six-count: #245b70; --series-navy-seal: #c8641f; }
 .progress-key-six-count { color: var(--series-six-count); }
 .progress-key-navy-seal { color: var(--series-navy-seal); }
-.adaptive-home .progress-gauge-type { display: flex; align-items: center; gap: 8px; color: var(--home-muted); }
+.adaptive-home .progress-gauge-type { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 .progress-gauge-type::before { content: ""; width: 14px; border-top: 2px solid currentColor; }
 .progress-gauge-type.progress-key-six-count::before { border-color: var(--series-six-count); }
 .progress-gauge-type.progress-key-navy-seal::before { border-top-style: dashed; border-color: var(--series-navy-seal); }
@@ -825,58 +838,58 @@ button.home-summary:hover .home-workout-name {
 #home-done-today .home-workout-name, #home-week-complete .home-workout-name { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
 /* Actions are icons: a 44px target, the icon centred, the label for screen readers. */
 .adaptive-home .home-icon-action { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; padding: 0; }
-.adaptive-home .home-primary-action.home-icon-action { width: 44px; }
+.adaptive-home .home-primary-action.home-icon-action { width: var(--pill-h); }
 .adaptive-home .progress-gauge-set { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; }
 /* Sessions: one row each, the type in its chart colour; a tapped row shows its trash. */
-.home-history-session-line { display: flex; align-items: center; border-bottom: 1px solid var(--home-line); }
+.home-history-session-line { display: flex; align-items: center; border-bottom: 1px solid var(--line); }
 .adaptive-home .home-history-sessions-panel .home-history-session-toggle { flex: 1; min-width: 0; border-bottom: 0; text-align: left; }
 .adaptive-home .home-history-session-name { display: flex; align-items: center; gap: 8px; font-weight: 400; }
 .home-history-session-name::before { content: ""; flex: none; width: 14px; border-top: 2px solid currentColor; }
 .home-history-session-name.progress-key-navy-seal::before { border-top-style: dashed; }
-.adaptive-home .home-history-session-name { color: #262722; }
+.adaptive-home .home-history-session-name { color: var(--ink); }
 .home-history-session-name.progress-key-six-count::before { border-color: var(--series-six-count); }
 .home-history-session-name.progress-key-navy-seal::before { border-color: var(--series-navy-seal); }
 .adaptive-home .home-history-session-summary small { padding-left: 20px; }
 .home-history-session-tag::before { content: " · "; }
-.home-history-session-selected .home-history-session-toggle { color: #262722; }
-.home-history-session-delete { margin-left: 4px; color: var(--home-muted); background: transparent; border: 0; animation: home-fade-in var(--motion-quick) ease; }
+.home-history-session-selected .home-history-session-toggle { color: var(--ink); }
+.home-history-session-delete { margin-left: 4px; color: var(--muted); background: transparent; border: 0; animation: home-fade-in var(--motion-quick) ease; }
 .home-history-session-delete-armed { color: #a55643; }
 @keyframes home-fade-in { from { opacity: 0; } to { opacity: 1; } }
-.adaptive-home .home-history-more { display: flex; width: 100%; margin-top: 4px; border: 0; color: var(--home-muted); background: transparent; }
+.adaptive-home .home-history-more { display: flex; width: 100%; margin-top: 4px; border: 0; color: var(--muted); background: transparent; }
 @media (prefers-reduced-motion: reduce) { .home-history-session-delete { animation: none; } }
 
 /* The streak sits opposite the level: a flame and the weeks in a row at the target. */
-.history-streak { display: inline-flex; align-items: center; gap: 4px; color: #262722; font-size: var(--text-body); font-variant-numeric: tabular-nums; }
+.history-streak { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); font-size: var(--text-body); font-variant-numeric: tabular-nums; }
 /* What the coach noted or forgot: a quiet line between exchanges. */
-.coach-memory { display: flex; align-items: flex-start; gap: 8px; color: var(--home-muted); font-size: var(--text-small); line-height: 1.5; }
+.coach-memory { display: flex; align-items: flex-start; gap: 8px; color: var(--muted); font-size: var(--text-small); line-height: 1.5; }
 .coach-memory .size-4 { flex: none; margin-top: 2px; }
 /* A view switch is one icon showing the view it leads to; it sits at the heading's end. */
 .adaptive-home .home-history-switch { margin-right: -10px; }
 /* A workout in progress sits where the workout and the result do, centred like them. */
 #home-ready-recommendation.home-resume { max-width: 354px; margin: clamp(65px, 12vh, 150px) auto 0; padding: 0; border: 0; text-align: center; }
 .home-resume .home-state-heading { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
-.home-resume .home-result-meta { margin-top: 12px; color: var(--home-muted); font-size: var(--text-body); font-variant-numeric: tabular-nums; }
-.home-resume .home-result-status { margin-top: 12px; color: var(--home-muted); font-size: var(--text-body); }
+.home-resume .home-result-meta { margin-top: 12px; color: var(--muted); font-size: var(--text-body); font-variant-numeric: tabular-nums; }
+.home-resume .home-result-status { margin-top: 12px; color: var(--muted); font-size: var(--text-body); }
 .home-resume .home-resume-actions { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 26px; }
 .home-resume #resume-recommended-workout { padding-inline: 36px; }
 /* Start and Resume are the filled pill with a play mark; the pill keeps its width. */
 .adaptive-home .home-play-action { display: inline-flex; align-items: center; justify-content: center; min-width: 96px; }
 
 /* The coach is a section of Home, not a card: its word, Progress's rows, then a chat. */
-.coach-week { margin: 0 0 24px; padding: 0; border-top: 1px solid var(--home-line); list-style: none; }
-.coach-week-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 48px; border-bottom: 1px solid var(--home-line); font-size: var(--text-body); }
-.adaptive-home .coach-week-type { display: flex; align-items: center; gap: 8px; color: #262722; }
+.coach-week { margin: 0 0 24px; padding: 0; border-top: 1px solid var(--line); list-style: none; }
+.coach-week-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; border-bottom: 1px solid var(--line); font-size: var(--text-body); }
+.adaptive-home .coach-week-type { display: flex; align-items: center; gap: 8px; color: var(--ink); }
 .coach-week-type::before { content: ""; flex: none; width: 14px; border-top: 2px solid currentColor; }
 .coach-week-type.progress-key-six-count::before { border-color: var(--series-six-count); }
 .coach-week-type.progress-key-navy-seal::before { border-top-style: dashed; border-color: var(--series-navy-seal); }
-.coach-week-when { display: inline-flex; align-items: center; gap: 6px; color: var(--home-muted); font-variant-numeric: tabular-nums; }
-.coach-week-done-mark { color: #262722; }
-.adaptive-home .coach-week-left .coach-week-type { color: var(--home-muted); }
+.coach-week-when { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.coach-week-done-mark { color: var(--ink); }
+.adaptive-home .coach-week-left .coach-week-type { color: var(--muted); }
 .coach-week-left .coach-week-type::before { opacity: .5; }
 .coach-thread { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
 .coach-exchange { display: grid; gap: 8px; font-size: var(--text-body); line-height: 1.5; }
-.coach-exchange-you { justify-self: end; max-width: 85%; margin: 0; padding: 8px 14px; border-radius: 18px 18px 4px 18px; background: #e9e5dc; color: #262722; }
-.coach-exchange-coach { margin: 0; color: #262722; }
+.coach-exchange-you { justify-self: end; max-width: 88%; margin: 0; padding: 9px 15px; border-radius: 20px 20px 6px 20px; background: var(--bubble); color: var(--ink); }
+.coach-exchange-coach { margin: 0; color: var(--ink); }
 
 /* The chat dock: the box you write in rides above the keyboard, as in the Claude app.
    ChatDock sets --keyboard-inset (how far the keyboard lifts it) and --chat-dock-height. */
@@ -886,49 +899,54 @@ button.home-summary:hover .home-workout-name {
 @media (min-width: 601px) { :root { --chat-w: 640px; } }
 /* The box floats a little above the bottom edge; the thread fades out under it rather than
    meeting a hard line. */
-.chat-dock { position: fixed; inset-inline: 0; bottom: var(--keyboard-inset, 0px); z-index: 30; padding: 20px var(--gutter) calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(to bottom, transparent, var(--color-base-100) 20px); pointer-events: none; transition: bottom var(--motion-quick) var(--ease-out); }
+.chat-dock { position: fixed; inset-inline: 0; bottom: 0; z-index: 30; padding: 20px var(--gutter) calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(to bottom, transparent, var(--color-base-100) 20px); pointer-events: none; transform: translateY(calc(-1 * var(--keyboard-inset, 0px))); }
 @media (min-width: 601px) { .chat-dock { padding-bottom: calc(24px + env(safe-area-inset-bottom)); } }
 /* The home indicator is behind the keyboard, so its padding would only float the box. */
-.chat-dock[data-keyboard="open"] { padding-bottom: 8px; }
+.chat-dock[data-keyboard="open"] { padding-bottom: 6px; }
 .chat-dock-inner { display: grid; gap: 8px; max-width: var(--chat-w); margin-inline: auto; pointer-events: auto; }
 .chat-dock .composer textarea { min-height: 1.5em; max-height: 9rem; overflow-y: auto; }
 .chat-dock-spacer { height: calc(var(--chat-dock-height, 0px) + 16px); }
 
 /* The design as a conversation: what you asked, what it became, newest last. */
-@media (prefers-reduced-motion: reduce) {
-  .chat-dock { transition: none; }
-}
 
 /* The coach thread grows downward: the reply arrives, it does not jump in. */
 .coach-exchange-coach, #home-coach-pending .coach-exchange-you { animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
-.coach-pending-status { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--home-muted); font-size: var(--text-small); }
+.coach-pending-status { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--muted); font-size: var(--text-small); }
 /* Inside the dock the form is the composer card itself; the panel's own spacing gives way. */
 @media (prefers-reduced-motion: reduce) { .coach-exchange-coach, #home-coach-pending .coach-exchange-you { animation: none; } }
 
-/* ---- Swap drawer, as in the Claude app. On a phone the page slides right and the list takes the
-   space it leaves. On a wide screen the list is a sidebar and the page re-centres in what is left;
-   between the two it lies over the page. The page moves with `left`/`padding`, not a transform,
-   so the fixed drawer stays put. ---- */
+/* ---- Swap drawer. On a phone and a tablet the list slides over the page from the left under a
+   light scrim, and the page stays put, so nothing overhangs the screen to pan sideways. At 1024px
+   and up it is a sidebar and the page re-centres in what is left. ---- */
 :root { --drawer-w: min(84vw, 340px); }
-#home-page { position: relative; left: 0; background: var(--color-base-100); transition: left var(--motion-settle) var(--ease-out), padding-left var(--motion-settle) var(--ease-out), border-radius var(--motion-settle) var(--ease-out); }
-body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
-#home-page:has(#home-alternatives-panel:not([hidden])) { left: var(--drawer-w); border-radius: var(--radius-surface) 0 0 var(--radius-surface); box-shadow: -1px 0 0 var(--color-base-border); }
-/* The drawer slides its whole width in and out with the page, on the same curve: `hidden` still
-   decides whether it is open, and `display` waits for the slide out before it lets go. */
-#home-alternatives-panel { position: fixed; z-index: 41; inset: 0 auto 0 0; width: var(--drawer-w); max-height: none; margin: 0; padding: calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 0; background: var(--color-base-300); overscroll-behavior: contain; transform: translateX(-100%); transition: transform var(--motion-settle) var(--ease-out), display var(--motion-settle) allow-discrete; }
+/* Nothing is wider than the screen, so a sideways stroke never pans the page: it is the swipe.
+   Scrollers inside (the day grid, a table, the suggestions) still scroll sideways themselves. */
+html, body { overflow-x: clip; }
+#home-page { position: relative; touch-action: pan-y; background: var(--color-base-100); transition: padding-left var(--motion-settle) var(--ease-out); }
+/* The drawer slides its whole width in and out on a transform: `hidden` still decides whether it
+   is open, and `display` waits for the slide out before it lets go. */
+#home-alternatives-panel { position: fixed; z-index: 41; inset: 0 auto 0 0; width: var(--drawer-w); max-height: none; margin: 0; padding: calc(var(--top) - 12px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 0; border-right: 1px solid var(--line); background: var(--color-base-300); box-shadow: 0 0 48px rgb(32 32 29 / .12); overscroll-behavior: contain; transform: translateX(-100%); transition: transform var(--motion-settle) var(--ease-out), display var(--motion-settle) allow-discrete; }
 #home-alternatives-panel:not([hidden]) { transform: none; }
 @starting-style { #home-alternatives-panel:not([hidden]) { transform: translateX(-100%); } }
 /* The page is the way back: a tap on it closes the drawer. */
-#home-chooser-backdrop { display: block; position: fixed; z-index: 40; inset: 0 0 0 var(--drawer-w); background: transparent; }
+#home-chooser-backdrop { display: block; position: fixed; z-index: 40; inset: 0; background: rgb(32 32 29 / .18); animation: sheet-fade var(--motion-quick) ease backwards; }
 .adaptive-home:has(#home-alternatives-panel:not([hidden])) #home-expansion { display: grid; }
+/* On a phone the list is a sheet from the bottom, as iOS does it: tall, with Home showing above
+   it, a grip at its top edge, dragged down to close (the SheetDrag hook follows the finger). */
+.home-sheet-grip { display: none; }
+@media (max-width: 600px) {
+  #home-alternatives-panel { inset: auto 0 0 0; width: 100%; height: 88svh; padding: 8px var(--gutter) calc(24px + env(safe-area-inset-bottom)); border-right: 0; border-radius: var(--radius-surface) var(--radius-surface) 0 0; box-shadow: 0 -8px 40px rgb(32 32 29 / .12); transform: translateY(100%); }
+  @starting-style { #home-alternatives-panel:not([hidden]) { transform: translateY(100%); } }
+  #home-alternatives-panel .home-sheet-grip { display: block; margin: 0 auto 4px; }
+  #home-alternatives-panel .home-chooser-header { margin-left: -12px; }
+}
 @media (min-width: 601px) {
   :root { --drawer-w: 320px; }
-  #home-alternatives-panel { padding: 20px 16px 24px; border-right: 1px solid var(--color-base-border); }
-  /* Over the page, which stays where it was under a light scrim. */
-  #home-page:has(#home-alternatives-panel:not([hidden])) { left: 0; border-radius: 0; box-shadow: none; }
-  #home-chooser-backdrop { inset: 0; background: rgb(32 32 29 / .18); animation: sheet-fade var(--motion-quick) ease backwards; }
-  #home-alternatives-panel { box-shadow: 0 0 48px rgb(32 32 29 / .12); }
+  #home-alternatives-panel { padding: calc(var(--top) - 12px) 16px 24px; }
 }
+/* From a tap on a workout until the page has it, the list holds where it is, so the name can
+   fly from its row (js/view_transitions.mjs). */
+html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important; transform: none !important; transition: none !important; }
 @media (min-width: 1024px) {
   /* A sidebar: the page keeps its full width beside it and its column centres in what is left. */
   #home-page:has(#home-alternatives-panel:not([hidden])) { padding-left: var(--drawer-w); }
@@ -940,53 +958,46 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .home-corner { display: flex; justify-content: center; gap: 8px; padding-top: 20px; }
 
 /* One icon button everywhere: 44px, plain and muted, filled on hover, pressed in on a tap. */
-.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--home-muted); cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
-:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch):hover { background: var(--color-base-300); color: #262722; }
+.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--muted); cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
+:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch):hover { background: var(--color-base-300); color: var(--ink); }
 :is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch):active { transform: scale(.94); }
-:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch):focus-visible { outline: 2px solid #5e615b; outline-offset: -2px; }
+:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch):focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
 /* A sheet rises from the bottom edge over a fading backdrop; its grip sits at its top edge. */
 @keyframes sheet-up { from { transform: translate(-50%, 100%); } to { transform: translate(-50%, 0); } }
 @keyframes sheet-fade { from { opacity: 0; } to { opacity: 1; } }
-.home-sheet-grip { justify-self: center; width: 36px; height: 4px; margin-bottom: 8px; border-radius: 2px; background: var(--color-base-border); }
+.home-sheet-grip { justify-self: center; width: 36px; height: 4px; margin-bottom: 8px; border-radius: 2px; background: var(--line); }
 
 /* ---- The studio: Edit and New as a chat. ---- */
-.studio { display: flex; flex-direction: column; max-width: calc(var(--chat-w) + 2 * var(--gutter)); min-height: 100svh; margin: 0 auto; padding: 0 var(--gutter); color: #262722; font-family: var(--font-sans); animation: studio-in var(--motion-settle) var(--ease-out) backwards; }
+.studio { display: flex; flex-direction: column; max-width: calc(var(--chat-w) + 2 * var(--gutter)); min-height: 100svh; margin: 0 auto; padding: 0 var(--gutter); color: var(--ink); font-family: var(--font-sans); animation: studio-in var(--motion-settle) var(--ease-out) backwards; }
 @keyframes studio-in { from { opacity: 0; transform: translateY(32px); } to { opacity: 1; transform: none; } }
-.studio-header { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px; margin-inline: calc(-1 * var(--gutter)); padding: calc(10px + env(safe-area-inset-top)) var(--gutter) 10px; background: var(--color-base-100); }
-.studio-back, .studio-close { flex: none; margin-left: -12px; color: #262722; }
-.studio-close { margin-left: auto; border-color: transparent; background: transparent; color: var(--home-muted, #736f68); }
-.studio-heading { min-width: 0; }
-.studio-title { margin: 0; font: 600 var(--text-body)/1.25 var(--font-sans); }
+.studio-header { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px; margin-inline: calc(-1 * var(--gutter)); padding: calc(var(--top) - 12px + env(safe-area-inset-top)) var(--gutter) 10px; background: var(--color-base-100); }
+.studio-back, .studio-close { flex: none; margin-left: -12px; color: var(--ink); }
+.studio-close { margin-left: auto; border-color: transparent; background: transparent; color: var(--muted); }
+/* Only Back sits in the bar; New's title stands below it, where Edit shows the workout's name. */
+.studio-title { margin: 6px 0 0; text-align: center; font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
 .studio-thread { display: grid; gap: 16px; margin: 12px 0 0; padding: 0; list-style: none; }
 .studio-msg { min-width: 0; animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
 .studio-you { display: flex; justify-content: flex-end; }
-.studio-bubble { width: fit-content; max-width: 88%; margin: 0; padding: 9px 15px; border: 0; border-radius: 20px 20px 6px 20px; background: #e9e5dc; color: #262722; font: 400 var(--text-body)/1.5 var(--font-sans); overflow-wrap: anywhere; text-align: left; white-space: pre-line; scroll-margin-top: 72px; }
+.studio-bubble { width: fit-content; max-width: 88%; margin: 0; padding: 9px 15px; border: 0; border-radius: 20px 20px 6px 20px; background: var(--bubble); color: var(--ink); font: 400 var(--text-body)/1.5 var(--font-sans); overflow-wrap: anywhere; text-align: left; white-space: pre-line; scroll-margin-top: 72px; }
 .studio-parts { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0; }
-.studio-part { min-height: 36px; padding: 0 14px; border: 1px solid var(--color-base-border); border-radius: 999px; background: var(--color-base-200); color: #262722; font: 400 var(--text-small)/1 var(--font-sans); cursor: pointer; transition: background var(--motion-quick) ease; }
-.studio-part:hover { background: var(--color-base-300); }
+.studio-part { min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--fill); color: var(--ink); font: 400 var(--text-small)/1 var(--font-sans); cursor: pointer; transition: background var(--motion-quick) ease; }
+.studio-part:hover { background: var(--fill-hover); }
 .studio-text { margin: 0; font-size: var(--text-body); line-height: 1.55; }
-.studio-turn { margin: 0; color: var(--home-muted, #736f68); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
-.studio-error { margin: 0; color: #8a3b2b; font-size: var(--text-small); }
+.studio-turn { margin: 0; color: var(--muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.studio-error { margin: 0; color: #a55643; font-size: var(--text-small); }
 .studio-error:empty { display: none; }
 
 /* A workout card: label, name, two chips, why, then the table in small type. */
 /* A workout in the studio reads as it does on Home: no card, the name at the title size, its
    totals one muted line, then its sets. A total the proposal changed is underlined. */
-.studio-card { margin-top: 6px; padding: 8px 0 0; text-align: center; }
+.studio-card { width: 100%; max-width: 354px; margin: 6px auto 0; padding: 8px 0 0; text-align: center; }
 .studio-card-name { margin: 0; font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; text-wrap: balance; }
 .studio-card-totals { display: flex; flex-wrap: wrap; justify-content: center; margin: 12px 0 0; }
-.studio-chip { color: var(--home-muted, #736f68); font-size: var(--text-body); font-variant-numeric: tabular-nums; }
-.studio-chip + .studio-chip::before { content: "·"; margin: 0 6px; color: var(--home-muted, #736f68); font-weight: 400; }
-.studio-card-note { max-width: 46ch; margin: 14px auto 0; color: var(--home-muted, #736f68); font-size: var(--text-small); line-height: 1.5; }
-.studio-card-table { margin: 20px 0 0; text-align: left; }
-.studio-card #home-inspection { padding-top: 4px; }
-.studio-card #home-inspection table { font-size: var(--text-body); }
-.studio-card #home-inspection thead th { padding: 12px 0 6px; color: var(--home-muted, #736f68); font-size: var(--text-small); font-weight: 400; }
-.studio-card #home-inspection :is(tbody th, tbody td) { padding: 11px 0; border-top: 1px solid var(--color-base-border); }
-.studio-card #home-inspection tbody:first-of-type :is(th, td) { border-top: 0; }
-.studio-card #home-inspection td { color: #262722; font-variant-numeric: tabular-nums; }
-.studio-card #home-inspection td:last-child { color: var(--home-muted, #736f68); }
+.studio-chip { color: var(--muted); font-size: var(--text-body); font-variant-numeric: tabular-nums; }
+.studio-chip + .studio-chip::before { content: "·"; margin: 0 0 0 .25em; color: var(--muted); font-weight: 400; }
+.studio-card-note { max-width: 46ch; margin: 14px auto 0; color: var(--muted); font-size: var(--text-small); line-height: 1.5; }
+.studio-card-table { margin: 0; text-align: left; }
 .studio-proposal { display: grid; gap: 8px; transition: opacity var(--motion-quick) ease; }
 .studio-proposal-stale { opacity: .45; }
 .studio-working { display: flex; align-items: center; gap: 2px; min-height: 36px; }
@@ -995,13 +1006,12 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-spinner { display: block; flex: none; width: 36px; height: 36px; margin-left: -6px; object-fit: contain; }
 .studio-working .studio-turn { font-size: var(--text-body); line-height: 1.5; }
 .studio-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.studio-pill { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 20px; border: 1px solid var(--color-base-border); border-radius: 999px; background: var(--color-base-200); color: #262722; font: 500 15px/1 var(--font-sans); cursor: pointer; transition: background var(--motion-quick) ease, opacity var(--motion-quick) ease; }
-.studio-pill:hover:not(:disabled) { background: var(--color-base-300); }
-.studio-pill-primary { border-color: #262722; background: #262722; color: var(--color-base-100); }
-.studio-pill-primary:hover:not(:disabled) { background: #262722; opacity: .85; }
-.studio-pill-wide { width: 100%; min-height: 52px; font-size: 16px; }
+.studio-pill { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 20px; border: 0; border-radius: 999px; background: var(--fill); color: var(--ink); font: 500 var(--text-body)/1 var(--font-sans); cursor: pointer; transition: background var(--motion-quick) ease, opacity var(--motion-quick) ease; }
+.studio-pill:hover:not(:disabled) { background: var(--fill-hover); }
+.studio-pill-wide { width: 100%; }
 .studio-pill:disabled { opacity: .4; cursor: default; }
-.studio-actions { display: flex; align-items: center; gap: 8px; }
+/* Run sits under the workout as Play does on Home: the ink pill, centred. */
+.studio-actions { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 18px; }
 /* The coach's suggested asks: quiet pills that wrap, above Save and Run. */
 .studio-suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
 /* On a phone one row that scrolls sideways, so the guesses never push the box up the screen. */
@@ -1010,51 +1020,54 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
   .studio-suggestions::-webkit-scrollbar { display: none; }
   .studio-suggestion { flex: none; white-space: nowrap; }
 }
-.studio-suggestion { padding: 0 16px; background: transparent; color: var(--home-muted, #736f68); font-size: var(--text-small); text-align: left; }
-.studio-actions .studio-pill { flex: 1; min-height: 48px; }
+.studio-suggestion { min-height: 36px; padding: 0 14px; color: var(--muted); font-size: var(--text-small); text-align: left; }
+.studio-actions .studio-pill { min-width: 96px; padding-inline: 36px; }
 
 /* New's form: a card of rows, each a label and its control, then the note and Create. It takes
    the column the chat that follows it takes, from the top. */
 .studio-form { display: grid; gap: 16px; width: 100%; padding: 12px 0 calc(32px + env(safe-area-inset-bottom)); animation: home-enter var(--motion-settle) var(--ease-out) backwards; }
-.studio-fields { border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: var(--color-base-200); }
+.studio-fields { border: 1px solid var(--line); border-radius: var(--radius-surface); background: var(--color-base-200); }
 .studio-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; min-width: 0; margin: 0; padding: 10px 12px 10px 18px; border: 0; }
-.studio-row + .studio-row { border-top: 1px solid var(--color-base-border); }
-.studio-row-label { float: left; padding: 0; color: #262722; font: 500 var(--text-body)/1.3 var(--font-sans); }
-.studio-row-hint { grid-column: 1 / -1; margin: 6px 0 2px; color: var(--home-muted, #736f68); font-size: var(--text-small); font-variant-numeric: tabular-nums; text-align: right; }
-.studio-segment { display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; padding: 3px; border-radius: 999px; background: var(--color-base-300); }
-.studio-segment-option { position: relative; display: grid; place-items: center; min-width: 92px; min-height: 44px; padding: 0 12px; border-radius: 999px; color: var(--home-muted, #736f68); font: 500 var(--text-small)/1 var(--font-sans); white-space: nowrap; cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease; }
+.studio-row + .studio-row { border-top: 1px solid var(--line); }
+.studio-row-label { float: left; padding: 0; color: var(--ink); font: 500 var(--text-body)/1.3 var(--font-sans); }
+.studio-row-hint { grid-column: 1 / -1; margin: 6px 0 2px; color: var(--muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; text-align: right; }
+/* A pick is words: the options side by side, the chosen one in ink at 600, a dot between. */
+.studio-segment { display: inline-grid; grid-auto-flow: column; grid-auto-columns: auto; }
+.studio-segment-option { position: relative; display: grid; place-items: center; min-height: 44px; padding: 0 14px; border-radius: 999px; color: var(--muted); font: 400 var(--text-body)/1 var(--font-sans); white-space: nowrap; cursor: pointer; transition: color var(--motion-quick) ease; }
 .studio-segment-option input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
-.studio-segment-option:has(input:checked) { background: var(--color-base-100); color: #262722; box-shadow: 0 1px 2px rgb(32 32 29 / .12); }
-.studio-segment-option:has(input:focus-visible) { outline: 2px solid #5e615b; outline-offset: 1px; }
+.studio-segment-option:has(input:checked) { color: var(--ink); font-weight: 600; }
+.studio-segment-option + .studio-segment-option::before { content: "·"; position: absolute; left: -3px; color: var(--muted); font-weight: 400; }
+.studio-row .studio-segment { margin-right: -14px; }
+.studio-segment-option:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 1px; }
 .studio-number { display: grid; grid-template-columns: 44px 104px 44px; align-items: center; gap: 4px; }
-.studio-number-button { display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--color-base-border); border-radius: 50%; background: var(--color-base-100); color: #262722; cursor: pointer; transition: background var(--motion-quick) ease; }
-.studio-number-button:hover:not(:disabled) { background: var(--color-base-300); }
+.studio-number-button { display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--fill); color: var(--ink); cursor: pointer; transition: background var(--motion-quick) ease; }
+.studio-number-button:hover:not(:disabled) { background: var(--fill-hover); }
 .studio-number-button:disabled { opacity: .3; cursor: default; }
 /* Held to repeat, so a long press must not select text or open the phone's callout. */
 .studio-number-button { -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
 /* The value and its unit read as one: "20 min". */
-.studio-number-field { display: flex; align-items: baseline; justify-content: center; gap: 4px; height: 44px; padding: 0 10px; border: 1px solid var(--color-base-border); border-radius: 12px; background: var(--color-base-100); cursor: text; }
-.studio-number-field:focus-within { outline: 2px solid #5e615b; outline-offset: 1px; }
-.studio-number-input { flex: 1 1 0; min-width: 0; height: 42px; padding: 0; border: 0; background: transparent; color: #262722; font: 600 var(--text-heading)/42px var(--font-sans); font-variant-numeric: tabular-nums; text-align: right; outline: none; }
-.studio-number-input::placeholder { color: var(--home-muted, #736f68); font-size: var(--text-small); font-weight: 500; text-align: center; }
-.studio-number-unit { flex: 1 1 0; color: var(--home-muted, #736f68); font-size: var(--text-small); white-space: nowrap; }
+.studio-number-field { display: flex; align-items: baseline; justify-content: center; gap: 4px; height: 44px; padding: 0 10px; border: 0; border-radius: 12px; background: transparent; cursor: text; }
+.studio-number-field:focus-within { outline: 2px solid var(--focus); outline-offset: 1px; }
+.studio-number-input { flex: 1 1 0; min-width: 0; height: 42px; padding: 0; border: 0; background: transparent; color: var(--ink); font: 600 var(--text-heading)/42px var(--font-sans); font-variant-numeric: tabular-nums; text-align: right; outline: none; }
+.studio-number-input::placeholder { color: var(--muted); font-size: var(--text-small); font-weight: 500; text-align: center; }
+.studio-number-unit { flex: 1 1 0; color: var(--muted); font-size: var(--text-small); white-space: nowrap; }
 .studio-number-input:placeholder-shown { text-align: center; }
 .studio-number-input:placeholder-shown + .studio-number-unit { display: none; }
 /* The folded fields' row: a full-width button that reads as a row, its summary where values sit. */
 .studio-more { width: 100%; min-height: 56px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
-.studio-more:focus-visible { outline: 2px solid #5e615b; outline-offset: -2px; border-radius: var(--radius-surface); }
-.studio-more-summary { display: inline-flex; align-items: center; gap: 8px; color: var(--home-muted, #736f68); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
+.studio-more:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: var(--radius-surface); }
+.studio-more-summary { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
 .studio-more-chevron { transition: transform var(--motion-quick) ease; }
 .studio-more[aria-expanded="true"] .studio-more-chevron { transform: rotate(180deg); }
-.studio-more-fields > .studio-row { border-top: 1px solid var(--color-base-border); }
+.studio-more-fields > .studio-row { border-top: 1px solid var(--line); }
 .studio-note { display: grid; gap: 8px; }
-.studio-note-label { color: var(--home-muted, #736f68); font-size: var(--text-small); }
-.studio-note textarea { width: 100%; min-height: 3.5em; max-height: 12rem; padding: 12px 16px; border: 1px solid var(--color-base-border); border-radius: 16px; background: var(--color-base-200); color: var(--color-base-content); font: 400 var(--text-body)/1.5 var(--font-sans); resize: none; field-sizing: content; }
-.studio-note textarea::placeholder { color: #74716A; opacity: 1; }
+.studio-note textarea { width: 100%; min-height: 3.5em; max-height: 12rem; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius-surface); background: var(--color-base-200); color: var(--color-base-content); font: 400 var(--text-body)/1.5 var(--font-sans); resize: none; field-sizing: content; }
+.studio-note textarea::placeholder { color: var(--muted); opacity: 1; }
 .studio-note textarea:focus-visible { outline: none; border-color: #918d83; }
 @media (prefers-reduced-motion: reduce) {
   .studio, .studio-msg, .studio-form { animation: none; }
   #home-page, .home-corner-action { transition: none; }
+  #home-chooser-backdrop { animation: none; }
   .studio-segment-option, .studio-more-chevron { transition: none; }
 }
 /* In the studio the working indicator is a line in the conversation, not a screen of its own. */
@@ -1063,32 +1076,50 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .coach-summary-loader { margin-top: -8px; }
 
 /* What a proposal changed from the one before: the clay underline, on a chip as its border. */
-.studio-chip-changed { color: #262722; font-weight: 600; text-decoration: underline 1.5px #a77b5d; text-underline-offset: 5px; }
+.studio-chip-changed { color: var(--ink); font-weight: 600; text-decoration: underline 1.5px var(--changed); text-underline-offset: 5px; }
 
 /* What the coach remembers: an icon beside the coach's note that opens a sheet with its two parts. */
 .coach-head { display: flex; align-items: flex-start; gap: 8px; }
 .coach-head .coach-note { flex: 1; min-width: 0; }
-.coach-memory-toggle { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: -10px -12px 0 0; border: 0; background: transparent; color: var(--home-muted); cursor: pointer; }
-.coach-memory-toggle:hover, .coach-memory-toggle[aria-expanded="true"] { color: #262722; }
+.coach-memory-toggle { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: -10px -12px 0 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.coach-memory-toggle:hover, .coach-memory-toggle[aria-expanded="true"] { color: var(--ink); }
 .home-sheet-backdrop { position: fixed; inset: 0; z-index: 40; background: rgb(32 32 29 / .28); animation: sheet-fade var(--motion-quick) ease backwards; }
 .home-sheet { position: fixed; z-index: 41; left: 50%; bottom: 0; display: grid; gap: 18px; width: min(430px, 100%); max-height: 80svh; overflow-y: auto; padding: 10px 20px calc(24px + env(safe-area-inset-bottom)); border-radius: var(--radius-surface) var(--radius-surface) 0 0; background: var(--color-base-200); text-align: left; transform: translateX(-50%); animation: sheet-up var(--motion-settle) var(--ease-out) backwards; }
 .home-sheet:focus { outline: none; }
 .coach-memory-sheet .home-sheet-grip { margin-bottom: 0; }
 @media (prefers-reduced-motion: reduce) { .home-sheet, .home-sheet-backdrop { animation: none; } }
-.coach-memory-heading { display: flex; justify-content: space-between; margin: 0 0 6px; color: var(--home-muted); font: 500 var(--text-small)/1.2 var(--font-sans); }
+.coach-memory-heading { display: flex; justify-content: space-between; margin: 0 0 6px; color: var(--muted); font: 500 var(--text-small)/1.2 var(--font-sans); }
 .coach-memory-usage { font-variant-numeric: tabular-nums; }
-.coach-memory-empty { margin: 0; color: var(--home-muted); font-size: var(--text-small); }
+.coach-memory-empty { margin: 0; color: var(--muted); font-size: var(--text-small); }
 .coach-memory-entries { margin: 0; padding: 0; list-style: none; }
-.coach-memory-entries li { display: flex; align-items: center; gap: 8px; min-height: 44px; border-bottom: 1px solid var(--home-line); color: #262722; font-size: var(--text-small); line-height: 1.4; }
+.coach-memory-entries li { display: flex; align-items: center; gap: 8px; min-height: 44px; border-bottom: 1px solid var(--line); color: var(--ink); font-size: var(--text-small); line-height: 1.4; }
 .coach-memory-entries li > span { flex: 1; padding: 8px 0; }
-.coach-memory-forget { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin-right: -12px; border: 0; background: transparent; color: var(--home-muted); }
-.coach-memory-forget:hover { color: #262722; }
+.coach-memory-forget { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin-right: -12px; border: 0; background: transparent; color: var(--muted); }
+.coach-memory-forget:hover { color: var(--ink); }
 
 /* ---- Moving between views (Home, Progress, New, Edit): the week bar holds still while the page
    slides 12px and fades, forward from the right, back from the left. A tap on a control marked
    data-vt starts it (js/view_transitions.mjs); the arrivals below would only double it. ---- */
 #home-week-progress { view-transition-name: week; }
 ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation-duration: 240ms; animation-timing-function: var(--ease-out); }
+/* Edit and New rise like the sheet grown to the full screen, and drop away the same way; the week
+   bar is part of Home's page then, not a piece that holds still. */
+html:is([data-vt="rise"], [data-vt="drop"]) #home-week-progress { view-transition-name: none; }
+html[data-vt="rise"]::view-transition-group(root), html[data-vt="drop"]::view-transition-group(root) { animation-duration: var(--motion-settle); }
+html[data-vt="rise"]::view-transition-old(root) { animation: vt-recede var(--motion-settle) var(--ease-out) both; }
+html[data-vt="rise"]::view-transition-new(root) { animation: vt-rise var(--motion-settle) var(--ease-out) both; }
+html[data-vt="drop"]::view-transition-old(root) { z-index: 1; animation: vt-drop var(--motion-settle) var(--ease-out) both; }
+html[data-vt="drop"]::view-transition-new(root) { animation: vt-recede var(--motion-settle) var(--ease-out) reverse both; }
+@keyframes vt-rise { from { transform: translateY(100%); } }
+@keyframes vt-drop { to { transform: translateY(100%); } }
+@keyframes vt-recede { to { opacity: .6; transform: scale(.97); } }
+/* A workout handed to Home: its name flies into Home's title while the list or the studio leaves
+   (the list as one piece, the way it came). */
+::view-transition-group(workout-title) { animation-duration: var(--motion-settle); }
+html[data-vt="attach"] #home-alternatives-panel { view-transition-name: sheet; transition: none; }
+html[data-vt="attach"]::view-transition-old(sheet) { animation: vt-sheet-out var(--motion-settle) var(--ease-out) both; }
+@keyframes vt-sheet-out { to { transform: translateX(-100%); } }
+@media (max-width: 600px) { @keyframes vt-sheet-out { to { transform: translateY(100%); } } }
 html[data-vt="forward"]::view-transition-old(root) { animation-name: vt-out-left; }
 html[data-vt="forward"]::view-transition-new(root) { animation-name: vt-in-right; }
 html[data-vt="back"]::view-transition-old(root) { animation-name: vt-out-right; }
@@ -1108,27 +1139,21 @@ html[data-vt] :is(.studio, .studio-form, .studio-msg, .home-enter) { animation: 
    plain step either side, the rest folded under More, Create at the foot. ---- */
 .studio-form-hero { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0; padding-top: 28px; }
 .studio-hero-segment { margin: 0; padding: 0; border: 0; }
-.studio-hero-segment .studio-segment { padding: 0; background: transparent; }
-.studio-hero-segment .studio-segment-option { min-width: 0; padding: 0 14px; font-size: var(--text-body); transition: color var(--motion-quick) ease; }
-.studio-hero-segment .studio-segment-option:has(input:checked) { background: transparent; box-shadow: none; color: #262722; font-weight: 600; }
-.studio-hero-segment .studio-segment-option + .studio-segment-option::before { content: "·"; position: absolute; left: -3px; color: var(--home-muted, #736f68); font-weight: 400; }
 .studio-hero-numbers { display: grid; gap: 32px; margin-top: 36px; justify-items: center; }
 .studio-hero-number { display: grid; justify-items: center; gap: 8px; }
 .studio-hero-number .studio-number { grid-template-columns: 52px 176px 52px; gap: 8px; }
-.studio-hero-number .studio-number-button { width: 52px; height: 52px; border: 0; background: var(--color-base-300); color: #262722; }
-.studio-hero-number .studio-number-button:hover:not(:disabled) { background: #e2dfd8; }
-.studio-hero-number .studio-number-field { flex-direction: column; align-items: center; gap: 2px; height: auto; padding: 4px 0; border: 0; border-radius: 14px; background: transparent; }
+.studio-hero-number .studio-number-button { width: 52px; height: 52px; }
+.studio-hero-number .studio-number-field { flex-direction: column; align-items: center; gap: 2px; height: auto; padding: 4px 0; border-radius: 14px; }
 .studio-hero-number .studio-number-input { width: 100%; height: auto; font: 600 64px/1 var(--font-sans); letter-spacing: -.04em; text-align: center; }
 .studio-hero-number .studio-number-input::placeholder { font-size: var(--text-heading); }
 .studio-hero-number .studio-number-unit { flex: none; }
 .studio-hero-number .studio-number-field:focus-within { outline-offset: 2px; }
 .studio-hero-number .studio-row-hint { margin: 0; text-align: center; }
 .studio-form-hero .studio-more { width: auto; min-height: 44px; margin-top: 24px; padding: 0 14px; border: 0; border-radius: 999px; text-align: center; }
-.studio-form-hero .studio-more:hover { background: var(--color-base-300); }
+.studio-form-hero .studio-more:hover { background: var(--fill); }
 .studio-form-hero .studio-more-fields { width: 100%; gap: 16px; margin: 8px 0 32px; }
 .studio-form-hero .studio-more[aria-expanded="false"] { margin-bottom: 32px; }
-.studio-form-hero .studio-fields { border: 0; border-top: 1px solid var(--color-base-border); border-bottom: 1px solid var(--color-base-border); border-radius: 0; background: transparent; }
+.studio-form-hero .studio-fields { border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
 .studio-form-hero .studio-fields .studio-row { padding-left: 0; padding-right: 0; }
 .studio-form-hero .studio-error { width: 100%; margin-top: 16px; }
 .studio-form-hero #studio-create { position: sticky; bottom: calc(16px + env(safe-area-inset-bottom)); margin-top: auto; }
-.studio-prompt { margin-top: 8px; color: var(--home-muted, #736f68); text-align: center; }

@@ -39,7 +39,7 @@ defmodule BurpeeTrainer.Coach.NewDefaultsTest do
       assert NewDefaults.suggested_reps(scope, :navy_seal, 1_200) == 20
     end
 
-    test "with a recent session they start from the best, scaled to the duration" do
+    test "with a recent session they start a step past the best, scaled to the duration" do
       scope = scope_fixture()
 
       free_form_session_fixture(scope.user, %{
@@ -47,10 +47,17 @@ defmodule BurpeeTrainer.Coach.NewDefaultsTest do
         "duration_sec_actual" => 1_200
       })
 
-      assert NewDefaults.suggested_reps(scope, :six_count, 1_200) == 100
-      assert NewDefaults.suggested_reps(scope, :six_count, 600) == 50
+      assert NewDefaults.suggested_reps(scope, :six_count, 1_200) == 110
+      assert NewDefaults.suggested_reps(scope, :six_count, 600) == 55
       # A longer session does not hold the same rate for longer.
-      assert NewDefaults.suggested_reps(scope, :six_count, 2_400) == 180
+      assert NewDefaults.suggested_reps(scope, :six_count, 2_400) == 195
+    end
+
+    test "the push is a step, never more than 10% past the best, and always past it" do
+      assert NewDefaults.pushed(40, 1_200) == 44
+      assert NewDefaults.pushed(80, 1_200) == 85
+      assert NewDefaults.pushed(150, 1_200) == 160
+      assert NewDefaults.pushed(7, 1_200) == 7
     end
 
     test "a step is five up to fifty and ten from there, never below five" do

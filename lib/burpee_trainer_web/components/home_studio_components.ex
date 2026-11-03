@@ -26,6 +26,9 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     ~H"""
     <section id="home-studio" class="studio" data-stage={@state.authoring_stage}>
       <.header state={@state} />
+      <h1 :if={not edit?(@state)} id="home-authoring-heading" class="studio-title">
+        {heading(@state)}
+      </h1>
       <.new_form :if={form?(@state)} state={@state} />
       <ol
         :if={not form?(@state)}
@@ -46,47 +49,58 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   attr(:state, :map, required: true)
 
-  # Back: out of Edit and out of New's form; from New's proposal, or its request in flight,
-  # back to the form.
+  # Back: from a proposal on screen, home with it as today's workout; otherwise out of Edit and
+  # out of New's form, and from New's request in flight back to the form.
   defp header(assigns) do
-    state = assigns.state
-    leaves? = edit?(state) or form?(state)
-
-    assigns =
-      assign(assigns,
-        leaves?: leaves?,
-        back_id: if(leaves?, do: "home-request-abort", else: "studio-back"),
-        back_label:
-          cond do
-            edit?(state) -> "Cancel edit"
-            leaves? -> "Cancel new workout"
-            true -> "Back to the form"
-          end
-      )
+    assigns = assign(assigns, back: back(assigns.state))
 
     ~H"""
     <header class="studio-header">
       <button
-        id={@back_id}
+        id={@back.id}
         type="button"
         class="studio-back"
-        data-vt="back"
-        aria-label={@back_label}
+        data-vt={@back.vt}
+        data-vt-from={@back.id == "home-request-keep" && "#studio-proposal .studio-card-name"}
+        aria-label={@back.label}
         title="Back"
-        phx-click={
-          if(@leaves?,
-            do: JS.push("abort_new_workout") |> JS.focus(to: "#home-summary"),
-            else: JS.push("back_new_step")
-          )
-        }
+        phx-click={@back.click}
       >
-        <.icon name="hero-chevron-left" class="size-5" />
+        <%!-- Edit and New rise over Home, so leaving them points down; a step back in New points back. --%>
+        <.icon
+          name={if(@back.vt == "drop", do: "hero-chevron-down", else: "hero-chevron-left")}
+          class="size-5"
+        />
       </button>
-      <div class="studio-heading">
-        <h1 id="home-authoring-heading" class="studio-title">{heading(@state)}</h1>
-      </div>
+      <%!-- The title is the workout: in Edit its name, below; New's stands under the bar. --%>
+      <h1 :if={edit?(@state)} id="home-authoring-heading" class="sr-only">{heading(@state)}</h1>
     </header>
     """
+  end
+
+  # What Back does here: keep the proposal on screen, leave, or step back to New's form.
+  defp back(%{authoring_stage: :review, pending_request: %{}, busy?: false}),
+    do: %{
+      id: "home-request-keep",
+      label: "Keep this workout",
+      vt: "drop",
+      click: JS.push("keep_workout_request") |> JS.focus(to: "#home-summary")
+    }
+
+  defp back(state) do
+    if edit?(state) or form?(state),
+      do: %{
+        id: "home-request-abort",
+        label: if(edit?(state), do: "Cancel edit", else: "Cancel new workout"),
+        vt: "drop",
+        click: JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")
+      },
+      else: %{
+        id: "studio-back",
+        label: "Back to the form",
+        vt: nil,
+        click: JS.push("back_new_step")
+      }
   end
 
   ## Edit
@@ -111,9 +125,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         expanded={@state.expanded_groups}
         table?={not @asked?}
       />
-    </li>
-    <li :if={not @asked?} class="studio-msg studio-coach">
-      <p class="studio-text studio-prompt">What would you like to change?</p>
     </li>
     <.proposal_thread :if={@asked?} state={@state} />
     """
@@ -418,13 +429,13 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           />
         </div>
         <div class="studio-note">
-          <label for="studio-note" class="studio-note-label">Anything else? (optional)</label>
+          <label for="studio-note" class="sr-only">Anything else? (optional)</label>
           <textarea
             id="studio-note"
             name="new[note]"
             rows="2"
             maxlength="300"
-            placeholder="e.g. front-load the reps"
+            placeholder="Anything else? Front-load the reps, say"
             phx-debounce="300"
           >{@params.note}</textarea>
         </div>

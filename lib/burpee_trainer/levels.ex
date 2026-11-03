@@ -74,6 +74,15 @@ defmodule BurpeeTrainer.Levels do
     if found, do: found.level, else: :level_1a
   end
 
+  @doc "The level above `level`, or nil above the top."
+  @spec next(atom()) :: atom() | nil
+  def next(level) do
+    case Enum.find_index(all_levels(), &(&1 == level)) do
+      index when index > 0 -> Enum.at(all_levels(), index - 1)
+      _top -> nil
+    end
+  end
+
   @doc "The next level above `count` reps in 20 minutes for one type, and the reps it needs."
   @spec next_landmark(:six_count | :navy_seal, non_neg_integer()) ::
           {atom(), pos_integer()} | nil

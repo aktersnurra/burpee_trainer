@@ -352,6 +352,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "change_current_edit",
              "change_new_workout",
              "edit_current_workout",
+             "keep_workout_request",
              "new_workout",
              "refine_workout",
              "review_current_edit",

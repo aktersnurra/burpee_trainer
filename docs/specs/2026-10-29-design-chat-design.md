@@ -27,22 +27,20 @@ swipe for Swap.
 ## The studio
 
 Edit and New take Home's place as a chat (`HomeStudioComponents`, `data-stage` on `#home-studio`).
-A header carries the back button (it leaves with no change) and the workout or the answers so far.
+A header carries only Back (⌄, since the studio rises over Home); the title is the workout's name in
+Edit, and "New workout" in New, large under it. With a proposal on screen Back keeps it (saved, today's workout, back on Home); otherwise it leaves with no change.
 
 ```
 ‹  Edit workout
-   Starter Navy Seal
-╭ Today's workout ────────╮   ← the coach's first message: a card
-│ Starter Navy Seal       │
-│ table                   │
-╰─────────────────────────╯
-What would you like to change?
+     Starter Navy Seal           ← the coach's first message: the workout as on Home
+     20 min · 15 reps
+   table
                  Make it 150 reps   ← you
 (spinner) Working on it…
-Two even sets with a breather.      ← the proposal arrives as a card
-╭ Proposal ───────────────╮
-╰─────────────────────────╯
-              (▶ Run)                ← under the card
+        Steady 150               ← the proposal, read the same way
+   Two even sets with a breather.
+   table
+   (▶ Run)
 ╭─────────────────────────╮
 │ Change anything else? ↑ │
 ╰─────────────────────────╯
@@ -72,9 +70,11 @@ holds what each value starts from.
 - **Duration** starts at 20 minutes, or at what the week has left if that is less, and steps by
   five up to what is left, which is always one of them. Never past the week's 80 minutes; a value
   typed is kept within that.
-- **Reps** start from the athlete's progression for the type (a recent comparable session, within
-  the planner's ceiling), else their recent best, else the next level's landmark, scaled to the
-  duration. They step by five up to 50 and by ten from there; the last step up stops at the most
+- **Reps** start a step past the athlete's best 20-minute pace for the type in the last eight
+  weeks (five, or ten from 50), never more than the planner's 10% above it, scaled to the
+  duration: a best of 40 opens on 44, of 100 on 110. When their latest session says to ease off
+  (`Progression` `:ease`), the eased rate instead; with no recent session, the next level's
+  landmark. They step by five up to 50 and by ten from there; the last step up stops at the most
   that fits.
 - **Set size** (unbroken only) starts at the step nearest a tenth of the reps (15 for 150) and
   follows the reps until the athlete sets it. It steps in fives below the reps, then no limit; a

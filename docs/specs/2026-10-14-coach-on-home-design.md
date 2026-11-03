@@ -63,7 +63,10 @@ Minutes each day             (a column a week)
   goal reached in the last week with the next goal; else the best with the next goal;
   else the first result; else "No sessions yet". A reached or best gauge offers
   "Set N by date" for its type. A new goal set after one is reached shows at once.
-- **One chart, two axes.** Six-count on the left, Navy SEAL on the right, each in its
-  colour (the gauges' keys). Each axis tops out at that type's goal, so both goals sit on
-  the one dashed line and a line's height reads as closeness to its goal; without a goal
-  an axis tops out at the best rounded up. Sessions open in the chart's place.
+- **A small chart per type**, stacked on one time axis, each named in its colour (the
+  gauges' keys) and on its own scale, so neither line is read against the other's numbers.
+  A scale tops out at the type's goal, drawn dashed; without a goal at the best rounded up.
+  Sessions open in the charts' place.
+- **The next level, in words.** Under the level, one line says what the next one takes ("Level
+  1C: 100 six-count and 40 Navy SEAL in 20 minutes, both in one week"), and each gauge says how
+  its type stands toward that same level ("Ready for 1C", "10 to go for 1C").

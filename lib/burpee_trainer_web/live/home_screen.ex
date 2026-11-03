@@ -43,13 +43,12 @@ defmodule BurpeeTrainerWeb.HomeScreen do
     end
   end
 
-  # What the started workout is, on one line: type, style, reps, time.
+  # The started workout's totals, as Home shows a workout's: minutes, then reps.
   defp resume_meta(session) do
     [
-      Fmt.burpee_type(session.burpee_type),
-      session.style_name,
-      session.burpee_count_planned && "#{session.burpee_count_planned} reps",
-      session.duration_sec_planned && Fmt.duration_sec(session.duration_sec_planned)
+      session.duration_sec_planned &&
+        HomeWorkoutComponents.duration_label(session.duration_sec_planned),
+      session.burpee_count_planned && "#{session.burpee_count_planned} reps"
     ]
     |> Enum.reject(&(&1 in [nil, ""]))
     |> Enum.join(" · ")

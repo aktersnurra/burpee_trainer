@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-11-03 — One look on every view
+
+- **One set of colours**: ink, muted, hairline, fill, focus and bubble are tokens every view reads. Before, there were eight greys and four inks, and the studio and drawer fell back to their own muted grey and hairline because Home's were scoped to Home.
+- **One workout block**: Edit, a proposal and Resume show a workout exactly as Home does: the same title, the same `20 min · 15 reps` line (Resume said `Navy SEAL · 15 reps · 20:00`), the same set table (Edit restyled it smaller) and Run as a centred pill under it, in Home's column.
+- **Three kinds of button**: one 48px ink pill for the way on (Play, Resume, Sign in, Run and Create were 44, 48 and 52px), quiet filled pills without borders for steppers and suggestions (some had borders, some didn't), and the icon button.
+- **One pick**: Style under More reads as words like the burpee type above it, instead of a segmented control; Pace and Max set use the same round steps as duration and reps.
+- **One top row and one tab**: the studio's and the drawer's headers sit at the week bar's height, and the drawer's tabs match Progress's.
+- **Words**: Edit no longer repeats its box's placeholder as a line above it; the note under More is named by its placeholder.
+- **Drawer on a phone**: Choose a workout slides over the page under a light scrim instead of pushing the page right. The pushed page hung off the screen's edge, so a sideways stroke panned the whole page; now nothing is wider than the screen and the page takes only vertical pans.
+- **Swap on a phone is a bottom sheet**: it rises from the bottom over Home, follows the finger when pulled down from the top of its list, and closes past a quarter of its height or with a flick. Swiping sideways no longer opens anything on a phone; tablets keep the left drawer and desktop the sidebar.
+- **A workout lands on Home**: a workout picked from the list flies from its row into Home's title as the list leaves. Edit and New rise from the bottom like the sheet grown to full screen and drop back down.
+- **Back keeps a proposal**: with a proposal on screen, Back saves it as today's workout and goes Home, its name settling into Home's title. Run still starts it at once. Before, Back threw the proposal away (Edit) or went back to the form (New).
+- **Studio header**: Edit and New show only Back, pointing down (⌄) since they rise over Home; the title is the workout's name in Edit and "New workout" in New, large under it.
+- **New starts a step past your best**: reps open one step above your best 20-minute pace of the last eight weeks, never more than 10% past it (a best of 40 Navy SEAL opens on 44), unless your latest session says to ease off.
+- **Progress reads plainly**: under the level, one line says what the next level takes (both types, 20 minutes each, in one week), and each type says "Ready for 1C" or how many reps to go for that same level, where it used to name a further level per type. The chart with two y-axes is two small charts, one per type on its own scale. The goal button says "Goal 150 by 15 Dec".
+- **Text box on a phone**: one capsule with the send arrow inside it, as the iOS chat apps draw it. It rides the keyboard on a transform instead of easing after it, which left it trailing and wobbling as iOS moved the viewport.
+
 ## 2026-11-03 — New's set size and pace bounds
 
 - **Max set** (unbroken) starts at a tenth of the reps on the five-rep grid (15 for 150) and follows the reps until set by hand, instead of starting at no limit and stepping down from the top.

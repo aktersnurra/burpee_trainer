@@ -646,3 +646,10 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 .composer-send:focus-visible { outline: none; }
 .composer-send:focus-visible .composer-send-dot { outline: 2px solid #5e615b; outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .composer, .composer-send-dot { transition: none; } }
+/* On a phone it is the iOS chat field, as the Claude and ChatGPT apps draw it: one capsule, the
+   words and the send key on one line, growing upward as the words wrap. */
+@media (max-width: 600px) {
+  .composer { flex-direction: row; align-items: flex-end; gap: 4px; padding: 3px 3px 3px 18px; border-radius: 26px; }
+  .composer textarea { padding: 10px 4px 10px 0; }
+  .composer-bar { flex: none; }
+}

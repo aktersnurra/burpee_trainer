@@ -241,6 +241,33 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
     |> begin_plan_review(%{"note" => String.trim(form.params.note || "")})
   end
 
+  # Back from a proposal keeps it: it is saved and becomes today's workout, and Home shows it
+  # closed, as a workout it has just been handed. Approving is a quick write, so it is done here
+  # rather than in a task, and the page changes in one patch.
+  def handle_event(
+        "keep_workout_request",
+        _,
+        %{assigns: %{authoring_stage: :review, busy?: false}} = socket
+      ) do
+    a = socket.assigns
+
+    with %{} = prepared <- a.pending_request,
+         :ok <- verify_edit_selection(socket),
+         {:ok, selected} <-
+           Coach.approve_and_select_plan(a.current_scope, prepared, a.home_selection) do
+      {:noreply,
+       socket
+       |> step(:kept)
+       |> HomeWorkspace.show_selection(selected, false)}
+    else
+      _ ->
+        {:noreply,
+         assign(socket,
+           local_error: "Couldn’t keep this workout. Your selection may have changed."
+         )}
+    end
+  end
+
   def handle_event("run_workout_request", _, %{assigns: %{authoring_stage: :review}} = socket) do
     a = socket.assigns
     id = make_ref()

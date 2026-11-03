@@ -8,6 +8,7 @@ import HoldRepeat from "./hooks/hold_repeat.mjs";
 import { registerHomeChooserFeedback } from "./hooks/home_chooser_feedback.mjs";
 import HomePendingSession from "./hooks/home_pending_session.mjs";
 import HomeStartChoice from "./hooks/home_start_choice.mjs";
+import SheetDrag from "./hooks/sheet_drag.mjs";
 import SessionHook from "./hooks/session_hook";
 import SessionCompleted from "./hooks/session_completed.mjs";
 import VideoHook from "./hooks/video_hook";
@@ -31,6 +32,7 @@ export function startApp(PoseTracker) {
 			HoldRepeat,
 			HomePendingSession,
 			HomeStartChoice,
+			SheetDrag,
 			SessionHook,
 			SessionCompleted,
 			VideoHook,

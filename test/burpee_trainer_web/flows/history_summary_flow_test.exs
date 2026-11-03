@@ -65,10 +65,10 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(view, "#progress-gauge-six_count .progress-gauge-number", "140")
     assert has_element?(view, "#progress-gauge-navy_seal .progress-gauge-number", "30")
     assert has_element?(view, "#progress-gauge-navy_seal", "of 60 by")
-    # One chart: six-count on the left axis, Navy SEAL on the right, each topped by its goal.
-    assert has_element?(view, "#home-history-trend-axis-left.progress-key-six-count", "150")
-    assert has_element?(view, "#home-history-trend-axis-right.progress-key-navy-seal", "60")
-    assert has_element?(view, "#home-history-trend .home-history-goal-line")
+    # A chart per type, each on its own scale topped by its goal.
+    assert has_element?(view, "#home-history-trend-axis-six-count", "150")
+    assert has_element?(view, "#home-history-trend-axis-navy-seal", "60")
+    assert has_element?(view, "#home-history-trend-plot-navy-seal .home-history-goal-line")
   end
 
   test "a goal on a rising line shows when it will be reached", %{conn: conn, user: user} do
@@ -109,7 +109,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
              BurpeeTrainer.Goals.list(Scope.for_user(user))
   end
 
-  test "after the first workout, its result is the best, with the next level it is short of",
+  test "after the first workout, its result is the best, measured against the next level",
        %{conn: conn, user: user} do
     free_form_session_fixture(user, %{duration_sec_actual: 1_200, burpee_count_actual: 110})
     {:ok, view, _} = live(conn, ~p"/progress")
@@ -123,7 +123,14 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(
              view,
              "#progress-gauge-six_count .progress-gauge-detail",
-             "1D at 150 · 40 to go"
+             "Ready for 1B"
+           )
+
+    # Level 1A until both types reach the next level in one week; the line says what that takes.
+    assert has_element?(
+             view,
+             "#history-next-level",
+             "Level 1B: 50 six-count and 20 Navy SEAL in 20 minutes, both in one week."
            )
   end
 

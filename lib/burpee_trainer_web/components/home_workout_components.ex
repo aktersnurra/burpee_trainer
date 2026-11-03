@@ -183,7 +183,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       <button
         id="home-corner-edit"
         type="button"
-        data-vt="forward"
+        data-vt="rise"
         class="home-corner-action"
         phx-click="edit_current_workout"
         aria-label="Edit this workout"
@@ -194,7 +194,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       <button
         id="home-corner-new"
         type="button"
-        data-vt="forward"
+        data-vt="rise"
         class="home-corner-action"
         phx-click="new_workout"
         aria-label="New workout"
@@ -213,6 +213,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     <div
       id="home-alternatives-panel"
       hidden={!@state.chooser_open?}
+      phx-hook="SheetDrag"
+      data-close="#home-chooser-close"
       role="dialog"
       aria-modal="true"
       aria-label="Choose a workout"
@@ -220,6 +222,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       phx-key={@state.chooser_open? && "Escape"}
     >
       <.focus_wrap id="home-chooser-focus">
+        <%!-- On a phone the list is a sheet: its grip says it drags down to close. --%>
+        <div class="home-sheet-grip" aria-hidden="true"></div>
         <header class="home-chooser-header">
           <button
             id="home-chooser-close"
@@ -346,6 +350,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           )
           |> JS.push("select_alternative")
         }
+        data-vt={@item.kind == "plan" && "attach"}
+        data-vt-from={@item.kind == "plan" && ".home-alternative-name"}
         phx-value-id={@item.source_id}
         phx-value-kind={@item.kind}
         aria-current={@current? && "true"}
@@ -659,9 +665,10 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       |> Decimal.normalize()
       |> Decimal.to_string(:normal)
 
-  defp duration_label(nil), do: "Duration unknown"
-  defp duration_label(seconds) when rem(seconds, 60) == 0, do: "#{div(seconds, 60)} min"
-  defp duration_label(seconds), do: "#{div(seconds, 60)} min #{rem(seconds, 60)} s"
+  @doc "A planned length as Home says it: `20 min`, or `2 min 30 s`."
+  def duration_label(nil), do: "Duration unknown"
+  def duration_label(seconds) when rem(seconds, 60) == 0, do: "#{div(seconds, 60)} min"
+  def duration_label(seconds), do: "#{div(seconds, 60)} min #{rem(seconds, 60)} s"
   defp progress_percent(%{weekly_target_sec: 0}), do: "0"
 
   defp progress_percent(slot),

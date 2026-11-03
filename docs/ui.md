@@ -77,11 +77,28 @@
 --phase-done-content:  #20201D
 ```
 
+### One set of tokens (`assets/css/adaptive_home.css`, on `:root`)
+
+Every view (Home, Progress, the drawer, the studio, sign in) takes its colours from these and
+nothing else; a new hex in a rule is a bug.
+
+```
+--ink:        #262722   text, the filled pill, the chosen tab and pick
+--ink-soft:   #55534c   a title under the pointer
+--muted:      #696b65   secondary text, labels, icons at rest
+--line:       #d6d7d0   every hairline: rows, tables, the drawer's edge, tabs at rest
+--fill:       base-300  quiet buttons: steppers, suggestions, start choices that are on
+--fill-hover: #e6e3db   a quiet button under the pointer
+--focus:      #5e615b   every focus ring
+--bubble:     #e9e5dc   your messages
+--changed:    #a77b5d   the clay underline on what a proposal changed
+```
+
 ### Data series (chart only)
 
 ```
-six_count: #20201D   (primary ink)
-navy_seal: #A77B5D   (muted clay — data-only, never UI chrome)
+six_count: #245b70   (--series-six-count)
+navy_seal: #c8641f   (--series-navy-seal — data only, never UI chrome)
 ```
 
 ### Status colors
@@ -138,6 +155,16 @@ Home's content does (`--gutter`), and a docked box is as wide as the column, not
 ## 4a. Lines and edges
 
 - One column edge per screen: the progress row, header and content share the 640px column.
+- One top row: the week bar's labels, the studio's back and title and the drawer's close and
+  title all centre at the same height (`--top`, 32px on a phone and 48px wide, less half the
+  44px button), so nothing jumps between views.
+- One workout block: a workout reads the same wherever it shows (Home, Edit, a proposal, Resume):
+  its name at the title size, `20 min · 15 reps` in one muted line, its sets in Home's table, and
+  under it the filled pill, centred, in Home's 354px column.
+- One row: a one-line row (a set, a session of the week) is 52px; a two-line row (a workout in
+  the drawer, a session in Progress) has 14px above and below. Every row ends in a `--line`.
+- One tab: body size, muted, the chosen one in ink over a 1.5px ink line, 24px apart (Progress's
+  periods, the drawer's Workouts and Videos).
 - A line marks an input (the underlined field row), a chosen tab, or data (the progress
   track, chart grid). Spacing separates everything else.
 
@@ -152,9 +179,11 @@ while the coach works it is a small square. Its border darkens while focused, so
 no ring of its own. There are no suggested words above it. Classes: `.composer`,
 `.composer-bar`, `.composer-send`, `.composer-stop`.
 
-A conversation's composer (a design's follow-ups, the coach) is docked: `.chat-dock` holds it,
-fixed at the bottom of the screen above the home indicator, and the `ChatDock` hook
-lifts it above the iPhone keyboard. A spacer (`.chat-dock-spacer`) keeps the last line clear of
+On a phone the composer is one capsule, as the iOS chat apps draw it: the words and the send key
+on one line, growing upward as the words wrap. A conversation's composer (a design's follow-ups,
+the coach) is docked: `.chat-dock` holds it, fixed at the bottom of the screen above the home
+indicator, and the `ChatDock` hook lifts it onto the iPhone keyboard with a transform, frame by
+frame and never eased, so it rides the keyboard instead of trailing it. A spacer (`.chat-dock-spacer`) keeps the last line clear of
 it. Your messages are soft bubbles on the right (`.studio-bubble`, `.coach-exchange-you`); new
 lines rise in rather than jump.
 
@@ -164,18 +193,37 @@ Swap, Edit and New are three muted 44px icons (`.home-corner`: bars, pencil, plu
 in a centred row under the sets once the workout is opened; closed, Home is the workout and Play
 alone. Every icon button (these, back and close in the studio and drawer, Progress's view
 switches) is the same: 44px, plain and muted, filled on hover, pressed in on a tap. Every view
-shares one 640px column. A swipe right also opens the swap drawer, from the left: the page slides
-right and the list slides its whole width in beside it on the same curve, and both slide back on
-close (`#home-page` moves with `left`, never a transform; the drawer keeps `hidden` and lets
-`display` wait for the slide out). A bottom sheet is for a short choice, not a list to browse. A tap on a workout in
-the drawer makes it today's and closes the drawer; a tap on a video starts it. Edit and New are the
-studio, a full-screen chat on the same page and gutter as Home:
+shares one 640px column. Swap opens the list of workouts and videos:
 
-- **Header**: a 44px back button and the title (`--text-body`, 600), nothing else. Back is
+- **On a phone** it is a sheet from the bottom, as iOS does it: 88% of the screen with Home showing
+  above it under a light scrim, a grip at its top edge. A pull down from the top of its list moves
+  it with the finger (`SheetDrag`); let go past a quarter of its height, or with a flick, and it
+  closes, otherwise it settles back. The scrim, the ✕ and Escape close it too. A sideways stroke does
+  nothing on a phone.
+- **On a tablet** it is a drawer from the left over the page, under the same scrim; a swipe right
+  opens it and a swipe left puts it away. **At 1024px and up** it is a sidebar and the page
+  re-centres beside it.
+- Both slide on a transform (the list keeps `hidden` and lets `display` wait for the slide out).
+  Nothing is ever wider than the screen and the page takes only vertical pans (`touch-action:
+  pan-y`), so a sideways stroke never pans the page; scrollers inside it still scroll sideways.
+- A tap on a workout makes it today's: its name flies from its row into Home's title while the
+  list leaves. A tap on a video starts it.
+
+Edit and New are the studio, a full-screen chat on the same page and gutter as Home. They rise from
+the bottom like the sheet grown to the full screen, and drop away the same way. They are never a
+sheet: a conversation needs the screen above the keyboard, and a stray pull must not throw it away.
+
+- **Header**: a 44px Back in the corner, nothing else. Edit and New rise over Home, so Back
+  points down (⌄); the one step back inside New (from a request in flight to its form) points
+  left. The title is the workout itself: in Edit its name, large, under the bar (the heading is
+  for screen readers); in New "New workout" in the same type and place. With a
+  proposal on screen Back keeps it: it is saved and made today's workout, the studio drops away and
+  the proposal's name settles into Home's title (Run still starts it at once). Otherwise Back is
   one step back, and out of the first. A drawer or sheet is closed with an x-mark, since it
   covers part of Home rather than replacing it. Where a screen's own head leads back (Progress's
   week strip), that stays.
-- **Messages**: the coach's plain on the left, yours in soft bubbles on the right. A workout
+- **Messages**: the coach's plain on the left, yours in soft bubbles on the right (one bubble,
+  `--bubble`, in the studio and the coach chat alike). A workout
   reads as on Home, with no card: its name centred at the title size, minutes and reps one muted
   line, why, then the table in body size. A proposal is marked against the one it replaced
   (Edit's first, against the workout): a changed total and a changed cell take the clay
@@ -186,7 +234,7 @@ studio, a full-screen chat on the same page and gutter as Home:
   type. Style, set size, pace and the note fold under one centred **More** line that reads them
   ("Even · 4.5 s/rep") and unfolds as quiet rows between hairlines. Create workout, the one
   filled pill, sits at the foot of the screen within the thumb's reach.
-- **Suggested asks**: up to three of the coach's guesses at the next change sit as quiet outline
+- **Suggested asks**: up to three of the coach's guesses at the next change sit as quiet
   pills (`.studio-suggestion`, muted small type) just above the chat box, wrapping on a wide screen and in one sideways-scrolling row on a phone, and go while the coach works; a tap sends one as
   a follow-up.
 - **Words on pills**: the studio is a conversation, so its actions are words on pills (the one
@@ -223,8 +271,14 @@ every animation here.
 - Deleting a session: tap its row and its trash shows; the first tap on the trash arms it
   (error colour), the second deletes. Tapping the row again or Escape lets go.
 - A chevron only means "opens here" or, pointing down at the end of a list, "more".
-- Every pick (burpee type, set style) is the same rounded choice; the
-  chosen one is filled light. A destructive decision is the filled pill in the error colour.
+- Every pick (burpee type, set style) is the same: its options as words side by side, a
+  middle dot between, the chosen one in ink at 600. A destructive decision is the filled pill in
+  the error colour.
+- Three kinds of button and no more. The **filled pill** (ink, 48px, `--pill-h`) is the one way
+  on per view: Play, Resume, Approve, Sign in, Run, Create workout. The **quiet pill** (`--fill`,
+  no border) is everything secondary that is words or a step: steppers, suggestions, More, a
+  start choice that is on. The **icon button** (4a1a) is the rest. Nothing has a border but
+  the composer.
 - The burpee types are always "Six-count" and "Navy SEAL" (lowercase "six-count" mid-sentence).
 
 ## 4a3. Words
@@ -242,7 +296,12 @@ Leaving runs on the action and LiveView holds the patch until it ends, so the ne
 arrives in place instead of beside the old. Moving between views (Home, Progress, New, Edit) is a
 view transition (`js/view_transitions.mjs`): a control marked `data-vt="forward"` or `"back"`
 slides the update it causes 12px and fades it over 240ms, forward from the right, back from the
-left, while the week bar holds still. Buttons that start or change something (Play, the start
+left, while the week bar holds still (Home and Progress). `"rise"` brings Edit or New up from the
+bottom over 360ms while Home recedes a little, and `"drop"` sends the studio back down. With
+`data-vt-from`, the workout's name travels: the element it names before the update and Home's
+title after it share the `workout-title` transition name, so a name picked from the list or kept
+from the studio flies into Home's title (`"attach"` is that flight with the list leaving as one
+piece). Buttons that start or change something (Play, the start
 choices, steppers, icon buttons) press in to 96% under the finger. Reduced motion turns it all off.
 
 ## 5. Navigation and screens

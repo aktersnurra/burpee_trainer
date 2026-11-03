@@ -50,19 +50,38 @@ defmodule BurpeeTrainer.Coach.NewDefaults do
   end
 
   @doc """
-  The reps to start from for `duration_sec`: the rate the athlete's recent sessions of this
-  type support, within what the planner would allow, scaled to the duration and rounded to
-  a step. With no history it is the next level's landmark.
+  The reps to start from for `duration_sec`, a little past what the athlete has shown: one
+  step above their best 20-minute pace of the last eight weeks, never beyond the 10% the
+  planner allows, scaled to the duration. When their latest session says to ease off, the
+  eased rate instead. With no recent session it is the next level's landmark.
   """
   @spec suggested_reps(Scope.t(), atom(), pos_integer()) :: pos_integer()
   def suggested_reps(%Scope{} = scope, burpee_type, duration_sec) do
-    rate =
-      case progression_rate(Progression.for_type(scope, burpee_type)) do
-        nil -> landmark_rate(scope, burpee_type)
-        rate -> capped(rate, RepCeiling.for_type(scope, burpee_type))
-      end
+    best = RepCeiling.recent_bests(scope)[burpee_type]
 
-    rate |> scale(duration_sec) |> snap(@rep_step)
+    case Progression.for_type(scope, burpee_type) do
+      %Progression{action: :ease, max_reps_per_20: eased} when is_integer(eased) ->
+        eased |> scale(duration_sec) |> snap(@rep_step)
+
+      _no_ease when is_integer(best) ->
+        pushed(best, duration_sec)
+
+      _none ->
+        scope |> landmark_rate(burpee_type) |> scale(duration_sec) |> snap(@rep_step)
+    end
+  end
+
+  @doc """
+  One step past `best` reps per 20 minutes, within 10% of it, for `duration_sec`: rounded to
+  five when that still beats the best, otherwise to the rep.
+  """
+  @spec pushed(pos_integer(), pos_integer()) :: pos_integer()
+  def pushed(best, duration_sec) do
+    target = best |> snap(@rep_step) |> step_reps(:up) |> min(div(best * 110, 100)) |> max(best)
+    reps = scale(target, duration_sec)
+    rounded = floor(reps / @rep_step) * @rep_step
+
+    if rounded > scale(best, duration_sec), do: rounded, else: max(round(reps), 1)
   end
 
   @doc """
@@ -153,35 +172,10 @@ defmodule BurpeeTrainer.Coach.NewDefaults do
   defp max_minutes(nil), do: @week_max_min
   defp max_minutes(remaining_sec), do: max(div(remaining_sec, 60), 1)
 
-  defp progression_rate(%Progression{
-         action: :progress,
-         min_reps_per_20: low,
-         max_reps_per_20: high
-       })
-       when is_integer(high),
-       do: div(low + high, 2)
-
-  defp progression_rate(%Progression{max_reps_per_20: high}) when is_integer(high), do: high
-  defp progression_rate(%Progression{}), do: nil
-
-  defp capped(rate, {:ok, {:recent_best, cap}}), do: min(rate, cap)
-  defp capped(rate, _ceiling), do: rate
-
-  # No comparable session: their recent best, or with none the next level, which is also
-  # what the planner may reach for.
+  # No recent session: the next level, which is also what the planner may reach for.
   defp landmark_rate(scope, burpee_type) do
-    case RepCeiling.for_type(scope, burpee_type) do
-      # The ceiling is 10% above their best; the suggestion is the best itself.
-      {:ok, {:recent_best, cap}} -> div(cap * 100, 110)
-      _none -> Levels.threshold(next_level(scope), burpee_type)
-    end
-  end
-
-  defp next_level(scope) do
-    levels = Enum.reverse(Levels.all_levels())
     current = Levels.current_level(BurpeeTrainer.Workouts.list_sessions(scope))
-    index = Enum.find_index(levels, &(&1 == current))
-    Enum.at(levels, index + 1, current)
+    Levels.threshold(Levels.next(current) || current, burpee_type)
   end
 
   defp scale(rate, duration_sec) when duration_sec > @standard_min * 60,

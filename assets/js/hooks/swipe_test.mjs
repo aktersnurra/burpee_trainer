@@ -99,4 +99,10 @@ test("a swipe on Home: right opens the swap drawer, left puts it away, nothing e
 	const drawer = { chooserOpen: true };
 	assert.equal(gestureEvent("left", drawer), "close_chooser");
 	for (const d of ["right", "up", "down"]) assert.equal(gestureEvent(d, drawer), null);
+
+	// On a phone the list is a bottom sheet: no sideways stroke opens or closes it.
+	for (const d of ["left", "right", "up", "down"]) {
+		assert.equal(gestureEvent(d, { chooserOpen: false, phone: true }), null);
+		assert.equal(gestureEvent(d, { chooserOpen: true, phone: true }), null);
+	}
 });

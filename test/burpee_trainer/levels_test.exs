@@ -26,4 +26,11 @@ defmodule BurpeeTrainer.LevelsTest do
       assert Levels.level_for_type([session], burpee_type) == expected
     end
   end
+
+  test "the next level climbs one step and stops at the top" do
+    assert Levels.next(:level_1a) == :level_1b
+    assert Levels.next(:level_1d) == :level_2
+    assert Levels.next(:level_4) == :graduated
+    assert Levels.next(:graduated) == nil
+  end
 end
