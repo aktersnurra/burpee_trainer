@@ -60,12 +60,12 @@ Two even sets with a breather.      ← the proposal arrives as a card
 
 ## New: one form
 
-New opens on one form, in the column the chat that follows it takes: burpee type as a choice of
-two side by side, then duration and reps, each a number to type with a round button either side
-that moves it by a step (held, it keeps stepping: the `HoldRepeat` hook). Style (a choice of two),
-for unbroken sets the most reps in one set (no limit to start), and pace fold under a **More** row
-whose summary reads them; most workouts leave them as suggested. Folded, they are still in the
-form and sent. Then an optional note and **Create workout**. Back from the form leaves; there is no close
+New opens on one form of big numbers, in the column the chat that follows it takes: burpee
+type as two words, then duration and reps, each a large centred number to type with a plain
+button either side that moves it by a step (held, it keeps stepping: the `HoldRepeat` hook).
+Style (a choice of two), for unbroken sets the most reps in one set, pace and an optional note
+fold under one **More** line whose summary reads them; most workouts leave them as suggested.
+Folded, they are still in the form and sent. **Create workout** sits at the foot. Back from the form leaves; there is no close
 button. `NewWorkoutForm` (pure but for the suggested reps) holds the rules; `Coach.NewDefaults`
 holds what each value starts from.
 
@@ -76,12 +76,15 @@ holds what each value starts from.
   the planner's ceiling), else their recent best, else the next level's landmark, scaled to the
   duration. They step by five up to 50 and by ten from there; the last step up stops at the most
   that fits.
-- **Set size** (unbroken only) steps in fives below the reps, then no limit; a limit at or above
-  the reps is no limit. It is a constraint: `WorkoutRequest.max_set_reps` tells the coach and
+- **Set size** (unbroken only) starts at the step nearest a tenth of the reps (15 for 150) and
+  follows the reps until the athlete sets it. It steps in fives below the reps, then no limit; a
+  limit at or above the reps is no limit. It is a constraint: `WorkoutRequest.max_set_reps` tells the coach and
   rejects a layout with a longer set (after the one correction), and a follow-up keeps it unless it
   is changed.
 - **Pace** starts mid-reference for the type (4.5 s six-count, 8 s Navy SEAL), or faster when the
-  reps leave little room to recover. It steps by half a second.
+  reps leave little room to recover. It steps by half a second and is never faster than the
+  graduated level: 20 minutes over its count (325 six-count, 150 Navy SEAL), so 3.7 s and 8 s. That
+  also bounds the reps, which must fit the duration at the pace.
 
 Reps and pace follow the duration and type until the athlete sets them; after that they stay as
 set. Movement alone must fit the duration: the value being changed is capped at what the others

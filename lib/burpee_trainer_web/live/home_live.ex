@@ -261,8 +261,6 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "history_period",
              "history_density_mode",
              "history_more",
-             "history_week",
-             "history_week_back",
              "history_session",
              "history_close_session",
              "progress_set_goal",

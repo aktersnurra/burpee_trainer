@@ -65,6 +65,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               {label}
             </button>
           </div>
+          <.week_grid weeks={@state.history_weeks} />
           <.trend_chart
             points={@state.history_points}
             empty?={@state.history_empty?}
@@ -89,9 +90,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
                 class="home-history-switch home-icon-action"
                 aria-label="Show chart"
                 title="Chart"
-                phx-mounted={
-                  @state.history_show_sessions? && JS.focus(to: "#home-history-density-back")
-                }
                 phx-click="history_density_mode"
                 phx-value-mode="chart"
               >
@@ -149,115 +147,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               <.icon name="hero-chevron-down" class="size-5" />
             </button>
           </section>
-          <section id="home-history-weekly" aria-label="Minutes each week">
-            <div class="home-history-week-heading">
-              <h2>Minutes each week</h2>
-              <%!-- One icon switches the view: it shows the view it leads to. --%>
-              <button
-                :if={@state.history_weeks != [] and is_nil(@state.history_week_start)}
-                id="home-history-week-mode"
-                type="button"
-                class="home-history-switch home-icon-action"
-                phx-click="history_week"
-                phx-value-start={Date.to_iso8601(List.last(@state.history_weeks).start)}
-                aria-label="Show days"
-                title="Days"
-              >
-                <.icon name="hero-calendar-days" class="size-5" />
-              </button>
-              <button
-                :if={@state.history_week_start}
-                id="home-history-week-mode"
-                type="button"
-                class="home-history-switch home-icon-action"
-                phx-mounted={JS.focus(to: "#home-history-week-mode")}
-                phx-click={JS.push("history_week_back")}
-                aria-label="Show weeks"
-                title="Weeks"
-              >
-                <.icon name="hero-squares-2x2" class="size-5" />
-              </button>
-            </div>
-            <p
-              :if={is_nil(@state.history_week_start) and completed_week_summary(@state.history_weeks)}
-              id="home-history-week-count"
-              class="home-history-week-count"
-            >
-              {completed_week_summary(@state.history_weeks)}
-            </p>
-            <%= if @state.history_week_start do %>
-              <div
-                id="home-history-week-detail"
-                class="home-history-status home-history-trend-readout"
-              >
-                <p class="home-history-streak-line">
-                  <strong>{week_minutes(@state.history_weeks, @state.history_week_start)}</strong>
-                  <span>min, {Fmt.week(@state.history_week_start)}</span>
-                </p>
-              </div>
-              <div
-                id="home-history-daily"
-                role="group"
-                aria-label="Daily training minutes"
-                class="home-history-daily"
-              >
-                <div id="home-history-day-axis" class="home-history-day-axis" aria-hidden="true">
-                  <span>80</span><span>40</span><span>0</span>
-                </div>
-                <div id="home-history-day-plot" class="home-history-day-plot">
-                  <div
-                    :for={day <- @state.history_week_days}
-                    id={"home-history-day-#{Date.to_iso8601(day.date)}"}
-                    data-minutes={day.minutes}
-                    data-seconds={day.seconds}
-                    class="home-history-day"
-                    role="img"
-                    aria-label={"#{Calendar.strftime(day.date, "%A")}: #{day_duration(day.seconds)}"}
-                  >
-                    <span
-                      class="home-history-day-bar"
-                      style={"height: #{day_bar_height(day.seconds)}%"}
-                    >
-                      <span :if={day.seconds > 0} class="home-history-day-value">
-                        {day_duration(day.seconds)}
-                      </span>
-                    </span>
-                    <span class="home-history-day-label">
-                      {day.date |> Calendar.strftime("%a") |> String.first()}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            <% end %>
-            <div
-              :if={is_nil(@state.history_week_start)}
-              id="home-history-week-grid"
-              class="home-history-week-grid"
-            >
-              <div :for={row <- weekly_rows(@state.history_weeks)} class="home-history-week-row">
-                <button
-                  :for={week <- row}
-                  id={"home-history-week-#{Date.to_iso8601(week.start)}"}
-                  type="button"
-                  phx-click={JS.focus(to: "#home-history-week-mode") |> JS.push("history_week")}
-                  phx-value-start={Date.to_iso8601(week.start)}
-                  class={[
-                    "home-history-week-cell",
-                    week_tone(week.minutes),
-                    week.open? && "home-history-week-open"
-                  ]}
-                  title={week_title(week)}
-                  aria-label={week_title(week)}
-                ></button>
-                <span
-                  :for={_ <- 1..(12 - length(row))//1}
-                  :if={length(row) < 12}
-                  class="home-history-week-placeholder"
-                  aria-hidden="true"
-                ></span>
-              </div>
-            </div>
-          </section>
         <% end %>
         <p
           :if={@state.history_empty? and is_nil(@state.history_error)}
@@ -284,29 +173,92 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
   defp open_session, do: JS.push("history_session")
 
+  attr(:weeks, :list, required: true)
+
+  # Every day as a square, a column a week, Monday at the top, as GitHub draws commits: the
+  # darker, the more minutes. A tick under a column marks a week that reached its target. On a
+  # narrow screen a long period scrolls sideways, opening at the newest week.
+  defp week_grid(assigns) do
+    ~H"""
+    <section :if={@weeks != []} id="home-history-weekly" aria-labelledby="home-history-weekly-heading">
+      <h2 id="home-history-weekly-heading">Minutes each day</h2>
+      <p
+        :if={completed_week_summary(@weeks)}
+        id="home-history-week-count"
+        class="home-history-week-count"
+      >
+        {completed_week_summary(@weeks)}
+      </p>
+      <div class="home-history-calendar-scroll">
+        <div id="home-history-week-grid" class="home-history-calendar">
+          <span class="home-history-calendar-label" aria-hidden="true"></span>
+          <span
+            :for={label <- ~w(Mon _ Wed _ Fri _ _)}
+            class="home-history-calendar-label"
+            aria-hidden="true"
+          >{if label != "_", do: label}</span>
+          <span class="home-history-calendar-label" aria-hidden="true"></span>
+          <%= for {week, index} <- Enum.with_index(@weeks) do %>
+            <span class="home-history-month" aria-hidden="true">{month_label(@weeks, index)}</span>
+            <span
+              :for={day <- week.days}
+              id={"home-history-day-#{Date.to_iso8601(day.date)}"}
+              class={[
+                "home-history-day-cell",
+                day_tone(day),
+                day.future? && "home-history-day-future"
+              ]}
+              data-minutes={day.minutes}
+              role={!day.future? && "img"}
+              aria-label={!day.future? && day_title(day)}
+              aria-hidden={day.future? && "true"}
+              title={!day.future? && day_title(day)}
+            ></span>
+            <span
+              id={"home-history-week-#{Date.to_iso8601(week.start)}"}
+              class={["home-history-week-mark", week.target? && "home-history-week-met"]}
+              role="img"
+              aria-label={week_title(week)}
+              title={week_title(week)}
+            ></span>
+          <% end %>
+        </div>
+      </div>
+    </section>
+    """
+  end
+
+  # A month's name over the first column, and over each week that holds a 1st.
+  defp month_label(weeks, index) do
+    start = Enum.at(weeks, index).start
+    last = Date.add(start, 6)
+
+    cond do
+      index == 0 -> Calendar.strftime(start, "%b")
+      last.day <= 7 -> Calendar.strftime(last, "%b")
+      true -> nil
+    end
+  end
+
+  defp day_tone(%{future?: true}), do: nil
+  defp day_tone(%{minutes: 0, seconds: 0}), do: "home-history-tone-0"
+  defp day_tone(%{minutes: m}) when m < 10, do: "home-history-tone-1"
+  defp day_tone(%{minutes: m}) when m < 20, do: "home-history-tone-2"
+  defp day_tone(%{minutes: m}) when m < 30, do: "home-history-tone-3"
+  defp day_tone(%{minutes: m}) when m < 40, do: "home-history-tone-4"
+  defp day_tone(_), do: "home-history-tone-5"
+
+  defp day_title(day),
+    do: "#{Calendar.strftime(day.date, "%a %-d %b")}: #{day_duration(day.seconds)}"
+
+  defp day_duration(0), do: "rest"
   defp day_duration(seconds) when seconds < 60, do: "#{seconds} sec"
   defp day_duration(seconds) when rem(seconds, 60) == 0, do: "#{div(seconds, 60)} min"
   defp day_duration(seconds), do: "#{div(seconds, 60)} min #{rem(seconds, 60)} sec"
 
-  defp day_bar_height(seconds) when seconds > 0, do: min(max(seconds * 100 / 4_800, 1), 100)
-  defp day_bar_height(_seconds), do: 0
-
-  defp week_minutes(weeks, date),
-    do: weeks |> Enum.find(&(&1.start == date)) |> Map.fetch!(:seconds) |> div(60)
-
-  defp weekly_rows(weeks),
-    do: weeks |> Enum.reverse() |> Enum.chunk_every(12) |> Enum.map(&Enum.reverse/1)
-
-  defp week_tone(0), do: "home-history-tone-0"
-  defp week_tone(minutes) when minutes < 20, do: "home-history-tone-1"
-  defp week_tone(minutes) when minutes < 40, do: "home-history-tone-20"
-  defp week_tone(minutes) when minutes < 60, do: "home-history-tone-40"
-  defp week_tone(minutes) when minutes < 80, do: "home-history-tone-60"
-  defp week_tone(_), do: "home-history-tone-80"
-
   defp week_title(week),
     do:
-      "Week of #{Date.to_iso8601(week.start)}: #{week.minutes} of #{week.target_minutes} minutes#{if week.open?, do: ", in progress", else: ""}"
+      "#{Fmt.week(week.start)}: #{week.minutes} of #{week.target_minutes} min#{if week.open?, do: ", in progress", else: ""}"
 
   # Counts the weeks that reached 80 minutes; with none yet it says nothing rather than "0 of 11".
   defp completed_week_summary(weeks) do
@@ -488,7 +440,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             id="home-history-density-sessions"
             type="button"
             class="home-history-switch home-icon-action"
-            phx-mounted={not @show_sessions? && JS.focus(to: "#home-history-density-sessions")}
             phx-click="history_density_mode"
             phx-value-mode="sessions"
             aria-label="Show sessions"

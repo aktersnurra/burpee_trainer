@@ -310,54 +310,22 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     refute has_element?(view, "#home-history-delete-#{saved.id}")
   end
 
-  test "a weekly cell opens actual day minutes and returns to the grid", %{conn: conn, user: user} do
+  test "the day grid shows each day's minutes above the chart", %{conn: conn, user: user} do
     saved = complete_history(user, DateTime.utc_now(:second), 1_200)
     {:ok, view, _} = live(conn, ~p"/")
     view = history_route(conn, view)
     week = :sys.get_state(view.pid).socket.assigns.history_weeks |> List.last()
-    day = DateTime.to_date(saved.completed_at)
+    day = Date.to_iso8601(DateTime.to_date(saved.completed_at))
 
-    [open_commands] =
-      render(view)
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#home-history-week-#{Date.to_iso8601(week.start)}")
-      |> LazyHTML.attribute("phx-click")
-
-    assert ["focus", %{"to" => "#home-history-week-mode"}] =
-             hd(Jason.decode!(open_commands))
-
-    view |> element("#home-history-week-#{Date.to_iso8601(week.start)}") |> render_click()
-    assert has_element?(view, "#home-history-daily[aria-label='Daily training minutes']")
-    refute has_element?(view, "#home-history-week-grid")
+    assert has_element?(view, "#home-history-day-#{day}[data-minutes='20'][role=img]")
 
     assert has_element?(
              view,
-             "#home-history-week-mode[phx-mounted][aria-label='Show weeks'] .hero-squares-2x2"
+             "#home-history-week-#{Date.to_iso8601(week.start)}[aria-label*='20 of']"
            )
 
-    refute has_element?(view, "#home-history-week-count, .home-history-week-key")
-    assert has_element?(view, "#home-history-day-#{Date.to_iso8601(day)}")
-    assert has_element?(view, "#home-history-week-detail strong", "20")
-
-    assert has_element?(
-             view,
-             "#home-history-day-#{Date.to_iso8601(day)}[data-minutes='20']"
-           )
-
-    assert Repo.reload!(saved) == saved
-
-    [commands] =
-      render(view)
-      |> LazyHTML.from_fragment()
-      |> LazyHTML.query("#home-history-week-mode")
-      |> LazyHTML.attribute("phx-click")
-
-    assert ["push", %{"event" => "history_week_back"}] =
-             List.last(Jason.decode!(commands))
-
-    view |> element("#home-history-week-mode") |> render_click()
-    refute has_element?(view, "#home-history-daily")
-    assert has_element?(view, "#home-history-week-#{Date.to_iso8601(week.start)}")
+    # The grid comes before the chart.
+    assert has_element?(view, "#home-history-weekly + #home-history-trend")
   end
 
   test "History deletion requires confirmation and refreshes owned progress", %{
@@ -372,7 +340,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     # Only this week has training, so the grid is this week alone, not a row of empty weeks.
     assert render(view)
            |> LazyHTML.from_fragment()
-           |> LazyHTML.query("#home-history-weekly .home-history-week-cell")
+           |> LazyHTML.query("#home-history-weekly .home-history-week-mark")
            |> Enum.count() == 1
 
     trash = "#home-history-delete-#{saved.id}"

@@ -148,6 +148,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                 rows={@state.inspection_rows}
                 expanded={@state.expanded_groups}
               />
+              <.corner :if={@state.authoring_stage == :idle and not @state.chooser_open?} />
               <div id={"home-editor-#{@state.home_selection.home_revision}"}>
                 <p id="home-adjustment-error" role="status" class="home-local-message">
                   {@state.local_error}
@@ -155,7 +156,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               </div>
             </section>
           </div>
-          <.corner :if={@state.authoring_stage == :idle and not @state.chooser_open?} />
           <.chooser state={@state} />
         <% end %>
       </div>
@@ -163,8 +163,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     """
   end
 
-  # The drawer, Edit and New, one tap each: at the top-left corner on a wide screen, as in the
-  # Claude app, and along the bottom edge on a phone, within the thumb's reach.
+  # The drawer, Edit and New, one tap each, under the workout's sets once it is opened: the
+  # collapsed Home is the workout and Play alone.
   defp corner(assigns) do
     ~H"""
     <nav class="home-corner" aria-label="Workout">
@@ -183,6 +183,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       <button
         id="home-corner-edit"
         type="button"
+        data-vt="forward"
         class="home-corner-action"
         phx-click="edit_current_workout"
         aria-label="Edit this workout"
@@ -193,6 +194,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       <button
         id="home-corner-new"
         type="button"
+        data-vt="forward"
         class="home-corner-action"
         phx-click="new_workout"
         aria-label="New workout"
@@ -208,15 +210,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   def chooser(assigns) do
     ~H"""
-    <%!-- The backdrop mounts with each opening, however it was opened (a button, the sheet, a
-         swipe), and takes focus into the drawer. Escape listens only while it is open. --%>
-    <div
-      :if={@state.chooser_open?}
-      id="home-chooser-backdrop"
-      phx-click={close_chooser()}
-      phx-mounted={JS.focus(to: "#home-chooser-close")}
-    >
-    </div>
     <div
       id="home-alternatives-panel"
       hidden={!@state.chooser_open?}
@@ -283,6 +276,17 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           />
         </div>
       </.focus_wrap>
+    </div>
+    <%!-- The backdrop mounts with each opening, however it was opened (a button or a swipe), and
+         takes focus into the drawer. It follows the drawer, so its coming and going never moves
+         the drawer in the page, which would cut the drawer's slide short. Escape listens only
+         while the drawer is open. --%>
+    <div
+      :if={@state.chooser_open?}
+      id="home-chooser-backdrop"
+      phx-click={close_chooser()}
+      phx-mounted={JS.focus(to: "#home-chooser-close")}
+    >
     </div>
     """
   end

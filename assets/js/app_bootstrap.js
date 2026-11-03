@@ -15,6 +15,7 @@ import PoseDebug from "./hooks/pose_debug";
 import PoseTraceButton from "./hooks/pose_trace_button";
 import { startPoseTraceSync } from "./hooks/pose_trace_sync.mjs";
 import { openSessionStore } from "./hooks/session_store.mjs";
+import { viewTransitions } from "./view_transitions.mjs";
 
 export function startApp(PoseTracker) {
 	const csrfToken = document
@@ -22,6 +23,7 @@ export function startApp(PoseTracker) {
 		.getAttribute("content");
 	const liveSocket = new LiveSocket("/live", Socket, {
 		longPollFallbackMs: 2500,
+		dom: viewTransitions(),
 		params: { _csrf_token: csrfToken },
 		hooks: {
 			ChatDock,

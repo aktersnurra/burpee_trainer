@@ -203,7 +203,7 @@ defmodule BurpeeTrainer.HistoryTest do
            }
   end
 
-  test "daily drilldown credits only real local authoritative minutes" do
+  test "each week's days credit only real local authoritative minutes" do
     user = user_fixture()
     {:ok, user} = BurpeeTrainer.Accounts.update_timezone(user, "America/Los_Angeles")
     now = ~U[2026-09-23 12:00:00Z]
@@ -217,14 +217,18 @@ defmodule BurpeeTrainer.HistoryTest do
       session(user, DateTime.add(now, 10, :second), duration_sec_actual: 4_800)
     ]
 
-    assert {:ok, days} = History.week_days(sessions, user, now, week)
+    assert {:ok, weeks} = History.weeks(sessions, user, now, "twelve_weeks")
+    assert %{start: ^week, minutes: 25, days: days} = List.last(weeks)
     assert Enum.map(days, & &1.minutes) == [20, 5, 0, 0, 0, 0, 0]
     assert Enum.map(days, & &1.date) == Enum.map(0..6, &Date.add(week, &1))
-    assert {:ok, weeks} = History.weeks(sessions, user, now, "twelve_weeks")
-    assert List.last(weeks).minutes == 25
+    # Days after today are not yet lived; the grid leaves them blank.
+    assert Enum.map(days, & &1.future?) == [false, false, false, true, true, true, true]
+    # The night before the week, in local time, belongs to the previous week's Sunday.
+    assert %{days: previous} = Enum.at(weeks, -2)
+    assert List.last(previous).minutes == 10
   end
 
-  test "daily drilldown preserves sub-minute credited seconds across days" do
+  test "each week's days keep sub-minute credited seconds" do
     user = user_fixture()
     {:ok, user} = BurpeeTrainer.Accounts.update_timezone(user, "Etc/UTC")
     now = ~U[2026-09-23 12:00:00Z]
@@ -235,11 +239,10 @@ defmodule BurpeeTrainer.HistoryTest do
       session(user, ~U[2026-09-22 12:00:00Z], duration_sec_actual: 59)
     ]
 
-    assert {:ok, days} = History.week_days(sessions, user, now, week)
+    assert {:ok, weeks} = History.weeks(sessions, user, now, "twelve_weeks")
+    assert %{start: ^week, minutes: 1, days: days} = List.last(weeks)
     assert Enum.map(days, & &1.seconds) == [59, 59, 0, 0, 0, 0, 0]
     assert Enum.map(days, & &1.minutes) == [0, 0, 0, 0, 0, 0, 0]
-    assert {:ok, weeks} = History.weeks(sessions, user, now, "twelve_weeks")
-    assert List.last(weeks).minutes == 1
   end
 
   test "weekly grid credits authoritative minutes; the open week counts once it is met" do

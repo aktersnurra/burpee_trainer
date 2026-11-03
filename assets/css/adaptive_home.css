@@ -584,20 +584,25 @@ button.home-summary:hover .home-workout-name {
 .home-history-period[aria-pressed='true'] { background: transparent; color: #262722; border-bottom: 1.5px solid #262722; }
 #home-history-weekly { margin-top: 24px; }
 #home-history-weekly h2, .home-history-sessions-heading { font-size: var(--text-body); font-weight: 600; }
-.home-history-week-heading { display: flex; align-items: center; justify-content: space-between; min-height: 36px; gap: 12px; }
 .home-history-week-count { margin-top: 8px; color: var(--home-muted); font-size: var(--text-small); }
-.home-history-week-oldest { color: var(--home-muted); font-size: var(--text-small); }
-.home-history-week-grid { display: flex; flex-direction: column; gap: 16px; margin: 4px 0 0; }
-.home-history-week-row { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; }
-.home-history-week-cell { aspect-ratio: 1; border-radius: 2px; }
-.home-history-week-open { outline: 1px dashed #262722; outline-offset: 1px; }
+/* Minutes each day, as GitHub draws commits: a column a week, Monday on top, month names over
+   the weeks that start them, a tick under each week that reached its target. Columns are at most
+   24px; a long period scrolls sideways and opens at the newest week (rtl scroller, ltr grid). */
+.home-history-calendar-scroll { margin-top: 12px; overflow-x: auto; direction: rtl; scrollbar-width: none; }
+.home-history-calendar-scroll::-webkit-scrollbar { display: none; }
+.home-history-calendar { direction: ltr; display: grid; grid-auto-flow: column; grid-template-rows: 16px repeat(7, auto) 4px; grid-template-columns: 30px; grid-auto-columns: minmax(10px, 24px); gap: 3px; width: max-content; min-width: 100%; justify-content: start; }
+.home-history-calendar-label { align-self: center; color: var(--home-muted); font-size: 11px; line-height: 1; }
+.home-history-month { overflow: visible; white-space: nowrap; color: var(--home-muted); font-size: 11px; line-height: 16px; }
+.home-history-day-cell { aspect-ratio: 1; border-radius: 3px; }
+.home-history-day-future { background: transparent; box-shadow: inset 0 0 0 1px var(--home-line); }
+.home-history-week-mark { border-radius: 2px; }
+.home-history-week-met { background: #262722; }
 .home-history-tone-0 { background: #e9ebe8; }
 .home-history-tone-1 { background: #dce9eb; }
-.home-history-tone-20 { background: #bed9de; }
-.home-history-tone-40 { background: #8cb8c2; }
-.home-history-tone-60 { background: #568b9a; }
-.home-history-tone-80 { background: #245b70; }
-.home-history-week-oldest { margin-top: 9px; }
+.home-history-tone-2 { background: #bed9de; }
+.home-history-tone-3 { background: #8cb8c2; }
+.home-history-tone-4 { background: #568b9a; }
+.home-history-tone-5 { background: #245b70; }
 .home-history-trend { margin-top: 36px; padding: 0; border: 0; background: transparent; }
 .home-history-trend-heading { display: flex; align-items: center; justify-content: space-between; min-height: 36px; }
 .home-history-plot { display: grid; grid-template-columns: 29px minmax(0, 1fr); gap: 10px; margin-top: 20px; padding: 0; }
@@ -617,28 +622,13 @@ button.home-summary:hover .home-workout-name {
 .home-history-sessions-heading { margin-top: 44px; }
 .home-history-table { table-layout: auto; }
 .home-history-session-card > td { padding: 7px 0; margin-top: 0; border: 0; border-top: 1px solid var(--home-line); border-radius: 0; background: transparent; }
-/* On a phone the bottom row of actions (.home-corner) stays clear of the page's end. */
-@media (max-width: 600px) { .adaptive-home { padding-inline: var(--gutter); padding-bottom: calc(76px + env(safe-area-inset-bottom)); } }
+@media (max-width: 600px) { .adaptive-home { padding-inline: var(--gutter); } }
 @media (prefers-reduced-motion: reduce) { .home-title-action, .home-loading-animation { transition: none; animation: none; } }
-/* Measured local-day detail keeps the same 80-minute visual ceiling as weekly cells. */
-.home-history-week-cell { display: block; width: 100%; padding: 0; border: 0; cursor: pointer; transition: transform var(--motion-quick) ease; }
-.home-history-week-cell:hover { transform: translateY(-2px); }
-.home-history-week-cell:focus-visible, #home-history-week-back:focus-visible { outline: 2px solid #262722; outline-offset: 3px; }
-#home-history-week-back { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 7px 0; font-size: var(--text-small); }
-.home-history-daily { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; max-width: 640px; padding-top: 21px; }
-.home-history-day-axis { display: flex; height: 121px; flex-direction: column; justify-content: space-between; color: var(--home-muted); font-size: var(--text-small); text-align: right; font-variant-numeric: tabular-nums; }
-.home-history-day-plot { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 9px; height: 121px; border-bottom: 1px solid var(--home-line); background: linear-gradient(to bottom, var(--home-line) 0 1px, transparent 1px 50%, var(--home-line) 50% calc(50% + 1px), transparent calc(50% + 1px)); }
-.home-history-day { position: relative; display: flex; align-items: end; justify-content: center; min-width: 0; height: 121px; }
-.home-history-day-bar { display: block; width: min(100%, 24px); min-height: 0; background: #568b9a; border-radius: 2px 2px 0 0; }
-.home-history-day-label { position: absolute; top: calc(100% + 8px); left: 0; right: 0; text-align: center; color: var(--home-muted); font-size: var(--text-small); }
 .home-history-line-six-count { color: var(--series-six-count); }
 .home-history-line-navy-seal { color: var(--series-navy-seal); }
 .home-history-point-six-count span { background: var(--home-surface); border-color: var(--series-six-count); }
 .home-history-point-navy-seal span { background: var(--home-surface); border-color: var(--series-navy-seal); border-radius: 0; }
-@media (prefers-reduced-motion: reduce) { .home-history-week-cell { transition: none; } }
 #home-history-empty { margin-top: 24px; }
-.home-history-day-bar { position: relative; }
-.home-history-day-value { position: absolute; bottom: calc(100% + 5px); left: 50%; transform: translateX(-50%); color: var(--home-muted); font-size: var(--text-small); white-space: nowrap; }
 /* The approved density view swaps its chart and session list in the same place. */
 #home-history-trend, #home-history-sessions-panel { max-width: 640px; }
 #home-history-trend[hidden], #home-history-sessions-panel[hidden] { display: none; }
@@ -769,7 +759,7 @@ button.home-summary:hover .home-workout-name {
 #home-alternatives-panel .home-chooser-header h2 { font: 600 var(--text-body)/1.4 var(--font-sans); letter-spacing: 0; }
 /* The workout you have now reads heavier in the list, so you can see what you would swap. */
 .home-alternative[aria-current="true"] .home-alternative-name { font-weight: 600; }
-@media (prefers-reduced-motion: reduce) { #home-alternatives-panel:not([hidden]) { animation: none; } }
+@media (prefers-reduced-motion: reduce) { #home-alternatives-panel { transition: none; } }
 /* New's title takes the workout title's place: centred, at the title size. */
 /* Review marks what Edit changed: ink weight and a clay underline, nothing louder. */
 :is(.adaptive-home, .studio) mark.home-changed { background: transparent; color: inherit; }
@@ -861,9 +851,7 @@ button.home-summary:hover .home-workout-name {
 .coach-memory { display: flex; align-items: flex-start; gap: 8px; color: var(--home-muted); font-size: var(--text-small); line-height: 1.5; }
 .coach-memory .size-4 { flex: none; margin-top: 2px; }
 /* A view switch is one icon showing the view it leads to; it sits at the heading's end. */
-.adaptive-home .home-history-switch { min-height: 44px; margin-right: -10px; border: 0; background: transparent; color: var(--home-muted); }
-.adaptive-home .home-history-switch:hover { color: #262722; }
-.home-history-switch:focus-visible { outline: 2px solid #5e615b; outline-offset: 2px; border-radius: 8px; }
+.adaptive-home .home-history-switch { margin-right: -10px; }
 /* A workout in progress sits where the workout and the result do, centred like them. */
 #home-ready-recommendation.home-resume { max-width: 354px; margin: clamp(65px, 12vh, 150px) auto 0; padding: 0; border: 0; text-align: center; }
 .home-resume .home-state-heading { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
@@ -895,7 +883,7 @@ button.home-summary:hover .home-workout-name {
 /* The conversation and its box share one column: the phone's width, and on a wide screen a
    reading column like the Claude app's. */
 :root { --chat-w: 350px; }
-@media (min-width: 601px) { :root { --chat-w: 680px; } }
+@media (min-width: 601px) { :root { --chat-w: 640px; } }
 /* The box floats a little above the bottom edge; the thread fades out under it rather than
    meeting a hard line. */
 .chat-dock { position: fixed; inset-inline: 0; bottom: var(--keyboard-inset, 0px); z-index: 30; padding: 20px var(--gutter) calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(to bottom, transparent, var(--color-base-100) 20px); pointer-events: none; transition: bottom var(--motion-quick) var(--ease-out); }
@@ -925,36 +913,37 @@ button.home-summary:hover .home-workout-name {
 #home-page { position: relative; left: 0; background: var(--color-base-100); transition: left var(--motion-settle) var(--ease-out), padding-left var(--motion-settle) var(--ease-out), border-radius var(--motion-settle) var(--ease-out); }
 body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 #home-page:has(#home-alternatives-panel:not([hidden])) { left: var(--drawer-w); border-radius: var(--radius-surface) 0 0 var(--radius-surface); box-shadow: -1px 0 0 var(--color-base-border); }
-#home-alternatives-panel:not([hidden]) { position: fixed; z-index: 41; inset: 0 auto 0 0; width: var(--drawer-w); max-height: none; margin: 0; padding: calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 0; background: var(--color-base-300); transform: none; animation: drawer-in var(--motion-settle) var(--ease-out) backwards; overscroll-behavior: contain; }
-@keyframes drawer-in { from { opacity: 0; transform: translateX(-32px); } to { opacity: 1; transform: none; } }
+/* The drawer slides its whole width in and out with the page, on the same curve: `hidden` still
+   decides whether it is open, and `display` waits for the slide out before it lets go. */
+#home-alternatives-panel { position: fixed; z-index: 41; inset: 0 auto 0 0; width: var(--drawer-w); max-height: none; margin: 0; padding: calc(20px + env(safe-area-inset-top)) 20px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 0; background: var(--color-base-300); overscroll-behavior: contain; transform: translateX(-100%); transition: transform var(--motion-settle) var(--ease-out), display var(--motion-settle) allow-discrete; }
+#home-alternatives-panel:not([hidden]) { transform: none; }
+@starting-style { #home-alternatives-panel:not([hidden]) { transform: translateX(-100%); } }
 /* The page is the way back: a tap on it closes the drawer. */
 #home-chooser-backdrop { display: block; position: fixed; z-index: 40; inset: 0 0 0 var(--drawer-w); background: transparent; }
 .adaptive-home:has(#home-alternatives-panel:not([hidden])) #home-expansion { display: grid; }
 @media (min-width: 601px) {
   :root { --drawer-w: 320px; }
-  #home-alternatives-panel:not([hidden]) { padding: 20px 16px 24px; border-right: 1px solid var(--color-base-border); }
+  #home-alternatives-panel { padding: 20px 16px 24px; border-right: 1px solid var(--color-base-border); }
   /* Over the page, which stays where it was under a light scrim. */
   #home-page:has(#home-alternatives-panel:not([hidden])) { left: 0; border-radius: 0; box-shadow: none; }
   #home-chooser-backdrop { inset: 0; background: rgb(32 32 29 / .18); animation: sheet-fade var(--motion-quick) ease backwards; }
-  #home-alternatives-panel:not([hidden]) { box-shadow: 0 0 48px rgb(32 32 29 / .12); }
+  #home-alternatives-panel { box-shadow: 0 0 48px rgb(32 32 29 / .12); }
 }
 @media (min-width: 1024px) {
   /* A sidebar: the page keeps its full width beside it and its column centres in what is left. */
   #home-page:has(#home-alternatives-panel:not([hidden])) { padding-left: var(--drawer-w); }
   #home-chooser-backdrop { inset: 0 0 0 var(--drawer-w); background: transparent; animation: none; }
-  #home-alternatives-panel:not([hidden]) { box-shadow: none; }
+  #home-alternatives-panel { box-shadow: none; }
 }
 
-/* The drawer, Edit and New, one tap each. A phone has them in a row along the bottom edge, within
-   the thumb's reach; a wide screen at the top-left corner, where the Claude app keeps its sidebar
-   and new-chat buttons. */
-.home-corner { position: fixed; z-index: 20; left: 50%; bottom: calc(8px + env(safe-area-inset-bottom)); display: flex; gap: 16px; transform: translateX(-50%); }
-.home-corner-action { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 10px; background: transparent; color: var(--home-muted); cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease; }
-.home-corner-action:hover { background: var(--color-base-300); color: #262722; }
-.home-corner-action:focus-visible { outline: 2px solid #5e615b; outline-offset: -2px; }
-@media (min-width: 601px) {
-  .home-corner { top: 12px; bottom: auto; left: 12px; gap: 2px; transform: none; }
-}
+/* The drawer, Edit and New, one tap each, in a row under the opened workout's sets. */
+.home-corner { display: flex; justify-content: center; gap: 8px; padding-top: 20px; }
+
+/* One icon button everywhere: 44px, plain and muted, filled on hover, pressed in on a tap. */
+.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--home-muted); cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
+:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch):hover { background: var(--color-base-300); color: #262722; }
+:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch):active { transform: scale(.94); }
+:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch):focus-visible { outline: 2px solid #5e615b; outline-offset: -2px; }
 
 /* A sheet rises from the bottom edge over a fading backdrop; its grip sits at its top edge. */
 @keyframes sheet-up { from { transform: translate(-50%, 100%); } to { transform: translate(-50%, 0); } }
@@ -965,7 +954,7 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio { display: flex; flex-direction: column; max-width: calc(var(--chat-w) + 2 * var(--gutter)); min-height: 100svh; margin: 0 auto; padding: 0 var(--gutter); color: #262722; font-family: var(--font-sans); animation: studio-in var(--motion-settle) var(--ease-out) backwards; }
 @keyframes studio-in { from { opacity: 0; transform: translateY(32px); } to { opacity: 1; transform: none; } }
 .studio-header { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 12px; margin-inline: calc(-1 * var(--gutter)); padding: calc(10px + env(safe-area-inset-top)) var(--gutter) 10px; background: var(--color-base-100); }
-.studio-back, .studio-close { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--color-base-border); border-radius: 50%; background: var(--color-base-200); color: #262722; cursor: pointer; }
+.studio-back, .studio-close { flex: none; margin-left: -12px; color: #262722; }
 .studio-close { margin-left: auto; border-color: transparent; background: transparent; color: var(--home-muted, #736f68); }
 .studio-heading { min-width: 0; }
 .studio-title { margin: 0; font: 600 var(--text-body)/1.25 var(--font-sans); }
@@ -982,13 +971,16 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-error:empty { display: none; }
 
 /* A workout card: label, name, two chips, why, then the table in small type. */
-.studio-card { margin-top: 6px; padding: 20px 20px 6px; border: 1px solid var(--color-base-border); border-radius: var(--radius-surface); background: var(--color-base-200); }
-.studio-card-name { margin: 0; font: 600 var(--text-heading)/1.2 var(--font-sans); letter-spacing: -.015em; text-wrap: balance; }
-.studio-card-totals { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0; }
-.studio-chip { display: inline-flex; align-items: center; min-height: 28px; padding: 0 12px; border-radius: 999px; background: var(--color-base-100); color: #262722; font-size: var(--text-small); font-variant-numeric: tabular-nums; }
-.studio-card-note { margin: 14px 0 0; color: var(--home-muted, #736f68); font-size: var(--text-small); line-height: 1.5; }
-.studio-card-table { margin: 14px -20px 0; padding: 0 20px; border-top: 1px solid var(--color-base-border); }
-.studio-card #home-inspection { max-width: none; padding-top: 4px; }
+/* A workout in the studio reads as it does on Home: no card, the name at the title size, its
+   totals one muted line, then its sets. A total the proposal changed is underlined. */
+.studio-card { margin-top: 6px; padding: 8px 0 0; text-align: center; }
+.studio-card-name { margin: 0; font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; text-wrap: balance; }
+.studio-card-totals { display: flex; flex-wrap: wrap; justify-content: center; margin: 12px 0 0; }
+.studio-chip { color: var(--home-muted, #736f68); font-size: var(--text-body); font-variant-numeric: tabular-nums; }
+.studio-chip + .studio-chip::before { content: "·"; margin: 0 6px; color: var(--home-muted, #736f68); font-weight: 400; }
+.studio-card-note { max-width: 46ch; margin: 14px auto 0; color: var(--home-muted, #736f68); font-size: var(--text-small); line-height: 1.5; }
+.studio-card-table { margin: 20px 0 0; text-align: left; }
+.studio-card #home-inspection { padding-top: 4px; }
 .studio-card #home-inspection table { font-size: var(--text-body); }
 .studio-card #home-inspection thead th { padding: 12px 0 6px; color: var(--home-muted, #736f68); font-size: var(--text-small); font-weight: 400; }
 .studio-card #home-inspection :is(tbody th, tbody td) { padding: 11px 0; border-top: 1px solid var(--color-base-border); }
@@ -1061,7 +1053,7 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .studio-note textarea::placeholder { color: #74716A; opacity: 1; }
 .studio-note textarea:focus-visible { outline: none; border-color: #918d83; }
 @media (prefers-reduced-motion: reduce) {
-  .studio, .studio-msg, .studio-form, #home-alternatives-panel:not([hidden]) { animation: none; }
+  .studio, .studio-msg, .studio-form { animation: none; }
   #home-page, .home-corner-action { transition: none; }
   .studio-segment-option, .studio-more-chevron { transition: none; }
 }
@@ -1071,7 +1063,7 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .coach-summary-loader { margin-top: -8px; }
 
 /* What a proposal changed from the one before: the clay underline, on a chip as its border. */
-.studio-chip-changed { box-shadow: inset 0 0 0 1.5px #a77b5d; font-weight: 600; }
+.studio-chip-changed { color: #262722; font-weight: 600; text-decoration: underline 1.5px #a77b5d; text-underline-offset: 5px; }
 
 /* What the coach remembers: an icon beside the coach's note that opens a sheet with its two parts. */
 .coach-head { display: flex; align-items: flex-start; gap: 8px; }
@@ -1091,3 +1083,52 @@ body:has(#home-alternatives-panel:not([hidden])) { overflow-x: clip; }
 .coach-memory-entries li > span { flex: 1; padding: 8px 0; }
 .coach-memory-forget { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin-right: -12px; border: 0; background: transparent; color: var(--home-muted); }
 .coach-memory-forget:hover { color: #262722; }
+
+/* ---- Moving between views (Home, Progress, New, Edit): the week bar holds still while the page
+   slides 12px and fades, forward from the right, back from the left. A tap on a control marked
+   data-vt starts it (js/view_transitions.mjs); the arrivals below would only double it. ---- */
+#home-week-progress { view-transition-name: week; }
+::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation-duration: 240ms; animation-timing-function: var(--ease-out); }
+html[data-vt="forward"]::view-transition-old(root) { animation-name: vt-out-left; }
+html[data-vt="forward"]::view-transition-new(root) { animation-name: vt-in-right; }
+html[data-vt="back"]::view-transition-old(root) { animation-name: vt-out-right; }
+html[data-vt="back"]::view-transition-new(root) { animation-name: vt-in-left; }
+@keyframes vt-out-left { to { opacity: 0; transform: translateX(-12px); } }
+@keyframes vt-out-right { to { opacity: 0; transform: translateX(12px); } }
+@keyframes vt-in-right { from { opacity: 0; transform: translateX(12px); } }
+@keyframes vt-in-left { from { opacity: 0; transform: translateX(-12px); } }
+html[data-vt] :is(.studio, .studio-form, .studio-msg, .home-enter) { animation: none; }
+
+/* Buttons that start or change something press in under the finger. */
+:is(.home-primary-action, .studio-number-button, .home-start-choice) { transition: background var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
+:is(.home-primary-action, .studio-number-button, .home-start-choice):active:not(:disabled) { transform: scale(.96); }
+@media (prefers-reduced-motion: reduce) { :is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch, .home-primary-action, .studio-number-button, .home-start-choice):active { transform: none; } }
+
+/* ---- New as big numbers: the burpee as two words, duration and reps large and centred with a
+   plain step either side, the rest folded under More, Create at the foot. ---- */
+.studio-form-hero { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0; padding-top: 28px; }
+.studio-hero-segment { margin: 0; padding: 0; border: 0; }
+.studio-hero-segment .studio-segment { padding: 0; background: transparent; }
+.studio-hero-segment .studio-segment-option { min-width: 0; padding: 0 14px; font-size: var(--text-body); transition: color var(--motion-quick) ease; }
+.studio-hero-segment .studio-segment-option:has(input:checked) { background: transparent; box-shadow: none; color: #262722; font-weight: 600; }
+.studio-hero-segment .studio-segment-option + .studio-segment-option::before { content: "·"; position: absolute; left: -3px; color: var(--home-muted, #736f68); font-weight: 400; }
+.studio-hero-numbers { display: grid; gap: 32px; margin-top: 36px; justify-items: center; }
+.studio-hero-number { display: grid; justify-items: center; gap: 8px; }
+.studio-hero-number .studio-number { grid-template-columns: 52px 176px 52px; gap: 8px; }
+.studio-hero-number .studio-number-button { width: 52px; height: 52px; border: 0; background: var(--color-base-300); color: #262722; }
+.studio-hero-number .studio-number-button:hover:not(:disabled) { background: #e2dfd8; }
+.studio-hero-number .studio-number-field { flex-direction: column; align-items: center; gap: 2px; height: auto; padding: 4px 0; border: 0; border-radius: 14px; background: transparent; }
+.studio-hero-number .studio-number-input { width: 100%; height: auto; font: 600 64px/1 var(--font-sans); letter-spacing: -.04em; text-align: center; }
+.studio-hero-number .studio-number-input::placeholder { font-size: var(--text-heading); }
+.studio-hero-number .studio-number-unit { flex: none; }
+.studio-hero-number .studio-number-field:focus-within { outline-offset: 2px; }
+.studio-hero-number .studio-row-hint { margin: 0; text-align: center; }
+.studio-form-hero .studio-more { width: auto; min-height: 44px; margin-top: 24px; padding: 0 14px; border: 0; border-radius: 999px; text-align: center; }
+.studio-form-hero .studio-more:hover { background: var(--color-base-300); }
+.studio-form-hero .studio-more-fields { width: 100%; gap: 16px; margin: 8px 0 32px; }
+.studio-form-hero .studio-more[aria-expanded="false"] { margin-bottom: 32px; }
+.studio-form-hero .studio-fields { border: 0; border-top: 1px solid var(--color-base-border); border-bottom: 1px solid var(--color-base-border); border-radius: 0; background: transparent; }
+.studio-form-hero .studio-fields .studio-row { padding-left: 0; padding-right: 0; }
+.studio-form-hero .studio-error { width: 100%; margin-top: 16px; }
+.studio-form-hero #studio-create { position: sticky; bottom: calc(16px + env(safe-area-inset-bottom)); margin-top: auto; }
+.studio-prompt { margin-top: 8px; color: var(--home-muted, #736f68); text-align: center; }

@@ -181,7 +181,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
   end
 
   test "a New workout is refined by talking once it is proposed", %{view: view} do
-    walk(view, reps: 10, minutes: 5, pace_ups: 1)
+    walk(view, reps: 10, minutes: 5, max_set: "", pace_ups: 1)
     create(view)
     render_async(view, 2_000)
     assert has_element?(view, "#home-edit-review #home-request-run")

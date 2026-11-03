@@ -80,13 +80,22 @@ defmodule BurpeeTrainer.Coach.NewDefaults do
 
   @doc """
   What a set may be limited to, for `reps` in all: steps of five below the total, then no limit
-  (`nil`), which is where it starts.
+  (`nil`).
   """
   @spec set_sizes(pos_integer()) :: [pos_integer() | nil]
   def set_sizes(reps) when reps > @rep_step,
     do: Enum.to_list(@rep_step..(reps - 1)//@rep_step) ++ [nil]
 
   def set_sizes(_reps), do: [nil]
+
+  @doc "The set size to start from: the step nearest a tenth of `reps`, or no limit when none."
+  @spec default_set_size(pos_integer()) :: pos_integer() | nil
+  def default_set_size(reps) do
+    case set_sizes(reps) |> Enum.reject(&is_nil/1) do
+      [] -> nil
+      sizes -> Enum.min_by(sizes, &abs(&1 - reps / 10))
+    end
+  end
 
   @doc "The limit one step up (looser) or down (tighter) the list, staying at its ends."
   @spec step_set_size(pos_integer() | nil, :up | :down, pos_integer()) :: pos_integer() | nil
@@ -108,13 +117,23 @@ defmodule BurpeeTrainer.Coach.NewDefaults do
   def default_pace(burpee_type, reps, duration_sec) do
     {fastest, slowest} = WorkoutGuidance.default_active_seconds_range(burpee_type)
     fits = duration_sec * @work_share / reps
-    round_to(min((fastest + slowest) / 2, fits), @pace_step) |> max(@pace_step)
+    round_to(min((fastest + slowest) / 2, fits), @pace_step) |> max(min_pace(burpee_type))
   end
 
-  @doc "The pace one step up or down, never below a step."
-  @spec step_pace(number(), :up | :down) :: float()
-  def step_pace(pace, :up), do: round_to(pace + @pace_step, @pace_step)
-  def step_pace(pace, :down), do: max(round_to(pace - @pace_step, @pace_step), @pace_step)
+  @doc """
+  The fastest pace, in seconds per rep: the graduated level's count in 20 minutes (325
+  six-count, 150 Navy SEAL), rounded up to a tenth so it is never faster.
+  """
+  @spec min_pace(atom()) :: float()
+  def min_pace(burpee_type),
+    do: Float.ceil(1_200 / Levels.threshold(:graduated, burpee_type), 1)
+
+  @doc "The pace one step up or down, never faster than `min_pace/1`."
+  @spec step_pace(number(), :up | :down, atom()) :: float()
+  def step_pace(pace, :up, _burpee_type), do: round_to(pace + @pace_step, @pace_step)
+
+  def step_pace(pace, :down, burpee_type),
+    do: max(round_to(pace - @pace_step, @pace_step), min_pace(burpee_type))
 
   @doc """
   What `reps` at `pace` come to in `duration_sec`: whole seconds spent moving and left to

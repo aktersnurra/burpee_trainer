@@ -69,26 +69,35 @@ defmodule BurpeeTrainer.History do
             max(12, div(Date.diff(context.week_start, Date.beginning_of_week(earliest)), 7) + 1)
         end
 
-      minutes_by_week =
+      seconds_by_day =
         Enum.reduce(dated, %{}, fn {date, session}, acc ->
-          Map.update(
-            acc,
-            Date.beginning_of_week(date),
-            credited_seconds(session),
-            &(&1 + credited_seconds(session))
-          )
+          Map.update(acc, date, credited_seconds(session), &(&1 + credited_seconds(session)))
         end)
 
       weeks =
         for offset <- (count - 1)..0//-1 do
           date = Date.add(context.week_start, -7 * offset)
-          seconds = Map.get(minutes_by_week, date, 0)
+
+          days =
+            for day <- 0..6, date = Date.add(date, day) do
+              seconds = Map.get(seconds_by_day, date, 0)
+
+              %{
+                date: date,
+                seconds: seconds,
+                minutes: div(seconds, 60),
+                future?: Date.compare(date, context.date) == :gt
+              }
+            end
+
+          seconds = Enum.sum_by(days, & &1.seconds)
           target_sec = Week.new(signed_up_on, date).target_sec
 
           %{
             start: date,
             seconds: seconds,
             minutes: div(seconds, 60),
+            days: days,
             open?: offset == 0,
             target_minutes: div(target_sec, 60),
             target?: seconds >= target_sec
@@ -96,32 +105,6 @@ defmodule BurpeeTrainer.History do
         end
 
       {:ok, weeks}
-    end
-  end
-
-  @spec week_days([WorkoutSession.t()], map(), DateTime.t(), Date.t()) ::
-          {:ok, [map()]} | {:error, :invalid_timezone}
-  def week_days(sessions, user, now, week_start) do
-    with {:ok, context} <- UserTime.context(user, now) do
-      seconds_by_day =
-        Enum.reduce(sessions, %{}, fn session, acc ->
-          with true <- session.user_id == user.id,
-               %DateTime{} = at <- session.completed_at,
-               true <- DateTime.compare(at, now) != :gt,
-               {:ok, date} <- UserTime.local_date(at, context.timezone),
-               true <- Date.beginning_of_week(date) == week_start do
-            Map.update(acc, date, credited_seconds(session), &(&1 + credited_seconds(session)))
-          else
-            _ -> acc
-          end
-        end)
-
-      {:ok,
-       for offset <- 0..6 do
-         date = Date.add(week_start, offset)
-         seconds = Map.get(seconds_by_day, date, 0)
-         %{date: date, seconds: seconds, minutes: div(seconds, 60)}
-       end}
     end
   end
 

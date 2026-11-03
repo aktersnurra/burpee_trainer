@@ -74,7 +74,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     counter = fake_authoring_provider(%{"workout_layout" => layout})
     count = Repo.aggregate(WorkoutPlan, :count)
 
-    walk(view, style: "unbroken", reps: 100, minutes: 20, pace_ups: 1)
+    walk(view, style: "unbroken", reps: 100, minutes: 20, max_set: "50", pace_ups: 1)
     create(view)
     render_async(view, 2_000)
 

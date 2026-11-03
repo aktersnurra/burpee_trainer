@@ -2,7 +2,7 @@ defmodule BurpeeTrainerWeb.NewWorkoutForm do
   @moduledoc """
   The New workout form: type, style, duration, reps, set size (unbroken only), pace and a note,
   on one screen. It opens on what `Coach.NewDefaults` suggests. Reps and pace follow the
-  duration and type until the athlete sets them; the value being changed is capped at what the
+  duration and type, and an unbroken set's size the reps, until the athlete sets them; the value being changed is capped at what the
   others leave room for, so reps stop where movement at the pace would fill the duration, and a
   change of duration or type lowers the reps when they no longer fit. Pure but for the suggested reps, which read the athlete's progression.
   """
@@ -25,7 +25,7 @@ defmodule BurpeeTrainerWeb.NewWorkoutForm do
   def open(params, scope, remaining_sec) do
     minutes = NewDefaults.default_duration(remaining_sec)
     params = %{params | duration: CreationParameters.duration_label(minutes * 60)}
-    %__MODULE__{params: suggest(params, [], scope), touched: []}
+    %__MODULE__{params: params |> suggest([], scope) |> fit_sets([]), touched: []}
   end
 
   @doc """
@@ -54,7 +54,7 @@ defmodule BurpeeTrainerWeb.NewWorkoutForm do
         "duration" -> NewDefaults.step_duration(minutes(p), direction, remaining_sec)
         "reps" -> NewDefaults.step_reps(p.reps, direction)
         "sets" -> NewDefaults.step_set_size(p.max_set_reps, direction, p.reps)
-        "pace" -> NewDefaults.step_pace(p.pace, direction)
+        "pace" -> NewDefaults.step_pace(p.pace, direction, type(p))
       end
 
     if value == current(p, field), do: form, else: set(form, field, value, scope)
@@ -105,9 +105,9 @@ defmodule BurpeeTrainerWeb.NewWorkoutForm do
     with {:ok, size} <- integer(value), do: {:ok, set_size(max(size, 1), params.reps)}
   end
 
-  defp parse("pace", value, _params, _remaining) when is_binary(value) do
+  defp parse("pace", value, params, _remaining) when is_binary(value) do
     case Float.parse(String.trim(value)) do
-      {pace, ""} -> {:ok, pace |> Float.round(1) |> max(0.5)}
+      {pace, ""} -> {:ok, pace |> Float.round(1) |> max(NewDefaults.min_pace(type(params)))}
       _ -> :error
     end
   end
@@ -137,7 +137,7 @@ defmodule BurpeeTrainerWeb.NewWorkoutForm do
 
     p = if field in ~w(burpee_type duration), do: suggest(p, touched, scope), else: p
 
-    %__MODULE__{params: p |> fit(field) |> fit_sets(), touched: touched}
+    %__MODULE__{params: p |> fit(field) |> fit_sets(touched), touched: touched}
   end
 
   defp put(p, "burpee_type", v), do: %{p | burpee_type: v}
@@ -160,16 +160,31 @@ defmodule BurpeeTrainerWeb.NewWorkoutForm do
 
   # Movement alone must fit the duration. A pace being changed is capped; otherwise the reps
   # give way.
-  defp fit(p, "pace") do
-    if p.reps * p.pace <= seconds(p),
-      do: p,
-      else: %{p | pace: Float.floor(seconds(p) / p.reps, 1)}
+  defp fit(p, field), do: p |> at_least_min_pace() |> fit_to_duration(field)
+
+  # A pace set for one type can be faster than another allows.
+  defp at_least_min_pace(p), do: %{p | pace: max(p.pace, NewDefaults.min_pace(type(p)))}
+
+  defp fit_to_duration(p, "pace") do
+    if p.reps * p.pace <= seconds(p) do
+      p
+    else
+      pace = max(Float.floor(seconds(p) / p.reps, 1), NewDefaults.min_pace(type(p)))
+      %{p | pace: pace, reps: min(p.reps, NewDefaults.max_reps(pace, seconds(p)))}
+    end
   end
 
-  defp fit(p, _field), do: %{p | reps: min(p.reps, NewDefaults.max_reps(p.pace, seconds(p)))}
+  defp fit_to_duration(p, _field),
+    do: %{p | reps: min(p.reps, NewDefaults.max_reps(p.pace, seconds(p)))}
 
-  defp fit_sets(%{pacing_style: "even"} = p), do: %{p | max_set_reps: nil}
-  defp fit_sets(p), do: %{p | max_set_reps: set_size(p.max_set_reps, p.reps)}
+  # An unbroken set follows the reps until the athlete sets its size.
+  defp fit_sets(%{pacing_style: "even"} = p, _touched), do: %{p | max_set_reps: nil}
+
+  defp fit_sets(p, touched) do
+    if "sets" in touched,
+      do: %{p | max_set_reps: set_size(p.max_set_reps, p.reps)},
+      else: %{p | max_set_reps: NewDefaults.default_set_size(p.reps)}
+  end
 
   # A limit at or above the reps is no limit.
   defp set_size(nil, _reps), do: nil

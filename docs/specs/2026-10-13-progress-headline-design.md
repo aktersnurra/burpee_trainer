@@ -22,7 +22,7 @@ Protect Thursday. Keep it unbroken…          ›   ← the coach line; opens t
 ──────────────────────────────────────────────
 Navy SEAL, 60 by 10 Jan                     20   ← other goals, one quiet row each
 
-Minutes each week                          Weeks | Days
+Minutes each day   (a column a week, Monday on top)
 Reps per 20 minutes                        Chart | Sessions
 ```
 
@@ -96,8 +96,9 @@ survives a reload. Only the latest is shown.
 
 ## The record
 
-"Minutes each week" shows only weeks from the first week with a session, never a row of
-empty cells. The density chart and sessions are unchanged.
+"Minutes each day" is drawn as GitHub draws commits: a column a week, a square a day, the darker
+the more minutes, a tick under each week at its target. It sits above the chart and shows only
+weeks from the first week with a session, never a field of empty cells. The density chart and sessions are unchanged.
 
 ## Out of scope
 

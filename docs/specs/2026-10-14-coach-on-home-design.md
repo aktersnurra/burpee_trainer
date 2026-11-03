@@ -53,7 +53,7 @@ Reps per 20 minutes          Chart  Sessions
 150 ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄ 60     ← both goals on one line
 115  ●───●───●──●─●                  40
  80   ○ - ○ - ○ - ○                  20
-Minutes each week            Weeks  Days
+Minutes each day             (a column a week)
 ```
 
 - **The look back** is a second field the summary job writes (`review`), validated like the

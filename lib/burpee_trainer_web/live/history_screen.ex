@@ -16,8 +16,6 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       history_show_sessions?: false,
       history_weeks: [],
       history_streak: 0,
-      history_week_start: nil,
-      history_week_days: [],
       history_session_return_to: "#home-history-heading",
       history_selected_id: nil,
       history_selected_session: nil,
@@ -64,8 +62,6 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
      socket
      |> assign(
        history_period: period,
-       history_week_start: nil,
-       history_week_days: [],
        history_expanded: MapSet.new(),
        history_selected_id: nil,
        history_selected_session: nil
@@ -83,28 +79,6 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       do: {:noreply, load_history(socket, false)},
       else: {:noreply, socket}
   end
-
-  def handle_event("history_week", %{"start" => raw}, socket) when is_binary(raw) do
-    a = socket.assigns
-
-    with true <- is_nil(a.history_error),
-         {:ok, date} <- Date.from_iso8601(raw),
-         %{start: ^date} <- Enum.find(a.history_weeks, &(&1.start == date)),
-         {:ok, days} <-
-           History.week_days(
-             Workouts.list_sessions(a.current_scope),
-             a.current_scope.user,
-             a.home_now.(),
-             date
-           ) do
-      {:noreply, assign(socket, history_week_start: date, history_week_days: days)}
-    else
-      _ -> {:noreply, socket}
-    end
-  end
-
-  def handle_event("history_week_back", _, socket),
-    do: {:noreply, assign(socket, history_week_start: nil, history_week_days: [])}
 
   def handle_event("history_session", %{"id" => raw} = params, socket) when is_binary(raw) do
     a = socket.assigns
@@ -284,26 +258,11 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       weeks = from_first_trained_week(weeks)
       {:ok, all_weeks} = History.weeks(all_sessions, a.current_scope.user, now, "all")
 
-      selected_week =
-        if Enum.any?(weeks, &(&1.start == a.history_week_start)),
-          do: a.history_week_start,
-          else: nil
-
-      days =
-        if selected_week do
-          {:ok, days} = History.week_days(all_sessions, a.current_scope.user, now, selected_week)
-          days
-        else
-          []
-        end
-
       socket
       |> assign(
         history_available?: history_available?,
         history_gauges: gauges(a.current_scope, all_sessions, now),
         history_weeks: weeks,
-        history_week_start: selected_week,
-        history_week_days: days,
         history_streak: History.streak(all_weeks),
         history_error: nil,
         history_cursor: next,
@@ -326,8 +285,6 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
           history_loaded_ids: [],
           history_loaded_count: 0,
           history_weeks: [],
-          history_week_start: nil,
-          history_week_days: [],
           history_streak: 0,
           history_points: %{six_count: [], navy_seal: []}
         )
@@ -427,6 +384,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
           <button
             id="home-history-close"
             type="button"
+            data-vt="back"
             class="absolute inset-0 min-h-11 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-4"
             phx-click="close_history"
             aria-label="Back to Home"

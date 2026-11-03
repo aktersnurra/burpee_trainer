@@ -161,28 +161,31 @@ lines rise in rather than jump.
 ## 4a1a. Swipes, the drawer and the studio
 
 Swap, Edit and New are three muted 44px icons (`.home-corner`: bars, pencil, plus), a tap each,
-with the workout opened or not: in a row along the bottom edge on a phone, within the thumb's
-reach, and at the top-left corner on a wide screen, where the Claude app keeps its sidebar and
-new-chat buttons. A swipe right also opens the swap drawer (the page slides right and the workout
-list takes the space; `#home-page` moves with `left`, never a transform). A tap on a workout in
+in a centred row under the sets once the workout is opened; closed, Home is the workout and Play
+alone. Every icon button (these, back and close in the studio and drawer, Progress's view
+switches) is the same: 44px, plain and muted, filled on hover, pressed in on a tap. Every view
+shares one 640px column. A swipe right also opens the swap drawer, from the left: the page slides
+right and the list slides its whole width in beside it on the same curve, and both slide back on
+close (`#home-page` moves with `left`, never a transform; the drawer keeps `hidden` and lets
+`display` wait for the slide out). A bottom sheet is for a short choice, not a list to browse. A tap on a workout in
 the drawer makes it today's and closes the drawer; a tap on a video starts it. Edit and New are the
 studio, a full-screen chat on the same page and gutter as Home:
 
-- **Header**: a 44px round back button and the title (`--text-body`, 600), nothing else. Back is
+- **Header**: a 44px back button and the title (`--text-body`, 600), nothing else. Back is
   one step back, and out of the first. A drawer or sheet is closed with an x-mark, since it
   covers part of Home rather than replacing it. Where a screen's own head leads back (Progress's
   week strip), that stays.
-- **Messages**: the coach's plain on the left, yours in soft bubbles on the right. A workout is a
-  card: its name (`--text-heading`), minutes and reps as chips, why, then the table in body size.
-  The card needs no label; what it is, the sentence before it says. A proposal is marked against
-  the one it replaced (Edit's first, against the workout): a changed chip has a clay ring, a
-  changed cell the clay underline. Sets read by number (`1–4`, `5`), rests as clocks (`4:30`).
-- **New's form**: one card of rows (`.studio-fields`), each a label and its control: a choice of
-  two as a segmented pill (`.studio-segment`), a number as a field with its unit inside
-  (`.studio-number-field`, "20 min") and a 44px round button either side that keeps stepping while
-  held; a hint under a row in small muted type. Burpee, duration and reps show; style, set size and
-  pace fold under a **More** row that reads them in its summary ("Even · 4.5 s/rep") and unfolds
-  in place. Then the note and the one filled Create workout.
+- **Messages**: the coach's plain on the left, yours in soft bubbles on the right. A workout
+  reads as on Home, with no card: its name centred at the title size, minutes and reps one muted
+  line, why, then the table in body size. A proposal is marked against the one it replaced
+  (Edit's first, against the workout): a changed total and a changed cell take the clay
+  underline. Sets read by number (`1–4`, `5`), rests as clocks (`4:30`).
+- **New's form** is big numbers (`.studio-form-hero`): the burpee as two words centred, the
+  chosen one in ink; duration and reps as 64px centred numbers with their unit under them and a
+  plain 52px step either side that keeps stepping while held; a hint under each in small muted
+  type. Style, set size, pace and the note fold under one centred **More** line that reads them
+  ("Even · 4.5 s/rep") and unfolds as quiet rows between hairlines. Create workout, the one
+  filled pill, sits at the foot of the screen within the thumb's reach.
 - **Suggested asks**: up to three of the coach's guesses at the next change sit as quiet outline
   pills (`.studio-suggestion`, muted small type) just above the chat box, wrapping on a wide screen and in one sideways-scrolling row on a phone, and go while the coach works; a tap sends one as
   a follow-up.
@@ -216,7 +219,7 @@ every animation here.
   conversation; Home's play is still a play mark, and means the same as the studio's Run.
 - A view switch is one icon at the end of its heading showing the view it leads to, and
   it turns into the other when tapped: list-bullet shows the sessions, chart-bar the
-  chart; calendar-days shows a week's days, squares-2x2 the weeks.
+  chart.
 - Deleting a session: tap its row and its trash shows; the first tap on the trash arms it
   (error colour), the second deletes. Tapping the row again or Escape lets go.
 - A chevron only means "opens here" or, pointing down at the end of a list, "more".
@@ -236,7 +239,11 @@ Two durations and two curves, as tokens: `--motion-quick` (180ms) for fades, fol
 hovers; `--motion-settle` (360ms) for things that arrive or open; `--motion-stagger`
 (80ms) between related arrivals. `--ease-out` for arrivals, `--ease-in-out` for folds.
 Leaving runs on the action and LiveView holds the patch until it ends, so the new content
-arrives in place instead of beside the old. Reduced motion turns it all off.
+arrives in place instead of beside the old. Moving between views (Home, Progress, New, Edit) is a
+view transition (`js/view_transitions.mjs`): a control marked `data-vt="forward"` or `"back"`
+slides the update it causes 12px and fades it over 240ms, forward from the right, back from the
+left, while the week bar holds still. Buttons that start or change something (Play, the start
+choices, steppers, icon buttons) press in to 96% under the finger. Reduced motion turns it all off.
 
 ## 5. Navigation and screens
 
@@ -258,8 +265,11 @@ screen leads to the next in context:
 - **Progress** (`/progress`; `/history` redirects) keeps the week strip on top, which leads
   back Home, then your level as its title with the streak (a flame and the weeks in a row
   at the target) opposite, then the coach's look back over recent weeks, then a gauge per burpee type
-  side by side (best against goal, its course, or the next goal to set), then one chart
-  with both types on their own axes and the weekly record. Design:
+  side by side (best against goal, its course, or the next goal to set), then the period tabs,
+  then **Minutes each day** drawn as GitHub draws commits (a column a week, Monday on top, the
+  darker the more minutes, month names over the weeks that start them, a dark tick under a week
+  that reached its target; a long period scrolls sideways and opens at the newest week), then one
+  chart with both types on their own axes. Design:
   `docs/specs/2026-10-14-coach-on-home-design.md`.
 - **Session** (`/session/:session_id`, `/videos/:video_id/session/:session_id`) runs a
   workout. Design: `docs/specs/2026-07-13-workout-session-redesign-design.md` and the

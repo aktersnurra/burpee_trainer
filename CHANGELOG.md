@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-11-03 — New's set size and pace bounds
+
+- **Max set** (unbroken) starts at a tenth of the reps on the five-rep grid (15 for 150) and follows the reps until set by hand, instead of starting at no limit and stepping down from the top.
+- **Pace** is never faster than the graduated level, 20 minutes over its count: 3.7 s/rep six-count (325), 8 s/rep Navy SEAL (150), when typed, stepped, suggested or carried across a change of type. Reps can't exceed what the duration holds at that pace.
+- **Home**: Swap, Edit and New appear under the sets once the workout is opened, instead of floating at the top-left corner on a wide screen (where at tablet widths they ran into the week bar). Closed, Home is the workout and Play.
+- **One pattern on every view**: one 640px column (New and Edit were 680), and one icon button (44px, plain, filled on hover) for back, close, the drawer's ✕ and Progress's view switches, which had a ringed circle and a boxed toggle between them.
+- **Motion**: moving between Home, Progress, New and Edit slides the page 12px and fades it while the week bar holds still (a view transition, forward from the right, back from the left); Play, steppers and icon buttons press in under the finger. Reduced motion turns both off.
+- **New** is big numbers: the burpee as two words, duration and reps large and centred with a step either side, style, set size, pace and the note under one More line, Create at the foot of the screen. Before, it was a card of label-and-field rows.
+- **Edit** shows the workout as Home does (title, totals, sets) instead of in a card with chips; a proposal underlines what changed.
+- **Progress**: minutes each day as a GitHub-style grid (a column a week, a square a day, a tick under each week at its target), above the chart. It replaces the weekly squares and the one-week drilldown.
+- **Drawer**: Choose a workout slides its whole width in from the left with the page, and now slides back out on close instead of vanishing.
+
 ## 2026-11-02 — The coach plans each new week
 
 - **Week start**: at the start of each local week the coach ranks the week's first workout afresh from history and goals (`Coach.WeekStartJob`, from cron at Monday 00:00 UTC). Before, a week was planned only after a session, or if Home happened to be open at midnight, so a week that started after days without training opened on the beginner starter.
