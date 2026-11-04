@@ -264,3 +264,41 @@ defmodule BurpeeTrainer.Mcp.Tools.DeleteSession do
 
   def call(_, _, _), do: {:error, "delete_session takes a session id"}
 end
+
+defmodule BurpeeTrainer.Mcp.Tools.GetSession do
+  @behaviour BurpeeTrainer.Coach.Tool
+  alias BurpeeTrainer.Coach.{AuthoritativeSession, Tool}
+  alias BurpeeTrainer.Mcp.Sessions
+  alias BurpeeTrainer.Workouts
+
+  def name, do: "get_session"
+
+  def description,
+    do:
+      "One completed session by id, in full: everything query_history returns, plus, for " <>
+        "camera sessions, each set's window, reps, finish, slack and rep times. `fields` " <>
+        "gives each field's unit and meaning; burpee://fatigue-guide defines fatigue, sets " <>
+        "and slack."
+
+  def schema, do: Tool.object(%{"id" => %{"type" => "integer", "minimum" => 1}}, ["id"])
+
+  def call(%{user: user} = scope, %{"id" => id} = args, _)
+      when is_integer(id) and map_size(args) == 1 do
+    case Workouts.get_session(scope, id) do
+      %{} = session ->
+        if AuthoritativeSession.authoritative?(session),
+          do:
+            {:ok,
+             %{
+               "session" => Sessions.encode(session, user.timezone, sets: true),
+               "fields" => Sessions.fields()
+             }},
+          else: {:error, "no completed session #{id} of the athlete's"}
+
+      nil ->
+        {:error, "no completed session #{id} of the athlete's"}
+    end
+  end
+
+  def call(_, _, _), do: {:error, "get_session takes a session id"}
+end

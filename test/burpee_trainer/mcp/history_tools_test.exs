@@ -289,7 +289,9 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
       assert session["burpee_type"] == "six_count"
       assert session["reps"] == 120
       assert session["duration_sec"] == 1200
-      assert session["pace_sec"] == 10.0
+      assert session["elapsed_pace_sec"] == 10.0
+      assert session["active_pace_sec"] == nil
+      assert session["fields"] == nil
       assert session["reps_per_20_min"] == 120
       assert session["capture_mode"] == "logged"
       assert session["date"] == Date.to_iso8601(Date.add(Date.utc_today(), -1))
@@ -402,6 +404,96 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
       assert period["start"] == Date.to_iso8601(month)
       assert period["sessions"] == 1
       refute Map.has_key?(period, "target_met")
+    end
+  end
+
+  describe "get_session" do
+    # A camera session of two sets of 3 at 4 s with 30 s between; the second set is
+    # finished 2 s early.
+    defp camera_session(user) do
+      work = %{"kind" => "work", "reps" => 3, "sec_per_rep" => 4.0, "sec_per_burpee" => 4.0}
+
+      plan =
+        plan_fixture(user, %{
+          definition: %{
+            "version" => 1,
+            "name" => "Threes",
+            "burpee_type" => "six_count",
+            "target_reps" => 6,
+            "target_duration_sec" => 54,
+            "pacing_style" => "unbroken",
+            "events" => [work, %{"kind" => "rest", "duration_sec" => 30}, work],
+            "rationale" => "Two short sets."
+          }
+        })
+
+      scope = Scope.for_user(user)
+      {:ok, started} = Workouts.start_plan(scope, plan.id, Ecto.UUID.generate())
+
+      {:ok, session} =
+        Workouts.complete_session(
+          scope,
+          started.id,
+          %{"burpee_count_actual" => 6, "duration_sec_actual" => 54},
+          {:trusted, [4_000, 8_000, 12_000, 45_000, 48_000, 52_000], 4.0}
+        )
+
+      session
+    end
+
+    test "reads one session in full, with its sets", %{user: user, scope: scope} do
+      session = camera_session(user)
+
+      {:ok, %{"session" => read, "fields" => fields}} =
+        call(scope, "get_session", %{"id" => session.id})
+
+      assert read["id"] == session.id
+      assert read["elapsed_pace_sec"] == 9.0
+      assert read["active_pace_sec"] == 3.67
+
+      assert [
+               %{"set" => 1, "reps" => 3, "slack_sec" => 30.0, "finish_vs_plan_sec" => +0.0},
+               %{"set" => 2, "reps" => 3, "finish_vs_plan_sec" => -2.0} = last
+             ] = read["sets"]
+
+      assert last["rep_times_sec"] == [3.0, 6.0, 10.0]
+      assert Map.has_key?(fields, "elapsed_pace_sec")
+
+      {:ok, %{"sessions" => [listed]}} = call(scope, "query_history")
+      refute Map.has_key?(listed, "sets")
+
+      {:ok, %{"sessions" => [with_sets]}} =
+        call(scope, "query_history", %{"include_sets" => true})
+
+      assert with_sets["sets"] == read["sets"]
+    end
+
+    test "never reads another athlete's session", %{scope: scope} do
+      other = camera_session(user_fixture())
+      assert {:error, _} = call(scope, "get_session", %{"id" => other.id})
+    end
+
+    test "the fatigue guide defines every field a session's fatigue, sets and slack carry",
+         %{user: user, scope: scope} do
+      {:reply, %{"result" => %{"contents" => [%{"text" => text}]}}} =
+        Mcp.handle(scope, %{
+          "jsonrpc" => "2.0",
+          "id" => 1,
+          "method" => "resources/read",
+          "params" => %{"uri" => "burpee://fatigue-guide"}
+        })
+
+      session = camera_session(user)
+
+      {:ok, %{"session" => read}} = call(scope, "get_session", %{"id" => session.id})
+
+      keys =
+        Map.keys(read["fatigue"]) ++
+          Enum.flat_map(read["sets"], &Map.keys/1) ++
+          ["window_slack", "first_sec", "last_sec", "min_sec", "median_sec"] ++
+          ["trend_sec_per_set", "sets_measured", "elapsed_pace_sec", "active_pace_sec"]
+
+      for key <- Enum.uniq(keys), do: assert(text =~ "`#{key}`", "#{key} is not defined")
     end
   end
 end

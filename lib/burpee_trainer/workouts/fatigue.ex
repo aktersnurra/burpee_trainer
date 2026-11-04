@@ -98,17 +98,29 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
   (string or atom keys). Every field is nil without detected reps or a program.
   """
   @spec for_session(String.t() | nil, map() | nil) :: t()
-  def for_session(cadence_json, program_snapshot)
-      when is_binary(cadence_json) and is_map(program_snapshot) do
-    with {:ok, [_ | _] = cadence} <- Jason.decode(cadence_json),
-         true <- Enum.all?(cadence, &(is_integer(&1) and &1 >= 0)) do
-      compute(cadence, snapshot_events(program_snapshot))
-    else
-      _ -> @empty
+  def for_session(cadence_json, program_snapshot) do
+    case decode(cadence_json, program_snapshot) do
+      {:ok, cadence, events} -> compute(cadence, events)
+      :error -> @empty
     end
   end
 
-  def for_session(_cadence_json, _program_snapshot), do: @empty
+  @doc """
+  A stored session's detected rep times (ms) and its program's events, as `compute/2`
+  takes them; `:error` without detected reps or a program.
+  """
+  @spec decode(String.t() | nil, map() | nil) :: {:ok, [non_neg_integer()], [map()]} | :error
+  def decode(cadence_json, program_snapshot)
+      when is_binary(cadence_json) and is_map(program_snapshot) do
+    with {:ok, [_ | _] = cadence} <- Jason.decode(cadence_json),
+         true <- Enum.all?(cadence, &(is_integer(&1) and &1 >= 0)) do
+      {:ok, cadence, snapshot_events(program_snapshot)}
+    else
+      _ -> :error
+    end
+  end
+
+  def decode(_cadence_json, _program_snapshot), do: :error
 
   defp snapshot_events(snapshot) do
     for event <- List.wrap(get(snapshot, :events)), is_map(event) do

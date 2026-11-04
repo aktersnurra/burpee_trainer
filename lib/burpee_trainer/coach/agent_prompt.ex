@@ -53,7 +53,7 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   The context that follows is JSON. goals: their active and proposed goals. current_level: the level they hold now. landmarks: the \
   reps each level needs in 20 minutes, per burpee type. recent_sessions: their latest \
   sessions first, with reps and reps_planned, duration_sec and duration_sec_planned, pace_sec \
-  (seconds per rep) and their feedback (mood: -1 rough, 0 OK, 1 good). \
+  (elapsed seconds per rep, rests included) and their feedback (mood: -1 rough, 0 OK, 1 good). \
   fatigue is null without the camera; camera_coverage is the share of planned reps it caught, \
   and when it missed the start that is all there is. kept_up: they stayed on or ahead of the \
   beat to the end (finishing a set early is keeping up); slip_at_sec: when they fell behind \
