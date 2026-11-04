@@ -468,6 +468,30 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
       assert with_sets["sets"] == read["sets"]
     end
 
+    test "compares with the last time the same workout was done", %{user: user, scope: scope} do
+      first = camera_session(user)
+      {:ok, %{"session" => alone}} = call(scope, "get_session", %{"id" => first.id})
+      assert alone["same_workout_last_time"] == nil
+
+      second = camera_session(user)
+      {:ok, %{"session" => read}} = call(scope, "get_session", %{"id" => second.id})
+
+      assert %{"session_id" => id, "sets_compared" => 2, "finish_change_sec" => +0.0} =
+               read["same_workout_last_time"]
+
+      assert id == first.id
+    end
+
+    test "history_stats groups camera sessions by the athlete's feedback",
+         %{user: user, scope: scope} do
+      session = camera_session(user)
+      {:ok, _} = call(scope, "edit_session", %{"id" => session.id, "primary_limiter" => "legs"})
+
+      {:ok, %{"camera_by_feedback" => groups}} = call(scope, "history_stats")
+      assert %{"sessions" => 1, "kept_up_share" => 1.0} = groups["limiter.legs"]
+      assert groups["all"]["sessions"] == 1
+    end
+
     test "never reads another athlete's session", %{scope: scope} do
       other = camera_session(user_fixture())
       assert {:error, _} = call(scope, "get_session", %{"id" => other.id})
@@ -491,7 +515,11 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
         Map.keys(read["fatigue"]) ++
           Enum.flat_map(read["sets"], &Map.keys/1) ++
           ["window_slack", "first_sec", "last_sec", "min_sec", "median_sec"] ++
-          ["trend_sec_per_set", "sets_measured", "elapsed_pace_sec", "active_pace_sec"]
+          ["trend_sec_per_set", "sets_measured", "elapsed_pace_sec", "active_pace_sec"] ++
+          ["rest_sec", "fade", "within_set", "across_sets", "pattern"] ++
+          ["same_workout_last_time", "sets_compared", "sets_faster", "finish_change_sec"] ++
+          ["camera_by_feedback", "kept_up_share", "median_slack_trend_sec_per_set"] ++
+          ["median_slack_last_share_of_rest", "median_decline", "slack_sessions"]
 
       for key <- Enum.uniq(keys), do: assert(text =~ "`#{key}`", "#{key} is not defined")
     end

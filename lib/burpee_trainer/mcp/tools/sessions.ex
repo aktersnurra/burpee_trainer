@@ -270,6 +270,7 @@ defmodule BurpeeTrainer.Mcp.Tools.GetSession do
   alias BurpeeTrainer.Coach.{AuthoritativeSession, Tool}
   alias BurpeeTrainer.Mcp.Sessions
   alias BurpeeTrainer.Workouts
+  alias BurpeeTrainer.Workouts.SetBreakdown
 
   def name, do: "get_session"
 
@@ -290,7 +291,10 @@ defmodule BurpeeTrainer.Mcp.Tools.GetSession do
           do:
             {:ok,
              %{
-               "session" => Sessions.encode(session, user.timezone, sets: true),
+               "session" =>
+                 session
+                 |> Sessions.encode(user.timezone, sets: true)
+                 |> Map.put("same_workout_last_time", last_time(scope, session, user.timezone)),
                "fields" => Sessions.fields()
              }},
           else: {:error, "no completed session #{id} of the athlete's"}
@@ -301,4 +305,18 @@ defmodule BurpeeTrainer.Mcp.Tools.GetSession do
   end
 
   def call(_, _, _), do: {:error, "get_session takes a session id"}
+
+  defp last_time(scope, session, timezone) do
+    with %{} = previous <- Workouts.previous_same_program(scope, session),
+         current = SetBreakdown.for_session(session.cadence_ms, session.program_snapshot),
+         before = SetBreakdown.for_session(previous.cadence_ms, previous.program_snapshot),
+         %{} = change <- SetBreakdown.compare(current.sets, before.sets) do
+      Map.merge(change, %{
+        "session_id" => previous.id,
+        "date" => Sessions.local_date(previous.completed_at, timezone)
+      })
+    else
+      _ -> nil
+    end
+  end
 end

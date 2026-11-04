@@ -66,7 +66,7 @@ defmodule BurpeeTrainer.Insights.Narrator do
         content:
           Voice.text() <>
             "\n" <>
-            "Write one insight about the session they just finished: a short headline and up to three points, shown right after the session. Say what went well or what changed, plainly. No numbers in the headline. Every number in a point must be a value from the metrics below, and list each metric id you used in metric_ids. A level metric may be named, but it never supports a number. Metrics: " <>
+            "Write one insight about the session they just finished: a short headline and up to three points, shown right after the session. Say what went well or what changed, plainly. No numbers in the headline. Every number in a point must be a value from the metrics below, and list each metric id you used in metric_ids. A level or status metric may be named, but it never supports a number. For a camera session, how they held the beat, the window left after each set (slack), where their pace faded and how they compare with the last time they did this workout matter more than totals; when session.camera_coverage_pct is there without session.kept_up, the camera missed the start, so say nothing about how the session went inside it. Metrics: " <>
             Jason.encode!(metrics)
       }
     ]
@@ -114,8 +114,30 @@ defmodule BurpeeTrainer.Insights.Narrator do
         reps -> [point("#{Metrics.format(reps)} reps last session.", ["session.reps"])]
       end
 
-    %{"headline" => "Session saved", "points" => week ++ session}
+    %{"headline" => "Session saved", "points" => week ++ session ++ camera(metrics)}
   end
+
+  # The camera's view of the session, when it caught the start.
+  defp camera(%{"same_workout.finish_change_sec" => %{value: change}}) when change != 0,
+    do: [
+      point(
+        "Sets finished #{if change < 0, do: "faster", else: "slower"} than last time.",
+        ["same_workout.finish_change_sec"]
+      )
+    ]
+
+  defp camera(%{"session.kept_up" => %{value: "kept up"}}),
+    do: [point("Held the beat to the end.", ["session.kept_up"])]
+
+  defp camera(%{"session.kept_up" => %{value: "fell behind"}, "session.slip_at_min" => at}),
+    do: [
+      point("Fell behind the beat at minute #{Metrics.format(at)}.", [
+        "session.kept_up",
+        "session.slip_at_min"
+      ])
+    ]
+
+  defp camera(_metrics), do: []
 
   defp point(text, ids), do: %{"text" => text, "metric_ids" => ids}
 end

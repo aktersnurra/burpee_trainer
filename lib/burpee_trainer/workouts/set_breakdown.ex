@@ -14,9 +14,19 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
 
   alias BurpeeTrainer.Workouts.Fatigue
 
-  @type t :: %{sets: [map()], active_pace_sec: float() | nil, window_slack: map() | nil}
+  # A set whose later reps are this much slower than its earlier ones faded within it; a
+  # session whose last sets are this much slower than its first faded across sets.
+  @within_fade 0.1
+  @across_fade 0.05
 
-  @empty %{sets: [], active_pace_sec: nil, window_slack: nil}
+  @type t :: %{
+          sets: [map()],
+          active_pace_sec: float() | nil,
+          window_slack: map() | nil,
+          fade: map() | nil
+        }
+
+  @empty %{sets: [], active_pace_sec: nil, window_slack: nil, fade: nil}
 
   @doc "A stored session's breakdown, from its `cadence_ms` JSON and program snapshot."
   @spec for_session(String.t() | nil, map() | nil) :: t()
@@ -41,7 +51,12 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
         times = cadence_ms |> Enum.sort() |> Enum.map(&(&1 / 1_000))
         sets = windows |> assign(times) |> Enum.with_index(1) |> Enum.map(&set/1)
 
-        %{sets: sets, active_pace_sec: active_pace(sets), window_slack: window_slack(sets)}
+        %{
+          sets: sets,
+          active_pace_sec: active_pace(sets),
+          window_slack: window_slack(sets),
+          fade: fade(sets)
+        }
     end
   end
 
@@ -136,11 +151,110 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
           "last_sec" => List.last(slack),
           "min_sec" => Enum.min(slack),
           "median_sec" => median(slack),
+          "rest_sec" => median(Enum.map(measured, & &1["rest_after_sec"])),
           "trend_sec_per_set" => slope(Enum.map(measured, &{&1["set"], &1["slack_sec"]}))
         }
 
       _too_few ->
         nil
+    end
+  end
+
+  # Within a set: how much slower its second half of rep-to-rep intervals was than its
+  # first, as a fraction, the median over complete sets with at least four reps. Across
+  # sets: how much slower the last third of complete sets moved against their planned beat
+  # than the first third did. The first rep of a set is left out of both, since it carries
+  # the reaction to the beep.
+  defp fade(sets) do
+    complete = Enum.filter(sets, & &1["finish_sec"])
+
+    within =
+      complete
+      |> Enum.flat_map(fn set ->
+        case intervals(set["rep_times_sec"]) do
+          [_, _, _ | _] = gaps ->
+            {early, late} = Enum.split(gaps, div(length(gaps), 2))
+            [mean(Enum.take(late, -length(early))) / mean(early) - 1]
+
+          _too_few ->
+            []
+        end
+      end)
+      |> median3()
+
+    across =
+      with third when third > 0 <- div(length(complete), 3),
+           first when first != nil <- beat_ratio(Enum.take(complete, third)),
+           last when last != nil <- beat_ratio(Enum.take(complete, -third)) do
+        Float.round(last / first - 1, 3)
+      else
+        _ -> nil
+      end
+
+    if within || across do
+      %{"within_set" => within, "across_sets" => across, "pattern" => pattern(within, across)}
+    end
+  end
+
+  defp pattern(within, across) do
+    case {is_number(within) and within > @within_fade,
+          is_number(across) and across > @across_fade} do
+      {true, true} -> "both"
+      {true, false} -> "within_sets"
+      {false, true} -> "across_sets"
+      {false, false} -> "none"
+    end
+  end
+
+  defp intervals(times),
+    do: times |> Enum.chunk_every(2, 1, :discard) |> Enum.map(fn [a, b] -> b - a end)
+
+  defp beat_ratio(sets) do
+    ratios =
+      for set <- sets,
+          gaps = intervals(set["rep_times_sec"]),
+          gaps != [],
+          do: mean(gaps) / set["sec_per_rep_planned"]
+
+    if ratios != [], do: mean(ratios)
+  end
+
+  defp mean(values), do: Enum.sum(values) / length(values)
+
+  defp median3([]), do: nil
+
+  defp median3(values) do
+    sorted = Enum.sort(values)
+    n = length(sorted)
+    mid = div(n, 2)
+
+    value =
+      if rem(n, 2) == 1,
+        do: Enum.at(sorted, mid),
+        else: (Enum.at(sorted, mid - 1) + Enum.at(sorted, mid)) / 2
+
+    Float.round(value / 1, 3)
+  end
+
+  @doc """
+  This session's sets against an earlier session of the same workout: the median change in
+  each set's finish (negative is faster), over sets complete in both. Nil when the two
+  are not the same plan or no set is complete in both.
+  """
+  @spec compare([map()], [map()]) :: map() | nil
+  def compare(current, previous) when is_list(current) and is_list(previous) do
+    pairs =
+      for {a, b} <- Enum.zip(current, previous),
+          a["reps_planned"] == b["reps_planned"] and a["start_sec"] == b["start_sec"],
+          a["finish_sec"] && b["finish_sec"],
+          do: a["finish_sec"] - b["finish_sec"]
+
+    if pairs != [] and length(current) == length(previous) do
+      %{
+        "sets_compared" => length(pairs),
+        "sets_faster" => Enum.count(pairs, &(&1 < 0)),
+        "finish_change_sec" => pairs |> median() |> round2()
+      }
     end
   end
 

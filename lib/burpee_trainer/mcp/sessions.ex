@@ -174,6 +174,8 @@ defmodule BurpeeTrainer.Mcp.Sessions do
     duration = session.duration_sec_actual
     measured? = is_integer(reps) and reps > 0 and is_integer(duration) and duration > 0
     breakdown = SetBreakdown.for_session(session.cadence_ms, session.program_snapshot)
+    # The summaries need the camera to have caught the opening; the raw sets do not.
+    opening? = is_boolean(session.kept_up)
 
     %{
       "id" => session.id,
@@ -189,13 +191,14 @@ defmodule BurpeeTrainer.Mcp.Sessions do
       "duration_sec_planned" => session.duration_sec_planned,
       "minutes_counted" => div(History.credited_seconds(session), 60),
       "elapsed_pace_sec" => if(measured?, do: Float.round(duration / reps, 2)),
-      "active_pace_sec" => breakdown.active_pace_sec,
+      "active_pace_sec" => if(opening?, do: breakdown.active_pace_sec),
       "reps_per_20_min" =>
         if(measured?, do: hd(Series.progress([session]).points).normalized_reps),
       "pace_consistency" => session.pace_consistency,
       "sets_completed" => session.prescribed_sets_completed,
       "fatigue" => Fatigue.summary(session),
-      "window_slack" => breakdown.window_slack,
+      "window_slack" => if(opening?, do: breakdown.window_slack),
+      "fade" => if(opening?, do: breakdown.fade),
       "mood" => session.mood,
       "primary_limiter" => session.primary_limiter && to_string(session.primary_limiter),
       "preference" => session.preference_feedback && to_string(session.preference_feedback),
@@ -231,6 +234,12 @@ defmodule BurpeeTrainer.Mcp.Sessions do
     "window_slack" =>
       "camera-only; seconds of each set's window (work + following rest) left after its " <>
         "last rep; see burpee://fatigue-guide",
+    "fade" =>
+      "camera-only; within_set and across_sets are fractions slower (0.1 is 10%), pattern " <>
+        "names where the pace faded; see burpee://fatigue-guide",
+    "same_workout_last_time" =>
+      "get_session only; this session's sets against the last camera session of the same " <>
+        "workout: finish_change_sec negative is faster",
     "sets" =>
       "per set: planned window and seconds from the session start, reps counted, rep_times_sec " <>
         "from the set's beep; see burpee://fatigue-guide",

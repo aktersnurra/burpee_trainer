@@ -98,8 +98,60 @@ defmodule BurpeeTrainer.Workouts.SetBreakdownTest do
   end
 
   test "without detected reps or a program there is nothing to break down" do
-    empty = %{sets: [], active_pace_sec: nil, window_slack: nil}
+    empty = %{sets: [], active_pace_sec: nil, window_slack: nil, fade: nil}
     assert SetBreakdown.for_session(nil, %{"events" => []}) == empty
     assert SetBreakdown.for_session("[1000]", nil) == empty
+  end
+
+  # Each set's reps with their gaps from the beep given by `gap.(set, rep)`.
+  defp paced(sets, reps, spr, rest, gap) do
+    for set <- 0..(sets - 1) do
+      start = set * (reps * spr + rest)
+
+      Enum.scan(1..reps, 0, fn rep, at -> at + gap.(set, rep) end)
+      |> Enum.map(&round((start + &1) * 1_000))
+    end
+    |> List.flatten()
+  end
+
+  property "slowing inside each set and slowing from set to set are told apart" do
+    check all({sets, reps, spr, rest} <- shape(), reps >= 6, fade <- float(min: 0.3, max: 0.5)) do
+      program = program(sets, reps, spr, rest)
+      steady = spr * 0.6
+      # The second half of every set slower than its first, the same in every set.
+      within = fn _set, rep ->
+        if rep > div(reps, 2) + 1, do: steady * (1 + fade), else: steady
+      end
+
+      # Every rep of a set equally slower the later the set.
+      across = fn set, _rep -> steady * (1 + fade * set / sets) end
+
+      assert SetBreakdown.compute(paced(sets, reps, spr, rest, within), program).fade["pattern"] ==
+               "within_sets"
+
+      assert SetBreakdown.compute(paced(sets, reps, spr, rest, across), program).fade["pattern"] ==
+               "across_sets"
+
+      assert SetBreakdown.compute(paced(sets, reps, spr, rest, fn _, _ -> steady end), program).fade[
+               "pattern"
+             ] == "none"
+    end
+  end
+
+  test "the same workout compares set by set; another workout does not compare" do
+    program = program(3, 5, 4.0, 30)
+    before = SetBreakdown.compute(reps(3, 5, 4.0, 30, fn _ -> 0 end), program).sets
+
+    now =
+      SetBreakdown.compute(reps(3, 5, 4.0, 30, fn set -> if set < 2, do: 2, else: 0 end), program).sets
+
+    assert SetBreakdown.compare(now, before) == %{
+             "sets_compared" => 3,
+             "sets_faster" => 2,
+             "finish_change_sec" => -2.0
+           }
+
+    other = SetBreakdown.compute(reps(3, 4, 4.0, 30, fn _ -> 0 end), program(3, 4, 4.0, 30)).sets
+    assert SetBreakdown.compare(now, other) == nil
   end
 end

@@ -3,7 +3,7 @@ defmodule BurpeeTrainer.Coach.Tools.History do
   alias BurpeeTrainer.Coach.{Tool, AuthoritativeSession}
   import Ecto.Query
   alias BurpeeTrainer.{Repo, Accounts.Scope}
-  alias BurpeeTrainer.Workouts.{Fatigue, WorkoutSession}
+  alias BurpeeTrainer.Workouts.{Fatigue, SetBreakdown, WorkoutSession}
   def name, do: "history"
   def description, do: "Completed session summaries for 1 to 26 weeks."
 
@@ -49,6 +49,14 @@ defmodule BurpeeTrainer.Coach.Tools.History do
           else: nil
         ),
       "feedback" => Map.take(s, [:mood, :primary_limiter, :preference_feedback]),
-      "fatigue" => Fatigue.summary(s)
+      "fatigue" => Fatigue.summary(s),
+      "window_slack" => camera(s, :window_slack),
+      "fade" => camera(s, :fade)
     }
+
+  # Only when the camera caught the opening, as `Fatigue.summary/1` is.
+  defp camera(%{kept_up: kept_up} = s, key) when is_boolean(kept_up),
+    do: SetBreakdown.for_session(s.cadence_ms, s.program_snapshot) |> Map.fetch!(key)
+
+  defp camera(_s, _key), do: nil
 end

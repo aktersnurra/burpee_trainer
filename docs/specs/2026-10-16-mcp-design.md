@@ -90,6 +90,10 @@ to next beep), reps counted, finish against the plan, slack (window left after t
 rep) and rep times, from `Workouts.SetBreakdown` over the stored `cadence_ms` and program
 snapshot. The resource `burpee://fatigue-guide` (`docs/guides/mcp-fatigue.md`) defines
 every fatigue, set and slack field: unit, sign, what it is compared against, when null.
+`get_session` adds `same_workout_last_time` (each set's finish against the last camera
+session of the same program), sessions carry `fade` (inside sets or from set to set), and
+`history_stats` carries `camera_by_feedback` (`Mcp.FeedbackFatigue`): camera sessions
+grouped by limiter, mood, energy and heat, with how often they kept up and their slack.
 
 `history_stats` groups the same filters by `week` or `month` and returns, per period and
 type: sessions, minutes, reps, best reps per 20 minutes, average pace, and whether the

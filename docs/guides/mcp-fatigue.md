@@ -4,8 +4,13 @@ The camera counts each rep and records when it finished. `query_history` and
 `get_session` compare those times with the workout's plan: when each set's beep
 went, how many reps it asked for and at what pace. Everything here is derived from
 those two things, so it exists only for camera sessions (`capture_mode` `tracked`).
-Timed and logged sessions have `fatigue` null, `window_slack` null,
+Timed and logged sessions have `fatigue` null, `window_slack` null, `fade` null,
 `active_pace_sec` null and `sets` empty.
+
+**When the camera missed the start** (`fatigue` holds only `camera_coverage`), the
+summaries `active_pace_sec`, `window_slack` and `fade` are null too: a shrinking curve
+could be a camera that stopped working, not the athlete. `sets` still lists what the
+camera counted, so you can see what it caught.
 
 All times are seconds. "From the session start" means from the first set's
 count-in, the same clock for every field.
@@ -80,4 +85,52 @@ rest is all work. Null with fewer than two such sets.
 | `sets_measured` | count | sets behind the curve |
 | `first_sec` / `last_sec` | s | slack of the first and last measured set |
 | `min_sec` / `median_sec` | s | smallest and median slack |
+| `rest_sec` | s | median planned rest after the measured sets: read `last_sec` against it |
 | `trend_sec_per_set` | s per set | least-squares slope of slack on set number; negative is the window shrinking as they tire |
+
+The planner reads the same curve. A last set with under a quarter of its rest left,
+on a shrinking curve, holds the next session at the same reps (`slack_running_out`)
+even when they kept up. Half the rest or more left in every set, shrinking by under
+a quarter of a rest over the session, after two successful sessions, allows a bigger
+step (`repeated_success_with_headroom`).
+
+## `fade`
+
+Where the pace faded: inside sets (the sets are too long) or from set to set (the
+rests are too short to recover). The first rep of each set is left out of both,
+since it carries the reaction to the beep. Null when neither can be measured.
+
+| Field | Unit | Positive means | Compared against | Null when |
+|---|---|---|---|---|
+| `within_set` | fraction | the second half of a set's rep-to-rep intervals was slower than its first half; 0.1 is 10% slower. Median over complete sets | the same set's first half | no complete set has four reps |
+| `across_sets` | fraction | the last third of complete sets moved slower against their planned beat than the first third; 0.05 is 5% slower | the first third of the same session | fewer than three complete sets |
+| `pattern` | text | `within_sets` (within_set over 0.1), `across_sets` (across_sets over 0.05), `both`, or `none` | | |
+
+## `same_workout_last_time` (`get_session`)
+
+This session against the last camera session of the same workout (the same program,
+to the microsecond), when the camera caught the start of both. Null without one.
+
+| Field | Unit | Meaning |
+|---|---|---|
+| `session_id` / `date` | | the earlier session |
+| `sets_compared` | count | sets complete in both |
+| `sets_faster` | count | of those, sets finished sooner after their beep this time |
+| `finish_change_sec` | s | median change in each set's `finish_sec`; negative is faster |
+
+## `camera_by_feedback` (`history_stats`)
+
+The selected camera sessions (start caught) grouped by what the athlete reported:
+`limiter.<breathing|whole_body|upper_body|legs>`, `mood.<-1|0|1>`, `low_energy`,
+`high_energy`, `heat_affected`, and `all`. A session is in every group its feedback
+puts it in. Null with no such session. These describe the selection; they do not
+show a cause, and a group of two sessions shows little.
+
+| Field | Unit | Meaning |
+|---|---|---|
+| `sessions` | count | camera sessions in the group |
+| `kept_up_share` | 0..1 | share that kept up to the end |
+| `median_decline` | ratio | median `decline` |
+| `slack_sessions` | count | sessions with a slack curve |
+| `median_slack_trend_sec_per_set` | s per set | median `trend_sec_per_set` |
+| `median_slack_last_share_of_rest` | 0..1+ | median `last_sec / rest_sec`: how much of the last rest was left |
