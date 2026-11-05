@@ -17,7 +17,16 @@
   --fill-hover: #e6e3db;
   --focus: #5e615b;
   --bubble: #e9e5dc;
-  --changed: #a77b5d;
+  /* One colour, one meaning: six-count navy, Navy SEAL sky (its lines and marks a step deeper),
+     cobalt as a tint for what the coach changed and an OK session, green a Good one, clay what
+     is at stake, amber Finish's tags and the streak's flame. */
+  --six: #1f3f73;
+  --seal: #86aee0;
+  --seal-line: #5f8fcf;
+  --cobalt: #2f63ad;
+  --good: #3f9161;
+  --clay: #b46958;
+  --amber: #c48a24;
   /* Where every view's top row sits, and the one height of a filled pill. */
   --top: 32px;
   --pill-h: 48px;
@@ -609,7 +618,7 @@ button.home-summary:hover .home-workout-name {
 .home-history-tone-2 { background: #bed9de; }
 .home-history-tone-3 { background: #8cb8c2; }
 .home-history-tone-4 { background: #568b9a; }
-.home-history-tone-5 { background: #245b70; }
+.home-history-tone-5 { background: var(--six); }
 .home-history-trend { margin-top: 36px; padding: 0; border: 0; background: transparent; }
 .home-history-trend-heading { display: flex; align-items: center; justify-content: space-between; min-height: 36px; }
 /* One small chart per type, its name above it in its colour, its scale on the left. */
@@ -617,8 +626,8 @@ button.home-summary:hover .home-workout-name {
 .home-history-plot + .home-history-plot { margin-top: 28px; }
 .home-history-plot-label { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; margin: 0 0 6px; color: var(--muted); font-size: var(--text-small); }
 .home-history-plot-label::before { content: ""; width: 14px; border-top: 2px solid; }
-.home-history-plot-label.progress-key-six-count::before { border-color: var(--series-six-count); }
-.home-history-plot-label.progress-key-navy-seal::before { border-top-style: dashed; border-color: var(--series-navy-seal); }
+.home-history-plot-label.progress-key-six-count::before { border-color: var(--six); }
+.home-history-plot-label.progress-key-navy-seal::before { border-top-style: dashed; border-color: var(--seal-line); }
 .home-history-plot .home-history-trend-axis { grid-column: 1; color: var(--muted); }
 .home-history-plot .home-history-plot-area { grid-column: 2; }
 
@@ -627,18 +636,18 @@ button.home-summary:hover .home-workout-name {
 .home-history-plot-area { height: 96px; border: 0; background: none; }
 .home-history-grid { stroke: var(--line); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .home-history-grid.home-history-goal-line { stroke: #8a877f; stroke-dasharray: 3 3; }
-.home-history-svg { color: var(--series-six-count); }
-.home-history-point span { width: 8px; height: 8px; border: 1.5px solid var(--series-six-count); border-radius: 0; background: var(--color-base-100); }
-.home-history-point-navy-seal span { border-color: var(--series-navy-seal); }
+.home-history-svg { color: var(--six); }
+.home-history-point span { width: 8px; height: 8px; border: 1.5px solid var(--six); border-radius: 0; background: var(--color-base-100); }
+.home-history-point-navy-seal span { border-color: var(--seal-line); }
 .home-history-sessions-heading { margin-top: 44px; }
 .home-history-table { table-layout: auto; }
 .home-history-session-card > td { padding: 7px 0; margin-top: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
 @media (max-width: 600px) { .adaptive-home { padding-inline: var(--gutter); } }
 @media (prefers-reduced-motion: reduce) { .home-title-action, .home-loading-animation { transition: none; animation: none; } }
-.home-history-line-six-count { color: var(--series-six-count); }
-.home-history-line-navy-seal { color: var(--series-navy-seal); }
-.home-history-point-six-count span { background: var(--color-base-100); border-color: var(--series-six-count); }
-.home-history-point-navy-seal span { background: var(--color-base-100); border-color: var(--series-navy-seal); border-radius: 0; }
+.home-history-line-six-count { color: var(--six); }
+.home-history-line-navy-seal { color: var(--seal-line); }
+.home-history-point-six-count span { background: var(--color-base-100); border-color: var(--six); }
+.home-history-point-navy-seal span { background: var(--color-base-100); border-color: var(--seal-line); border-radius: 0; }
 #home-history-empty { margin-top: 24px; }
 /* The approved density view swaps its chart and session list in the same place. */
 #home-history-trend, #home-history-sessions-panel { max-width: 640px; }
@@ -765,8 +774,8 @@ button.home-summary:hover .home-workout-name {
 /* The density readout sits under its heading like the streak and level pair. */
 .home-history-trend-readout { margin-top: 12px; }
 /* Points are dots: six-count filled ink, navy seal an open ring. */
-.adaptive-home .home-history-point span { width: 9px; height: 9px; border-radius: 999px; border: 2px solid var(--color-base-100); background: var(--series-six-count); outline: 1px solid var(--series-six-count); }
-.adaptive-home .home-history-point-navy-seal span { background: var(--color-base-100); outline: 1.5px solid var(--series-navy-seal); }
+.adaptive-home .home-history-point span { width: 9px; height: 9px; border-radius: 999px; border: 2px solid var(--color-base-100); background: var(--six); outline: 1px solid var(--six); }
+.adaptive-home .home-history-point-navy-seal span { background: var(--color-base-100); outline: 1.5px solid var(--seal-line); }
 /* View switches sit at the heading's right edge and look like the period tabs. */
 .home-workout-actions[inert] { opacity: .45; transition: opacity var(--motion-quick) ease; }
 #home-alternatives-panel .home-chooser-header h2 { font: 600 var(--text-body)/1.4 var(--font-sans); letter-spacing: 0; }
@@ -774,11 +783,14 @@ button.home-summary:hover .home-workout-name {
 .home-alternative[aria-current="true"] .home-alternative-name { font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { #home-alternatives-panel { transition: none; } }
 /* New's title takes the workout title's place: centred, at the title size. */
-/* Review marks what Edit changed: ink weight and a clay underline, nothing louder. */
-:is(.adaptive-home, .studio) mark.home-changed { background: transparent; color: inherit; }
-:is(.adaptive-home, .studio) .home-changed { font-weight: 600; color: var(--ink); text-decoration: underline 2px var(--changed); text-underline-offset: 4px; }
-:is(.adaptive-home, .studio) td.home-changed, :is(.adaptive-home, .studio) th.home-changed { text-decoration: none; }
-:is(.adaptive-home, .studio) td.home-changed span, :is(.adaptive-home, .studio) th.home-changed > span { text-decoration: underline 2px var(--changed); text-underline-offset: 4px; }
+/* The diff: what a proposal changed. The old value struck through in grey, the new one on a soft
+   cobalt highlight that hugs it; a changed cell's value keeps its place in the column. */
+:is(.adaptive-home, .studio) .diff-was { color: var(--muted); text-decoration: line-through; }
+:is(.adaptive-home, .studio) :is(.diff-now, td.home-changed > span, th.home-changed > span) { padding: 0 4px; border-radius: 3px; background: color-mix(in srgb, var(--cobalt) 16%, transparent); color: var(--ink); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+:is(.adaptive-home, .studio) td.home-changed > span { width: fit-content; margin: 0 -4px 0 auto; }
+:is(.adaptive-home, .studio) th.home-changed > span { margin-left: -4px; }
+/* The table scrolls sideways, so it gives the highlight room at its edges without moving a column. */
+:is(.adaptive-home, .studio) #home-inspection:has(.home-changed) { max-width: 648px; margin-inline: -4px; padding-inline: 4px; }
 /* New's title lands exactly where the open workout's title was. */
 #home-ready-recommendation[data-expanded="true"]:has(#home-authoring-heading) { margin-top: 56px; }
 /* The status row opens the page under its heading; the period tabs then open the record. */
@@ -824,13 +836,12 @@ button.home-summary:hover .home-workout-name {
 .coach-note .coach-summary-text { font-size: inherit; }
 
 /* One colour per burpee type, for its line, its points, its axis and its key. */
-:root { --series-six-count: #245b70; --series-navy-seal: #c8641f; }
-.progress-key-six-count { color: var(--series-six-count); }
-.progress-key-navy-seal { color: var(--series-navy-seal); }
+.progress-key-six-count { color: var(--six); }
+.progress-key-navy-seal { color: var(--seal-line); }
 .adaptive-home .progress-gauge-type { display: flex; align-items: center; gap: 8px; color: var(--muted); }
 .progress-gauge-type::before { content: ""; width: 14px; border-top: 2px solid currentColor; }
-.progress-gauge-type.progress-key-six-count::before { border-color: var(--series-six-count); }
-.progress-gauge-type.progress-key-navy-seal::before { border-top-style: dashed; border-color: var(--series-navy-seal); }
+.progress-gauge-type.progress-key-six-count::before { border-color: var(--six); }
+.progress-gauge-type.progress-key-navy-seal::before { border-top-style: dashed; border-color: var(--seal-line); }
 .progress-gauge .progress-course-caption { margin-top: 12px; }
 /* With the coach open under it, the result sits higher. */
 #home-done-today[data-expanded="true"], #home-week-complete[data-expanded="true"] { margin-top: 56px; }
@@ -847,8 +858,8 @@ button.home-summary:hover .home-workout-name {
 .home-history-session-name::before { content: ""; flex: none; width: 14px; border-top: 2px solid currentColor; }
 .home-history-session-name.progress-key-navy-seal::before { border-top-style: dashed; }
 .adaptive-home .home-history-session-name { color: var(--ink); }
-.home-history-session-name.progress-key-six-count::before { border-color: var(--series-six-count); }
-.home-history-session-name.progress-key-navy-seal::before { border-color: var(--series-navy-seal); }
+.home-history-session-name.progress-key-six-count::before { border-color: var(--six); }
+.home-history-session-name.progress-key-navy-seal::before { border-color: var(--seal-line); }
 .adaptive-home .home-history-session-summary small { padding-left: 20px; }
 .home-history-session-tag::before { content: " · "; }
 .home-history-session-selected .home-history-session-toggle { color: var(--ink); }
@@ -880,8 +891,8 @@ button.home-summary:hover .home-workout-name {
 .coach-week-item { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; border-bottom: 1px solid var(--line); font-size: var(--text-body); }
 .adaptive-home .coach-week-type { display: flex; align-items: center; gap: 8px; color: var(--ink); }
 .coach-week-type::before { content: ""; flex: none; width: 14px; border-top: 2px solid currentColor; }
-.coach-week-type.progress-key-six-count::before { border-color: var(--series-six-count); }
-.coach-week-type.progress-key-navy-seal::before { border-top-style: dashed; border-color: var(--series-navy-seal); }
+.coach-week-type.progress-key-six-count::before { border-color: var(--six); }
+.coach-week-type.progress-key-navy-seal::before { border-top-style: dashed; border-color: var(--seal-line); }
 .coach-week-when { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .coach-week-done-mark { color: var(--ink); }
 .adaptive-home .coach-week-left .coach-week-type { color: var(--muted); }
@@ -904,7 +915,7 @@ button.home-summary:hover .home-workout-name {
 /* The home indicator is behind the keyboard, so its padding would only float the box. */
 .chat-dock[data-keyboard="open"] { padding-bottom: 6px; }
 .chat-dock-inner { display: grid; gap: 8px; max-width: var(--chat-w); margin-inline: auto; pointer-events: auto; }
-.chat-dock .composer textarea { min-height: 1.5em; max-height: 9rem; overflow-y: auto; }
+.chat-dock .composer textarea { max-height: 9rem; }
 .chat-dock-spacer { height: calc(var(--chat-dock-height, 0px) + 16px); }
 
 /* The design as a conversation: what you asked, what it became, newest last. */
@@ -990,7 +1001,7 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 
 /* A workout card: label, name, two chips, why, then the table in small type. */
 /* A workout in the studio reads as it does on Home: no card, the name at the title size, its
-   totals one muted line, then its sets. A total the proposal changed is underlined. */
+   totals one muted line, then its sets. A total the proposal changed shows the diff. */
 .studio-card { width: 100%; max-width: 354px; margin: 6px auto 0; padding: 8px 0 0; text-align: center; }
 .studio-card-name { margin: 0; font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; text-wrap: balance; }
 .studio-card-totals { display: flex; flex-wrap: wrap; justify-content: center; margin: 12px 0 0; }
@@ -1012,14 +1023,13 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .studio-pill:disabled { opacity: .4; cursor: default; }
 /* Run sits under the workout as Play does on Home: the ink pill, centred. */
 .studio-actions { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 18px; }
-/* The coach's suggested asks: quiet pills that wrap, above Save and Run. */
-.studio-suggestions { display: flex; flex-wrap: wrap; gap: 8px; }
-/* On a phone one row that scrolls sideways, so the guesses never push the box up the screen. */
-@media (max-width: 600px) {
-  .studio-suggestions { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
-  .studio-suggestions::-webkit-scrollbar { display: none; }
-  .studio-suggestion { flex: none; white-space: nowrap; }
-}
+/* The coach's suggested asks, just above the box: one row that scrolls sideways and fades at its
+   right edge, so the guesses never push the box up the screen. On a phone it runs on to the
+   screen's edge, so the last guess can scroll clear of the fade. */
+.studio-suggestions { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; -webkit-mask-image: linear-gradient(90deg, black calc(100% - 40px), transparent); mask-image: linear-gradient(90deg, black calc(100% - 40px), transparent); }
+.studio-suggestions::-webkit-scrollbar { display: none; }
+@media (max-width: 600px) { .studio-suggestions { margin-right: calc(-1 * var(--gutter)); padding-right: var(--gutter); } }
+.studio-suggestion { flex: none; white-space: nowrap; }
 .studio-suggestion { min-height: 36px; padding: 0 14px; color: var(--muted); font-size: var(--text-small); text-align: left; }
 .studio-actions .studio-pill { min-width: 96px; padding-inline: 36px; }
 
@@ -1060,10 +1070,6 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .studio-more-chevron { transition: transform var(--motion-quick) ease; }
 .studio-more[aria-expanded="true"] .studio-more-chevron { transform: rotate(180deg); }
 .studio-more-fields > .studio-row { border-top: 1px solid var(--line); }
-.studio-note { display: grid; gap: 8px; }
-.studio-note textarea { width: 100%; min-height: 3.5em; max-height: 12rem; padding: 12px 16px; border: 1px solid var(--line); border-radius: var(--radius-surface); background: var(--color-base-200); color: var(--color-base-content); font: 400 var(--text-body)/1.5 var(--font-sans); resize: none; field-sizing: content; }
-.studio-note textarea::placeholder { color: var(--muted); opacity: 1; }
-.studio-note textarea:focus-visible { outline: none; border-color: #918d83; }
 @media (prefers-reduced-motion: reduce) {
   .studio, .studio-msg, .studio-form { animation: none; }
   #home-page, .home-corner-action { transition: none; }
@@ -1074,9 +1080,6 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .studio #home-update-loading { display: flex; align-items: center; min-height: 36px; }
 
 .coach-summary-loader { margin-top: -8px; }
-
-/* What a proposal changed from the one before: the clay underline, on a chip as its border. */
-.studio-chip-changed { color: var(--ink); font-weight: 600; text-decoration: underline 1.5px var(--changed); text-underline-offset: 5px; }
 
 /* What the coach remembers: an icon beside the coach's note that opens a sheet with its two parts. */
 .coach-head { display: flex; align-items: flex-start; gap: 8px; }

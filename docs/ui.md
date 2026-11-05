@@ -2,7 +2,7 @@
 
 > Single source of truth for all visual and interaction decisions.
 > Read this before touching any template or CSS.
-> Design directive: quiet, warm, tasteful. Light Quiet stone is the only theme; there is no dark mode. Typography, whitespace, and thin rules carry the interface. Muted clay replaces saturated blue as the rare accent.
+> Design directive: quiet, warm, tasteful. Light Quiet stone is the only theme; there is no dark mode. Typography, whitespace, and thin rules carry the interface. A few muted colours each mean one thing.
 
 ---
 
@@ -20,7 +20,8 @@
   best beside it.
 - **Hierarchy through scale and weight**, not color and decoration.
 - **Warm light, always.** Quiet stone carries the app; there is no dark mode.
-- **Rare accent color.** Muted clay is the restrained accent. Orange (navy seal series) is data only.
+- **A colour means one thing.** Ink and greys carry the app; the few colours (2) each say one
+  thing wherever they show, and never decorate.
 - **No shadows, no gradients.** Flat surfaces separated by subtle borders and opacity. The
   composer (4a1) is the one exception: a faint lift that says "write here".
 - **Generous whitespace.** Breathing room is a feature, not waste.
@@ -100,23 +101,28 @@ nothing else; a new hex in a rule is a bug.
 --fill-hover: #e6e3db   a quiet button under the pointer
 --focus:      #5e615b   every focus ring
 --bubble:     #e9e5dc   your messages
---changed:    #a77b5d   the clay underline on what a proposal changed
 ```
 
-### Data series (chart only)
+### Colours that mean something
 
-```
-six_count: #245b70   (--series-six-count)
-navy_seal: #c8641f   (--series-navy-seal — data only, never UI chrome)
-```
+One palette across every view. A colour means one thing.
 
-### Status colors
+| Token | Hex | Means |
+|---|---|---|
+| `--six` | `#1f3f73` navy | six-count: its days, its solid line, its picked type |
+| `--seal` | `#86aee0` sky | Navy SEAL: its days, its picked type |
+| `--seal-line` | `#5f8fcf` | Navy SEAL's dashed line and its marks |
+| `--cobalt` | `#2f63ad` | as a tint: what the coach changed; an OK session |
+| `--good` | `#3f9161` | a Good session |
+| `--clay` | `#b46958` | at stake: abort, delete, where you stopped; a Rough session |
+| `--amber` | `#c48a24` | Finish's tags; the streak's flame |
 
-```
-success:  #6F7D55   (goal met, level unlock)
-warning:  #A77B5D   (muted clay)
-error:    #A55643
-```
+A choice is a soft tint of its colour with a thin ring of it and its text in the full colour
+(`rgba(c, .16–.32)` fill, `inset 0 0 0 1px rgba(c, .45–.6)`), never a solid fill.
+
+The diff shows what a proposal changed: the old value struck through in `--muted`
+(`.diff-was`), the new one on a soft cobalt highlight (`--cobalt` at 16%, a 3px corner, 4px
+either side: `.diff-now`, and a changed cell's value in the set table).
 
 ---
 
@@ -179,18 +185,19 @@ Home's content does (`--gutter`), and a docked box is as wide as the column, not
 
 ## 4a1. The composer
 
-Every box you write words in (Edit's follow-ups, a request for New, a message to the coach) is the
-composer: one rounded line (`--color-base-200`, a `--color-base-border` edge, `--radius-surface`,
-a faint shadow) that grows with its text up to nine lines, the send key inside its right edge.
-Its send key is a 44px target. Its placeholder names it; the label stays for screen readers. Send is a return arrow, grey until
-there is something to send, then ink (always ink where an empty send is fine, as New's request);
-while the coach works it is a small square. Its border darkens while focused, so the text draws
-no ring of its own. There are no suggested words above it. Classes: `.composer`,
-`.composer-bar`, `.composer-send`, `.composer-stop`.
+Every place you write (Edit's follow-ups, the coach, New's request, Finish's note) is one box,
+the composer: `--color-base-200`, a `--line` edge, `--radius-surface` corners and the faintest
+lift. At rest it is about two lines tall (84px), its placeholder at the top left; it grows with
+its text, up to nine lines when docked. The words fill the box, so a tap anywhere in it writes.
+Its placeholder names it; the label stays for screen readers. Its border darkens while focused,
+so the text draws no ring of its own. The box is the same on a phone and a wide screen.
 
-On a phone the composer is one capsule, as the iOS chat apps draw it: the words and the send key
-on one line, growing upward as the words wrap. A conversation's composer (a design's follow-ups,
-the coach) is docked: `.chat-dock` holds it, fixed at the bottom of the screen above the home
+Where it sends on its own (Edit, the coach) the send key sits in the bottom-right corner, inside
+the box: a 34px circle in a 44px target. It is grey until there is something to send, then ink;
+the composer stays grey while the coach works. New's note and Finish's note go with the screen's
+✓ and have no send key. Classes: `.composer`, `.composer-bar`, `.composer-send`.
+
+A conversation's composer (a design's follow-ups, the coach) is docked: `.chat-dock` holds it, fixed at the bottom of the screen above the home
 indicator, and the `ChatDock` hook lifts it onto the iPhone keyboard with a transform, frame by
 frame and never eased, so it rides the keyboard instead of trailing it. A spacer (`.chat-dock-spacer`) keeps the last line clear of
 it. Your messages are soft bubbles on the right (`.studio-bubble`, `.coach-exchange-you`); new
@@ -235,8 +242,8 @@ sheet: a conversation needs the screen above the keyboard, and a stray pull must
   `--bubble`, in the studio and the coach chat alike). A workout
   reads as on Home, with no card: its name centred at the title size, minutes and reps one muted
   line, why, then the table in body size. A proposal is marked against the one it replaced
-  (Edit's first, against the workout): a changed total and a changed cell take the clay
-  underline. Sets read by number (`1–4`, `5`), rests as clocks (`4:30`).
+  (Edit's first, against the workout): a changed total shows the diff (2), the old number
+  struck through and the new one highlighted, and a changed cell is highlighted. Sets read by number (`1–4`, `5`), rests as clocks (`4:30`).
 - **New's form** is big numbers (`.studio-form-hero`): the burpee as two words centred, the
   chosen one in ink; duration and reps as 64px centred numbers with their unit under them and a
   plain 52px step either side that keeps stepping while held; a hint under each in small muted
@@ -244,8 +251,9 @@ sheet: a conversation needs the screen above the keyboard, and a stray pull must
   ("Even · 4.5 s/rep") and unfolds as quiet rows between hairlines. Create workout, the one
   filled pill, sits at the foot of the screen within the thumb's reach.
 - **Suggested asks**: up to three of the coach's guesses at the next change sit as quiet
-  pills (`.studio-suggestion`, muted small type) just above the chat box, wrapping on a wide screen and in one sideways-scrolling row on a phone, and go while the coach works; a tap sends one as
-  a follow-up.
+  pills (`.studio-suggestion`, muted small type) just above the chat box, in one row that
+  scrolls sideways and fades at its right edge (on a phone the row runs on to the screen's
+  edge), and go while the coach works; a tap sends one as a follow-up.
 - **Words on pills**: the studio is a conversation, so its actions are words on pills (the one
   filled ink pill per view is the way on: Run, Create workout), where the rest of the app
   uses icons (4a2). Run keeps its play mark and uses Home's camera and warmup choices; the studio

@@ -278,14 +278,15 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     <article id={@id} class="studio-card">
       <h2 class="studio-card-name">{@name}</h2>
       <p class="studio-card-totals">
-        <span class={[
-          "studio-chip",
-          changed?(@was, :seconds, round(@seconds)) && "studio-chip-changed"
-        ]}>
-          {minutes(@seconds)} min
+        <span class="studio-chip">
+          <.diff
+            changed?={changed?(@was, :seconds, round(@seconds))}
+            was={@was && minutes(@was.seconds)}
+            now={minutes(@seconds)}
+          /> min
         </span>
-        <span class={["studio-chip", changed?(@was, :reps, @reps) && "studio-chip-changed"]}>
-          {@reps} reps
+        <span class="studio-chip">
+          <.diff changed?={changed?(@was, :reps, @reps)} was={@was && @was.reps} now={@reps} /> reps
         </span>
       </p>
       <p :if={@note && @table?} class="studio-card-note">{@note}</p>
@@ -302,6 +303,21 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   defp changed?(nil, _key, _value), do: false
   defp changed?(was, key, value), do: Map.get(was, key) != value
+
+  attr(:changed?, :boolean, required: true)
+  attr(:was, :any, required: true)
+  attr(:now, :any, required: true)
+
+  # What a proposal changed: the old value struck through, the new one highlighted.
+  defp diff(assigns) do
+    ~H"""
+    <%= if @changed? do %>
+      <s class="diff-was">{@was}</s> <mark class="diff-now">{@now}</mark>
+    <% else %>
+      {@now}
+    <% end %>
+    """
+  end
 
   ## New
 
@@ -428,7 +444,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
             up?={not @at_max_pace?}
           />
         </div>
-        <div class="studio-note">
+        <div class="studio-note composer">
           <label for="studio-note" class="sr-only">Anything else? (optional)</label>
           <textarea
             id="studio-note"
