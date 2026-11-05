@@ -33,6 +33,12 @@ class FakeElement {
 			add: (...names) => names.forEach((name) => classes.add(name)),
 			remove: (...names) => names.forEach((name) => classes.delete(name)),
 			contains: (name) => classes.has(name),
+			toggle: (name, force) => {
+				const on = force === undefined ? !classes.has(name) : Boolean(force);
+				if (on) classes.add(name);
+				else classes.delete(name);
+				return on;
+			},
 		};
 		this.textContent = "";
 		this.value = "";
@@ -379,15 +385,8 @@ function buildHarness({
 		element.hidden = id === "session-abort-error";
 		pauseChoices.append(element);
 	}
-	const abortConfirm = new FakeElement("div");
-	abortConfirm.id = "session-abort-confirm";
-	abortConfirm.hidden = true;
-	for (const id of ["session-abort-keep", "session-abort-yes"]) {
-		const button = new FakeElement("button");
-		button.id = id;
-		abortConfirm.append(button);
-	}
-	pauseActions.append(pauseChoices, abortConfirm);
+	pauseChoices.querySelector?.("#session-abort-btn")?.setAttribute("aria-pressed", "false");
+	pauseActions.append(pauseChoices);
 	root.append(pauseActions);
 
 	const renderer = {
@@ -400,10 +399,12 @@ function buildHarness({
 		updateTotalGoal() {},
 		renderTimer() {},
 		enterWorkPhase() {},
-		triggerDown(value) {
-			downCueValues.push(value);
-		},
 		updateCurrentSetRepCount() {},
+		pulseCounted() {},
+		armAbort() {},
+		abortArmed() {
+			return false;
+		},
 		updateWorkFill() {},
 		enterRestPhase() {},
 		renderRestProgress() {},
@@ -425,6 +426,10 @@ function buildHarness({
 		stop() {},
 		playLeadBeep() {},
 		playRepBeep() {},
+		playLastRepBeep() {},
+		playCountedClick() {},
+		playRestChime() {},
+		playLostBuzz() {},
 		close() {},
 	};
 
@@ -669,7 +674,6 @@ test("with the camera, the screen counts the camera's reps; without it, the sche
 	assert.equal(model.primaryCount, 2);
 	assert.equal(model.totalDone, 1);
 	assert.equal(model.repProgress, 1 / 3);
-	assert.deepEqual(ctx.downCueValues.at(-1), 2);
 
 	ctx.updatePoseStatus({ state: "lost" });
 	ctx.renderRunningFrame(2.7, currentFrame(ctx.timeline, 2.7));
@@ -679,7 +683,7 @@ test("with the camera, the screen counts the camera's reps; without it, the sche
 	assert.equal(model.repProgress, null);
 });
 
-test("with the camera, the workout waits briefly for its last rep before the count is final", () => {
+test("with the camera, a rep after the timer counts at the workout's end, and none after it is final", () => {
 	const ctx = trackedContext([{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 }]);
 	ctx.draftWrite = Promise.resolve();
 	ctx.flow = {
@@ -707,6 +711,84 @@ test("with the camera, the workout waits briefly for its last rep before the cou
 	ctx.observePoseRep({ index: 2 });
 	assert.deepEqual(ctx.tracking.cadenceMs, [8_000]);
 	ctx.destroyed();
+});
+
+function waitingLastSet(repsDuringSet) {
+	const ctx = trackedContext([{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 }]);
+	ctx.draftWrite = Promise.resolve();
+	ctx.flow = {
+		...ctx.flow,
+		mode: "workout_running",
+		captureMode: "camera",
+		trackingTrust: "observing",
+	};
+	for (let index = 1; index <= repsDuringSet; index++) {
+		ctx.segment = { ...ctx.segment, clock: { ...ctx.segment.clock, elapsedSec: 2 * index } };
+		ctx.observePoseRep({ index });
+	}
+	ctx.segment = { ...ctx.segment, mode: "done", clock: { ...ctx.segment.clock, elapsedSec: 8 } };
+	ctx.runSegmentCommand({ type: "segmentDone", result: { burpeeCountDone: 2, durationSec: 8 } });
+	return ctx;
+}
+
+test("a short last set waits for its last rep however long it takes", () => {
+	const ctx = waitingLastSet(1);
+	assert.equal(ctx.finalRepGraceTimeoutId ?? null, null);
+	assert.equal(ctx.flow.mode, "workout_running");
+	ctx.observePoseRep({ index: 2 });
+	assert.notEqual(ctx.flow.mode, "workout_running");
+	ctx.destroyed();
+});
+
+test("a complete last set keeps the brief wait for a rep the camera saw late", () => {
+	const ctx = waitingLastSet(2);
+	assert.notEqual(ctx.finalRepGraceTimeoutId ?? null, null);
+	assert.equal(ctx.flow.mode, "workout_running");
+	ctx.destroyed();
+});
+
+test("Finish early or losing the camera ends a last set's open wait", () => {
+	const finished = waitingLastSet(1);
+	finished.paused = true;
+	finished.onFinishEarly();
+	assert.notEqual(finished.flow.mode, "workout_running");
+	finished.destroyed();
+
+	const lost = waitingLastSet(1);
+	lost.updatePoseStatus({ state: "lost" });
+	assert.equal(lost.pendingWorkoutResult, null);
+	lost.destroyed();
+});
+
+test("a set short when its time ends runs into its rest and counts reps there until the count-in", () => {
+	const timeline = [
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 },
+		{ kind: "rest", duration_sec: 10 },
+		{ kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 },
+	];
+	const at = (ctx, elapsedSec) => {
+		ctx.segment = { ...ctx.segment, clock: { ...ctx.segment.clock, elapsedSec } };
+	};
+
+	const late = trackedContext(timeline);
+	at(late, 2);
+	late.observePoseRep({ index: 1 });
+	late.renderRunningFrame(8.5, currentFrame(late.timeline, 8.5));
+	assert.equal(currentFrame(late.timeline, 8.5).index, 0);
+	assert.equal(late.renderedModels.at(-1).primaryCount, 1);
+	assert.equal(late.renderedModels.at(-1).visual.pace, "behind");
+	at(late, 12);
+	late.observePoseRep({ index: 2 });
+	assert.equal(currentFrame(late.timeline, 12.1).event.kind, "rest");
+	assert.equal(currentFrame(late.timeline, 18).index, 2);
+
+	const cutOff = trackedContext(timeline);
+	at(cutOff, 2);
+	cutOff.observePoseRep({ index: 1 });
+	cutOff.renderRunningFrame(8.5, currentFrame(cutOff.timeline, 8.5));
+	at(cutOff, 15.5);
+	cutOff.observePoseRep({ index: 2 });
+	assert.deepEqual(cutOff.tracking.cadenceMs, [2_000]);
 });
 
 test("finishing early with the camera completes at once: it happens while paused", () => {
@@ -1444,6 +1526,10 @@ function mountedFlowHarness(options = {}) {
 		stop() {},
 		playLeadBeep() {},
 		playRepBeep() {},
+		playLastRepBeep() {},
+		playCountedClick() {},
+		playRestChime() {},
+		playLostBuzz() {},
 		close() {},
 	};
 	ctx.wakeLock = {
@@ -1927,7 +2013,7 @@ test("camera through completion review requires no server event", async () => {
 	trackerEvent(ctx, "pose-tracker:started");
 	assert.equal(heading(), "Step into frame");
 	trackerEvent(ctx, "pose-tracker:readiness", { state: "ready" });
-	assert.equal(heading(), "Hand up or hold still");
+	assert.equal(heading(), "Hand up");
 	trackerEvent(ctx, "pose-tracker:gesture-confirm", { step: "camera_setup" });
 	assert.equal(ctx.flow.mode, "workout_running");
 	ctx.dispatchSegment({ type: "COUNTDOWN_DONE", now: 1 });
@@ -2583,7 +2669,6 @@ test("pause actions are inert and disabled whenever hidden", () => {
 	ctx.startTime = 0;
 	ctx.paused = true;
 
-	assert.equal(actions.children.length, 2);
 	ctx.updatePauseActionsVisibility();
 	assert.equal(actions.style.opacity, "1");
 	assert.equal(actions.style.pointerEvents, "auto");
@@ -3761,24 +3846,34 @@ async function pausedWithAbortReply(reply, discarded = []) {
 	return ctx;
 }
 
-test("paused, Abort asks in place of Finish early before it deletes anything", async () => {
+const abortPressed = (ctx) => ctx.el.querySelector("#session-abort-btn").getAttribute("aria-pressed");
+
+test("paused, Abort arms on the first tap and deletes nothing; a tap elsewhere lets go", async () => {
 	const ctx = await pausedWithAbortReply(null);
-	const confirm = ctx.el.querySelector("#session-abort-confirm");
-	const choices = ctx.el.querySelector("#session-pause-choices");
 	click(ctx, "session-abort-btn");
-	assert.equal(confirm.hidden, false);
-	assert.equal(choices.hidden, true);
-	assert.equal(ctx.el.querySelector("#session-abort-keep").focused, true);
-	click(ctx, "session-abort-keep");
-	assert.equal(confirm.hidden, true);
-	assert.equal(choices.hidden, false);
-	assert.equal(ctx.el.querySelector("#session-abort-btn").focused, true);
+	assert.equal(abortPressed(ctx), "true");
 	assert.deepEqual(ctx.events, []);
 	assert.equal(ctx.isPaused(), true);
+	click(ctx, "session-pause-choices");
+	assert.equal(abortPressed(ctx), "false");
+	assert.deepEqual(ctx.events, []);
 	ctx.destroyed();
 });
 
-test("a confirmed abort deletes the session, clears the device copy, and goes Home", async () => {
+test("Escape lets go of an armed abort", async () => {
+	const ctx = await pausedWithAbortReply(null);
+	click(ctx, "session-abort-btn");
+	ctx.el.dispatchEvent({
+		type: "keydown",
+		key: "Escape",
+		target: ctx.el.querySelector("#session-abort-btn"),
+		preventDefault() {},
+	});
+	assert.equal(abortPressed(ctx), "false");
+	ctx.destroyed();
+});
+
+test("a second tap on Abort deletes the session, clears the device copy, and goes Home", async () => {
 	const originalWindow = globalThis.window;
 	const navigations = [];
 	globalThis.window = { location: { assign: (path) => navigations.push(path) }, dispatchEvent() {} };
@@ -3786,7 +3881,7 @@ test("a confirmed abort deletes the session, clears the device copy, and goes Ho
 	const ctx = await pausedWithAbortReply({ status: "discarded" }, discarded);
 	try {
 		click(ctx, "session-abort-btn");
-		click(ctx, "session-abort-yes");
+		click(ctx, "session-abort-btn");
 		await ctx.discarding;
 
 		assert.deepEqual(ctx.events, [{ name: "discard_session", payload: {} }]);
@@ -3798,20 +3893,19 @@ test("a confirmed abort deletes the session, clears the device copy, and goes Ho
 	}
 });
 
-test("a refused abort stays paused, puts the choices back and says so", async () => {
+test("a refused abort stays paused, lets go of Abort and says so", async () => {
 	const originalWindow = globalThis.window;
 	const navigations = [];
 	globalThis.window = { location: { assign: (path) => navigations.push(path) }, dispatchEvent() {} };
 	const ctx = await pausedWithAbortReply({ status: "error" });
 	try {
 		click(ctx, "session-abort-btn");
-		click(ctx, "session-abort-yes");
+		click(ctx, "session-abort-btn");
 		await ctx.discarding;
 
 		assert.deepEqual(navigations, []);
 		assert.equal(ctx.isPaused(), true);
-		assert.equal(ctx.el.querySelector("#session-abort-confirm").hidden, true);
-		assert.equal(ctx.el.querySelector("#session-pause-choices").hidden, false);
+		assert.equal(abortPressed(ctx), "false");
 		const error = ctx.el.querySelector("#session-abort-error");
 		assert.equal(error.hidden, false);
 		assert.match(error.textContent, /Could not abort/);
@@ -3824,20 +3918,19 @@ test("a refused abort stays paused, puts the choices back and says so", async ()
 test("an abort in flight keeps the workout paused", async () => {
 	const ctx = await pausedWithAbortReply(null);
 	click(ctx, "session-abort-btn");
-	click(ctx, "session-abort-yes");
+	click(ctx, "session-abort-btn");
 	assert.ok(ctx.discarding);
 	assert.equal(ctx.canTogglePause(), false);
-	assert.equal(ctx.el.querySelector("#session-abort-yes").hasAttribute("disabled"), true);
+	assert.equal(ctx.el.querySelector("#session-abort-btn").hasAttribute("disabled"), true);
 	ctx.destroyed();
 });
 
-test("resuming closes an open abort question", async () => {
+test("resuming lets go of an armed abort", async () => {
 	const ctx = await pausedWithAbortReply(null);
 	click(ctx, "session-abort-btn");
 	ctx.togglePause();
 	assert.equal(ctx.isPaused(), false);
-	assert.equal(ctx.el.querySelector("#session-abort-confirm").hidden, true);
-	assert.equal(ctx.el.querySelector("#session-pause-choices").hidden, false);
+	assert.equal(abortPressed(ctx), "false");
 	ctx.destroyed();
 });
 
@@ -3845,7 +3938,8 @@ test("running, not paused, Abort does nothing", async () => {
 	const ctx = await pausedWithAbortReply(null);
 	ctx.togglePause();
 	click(ctx, "session-abort-btn");
-	assert.equal(ctx.el.querySelector("#session-abort-confirm").hidden, true);
+	assert.equal(abortPressed(ctx), "false");
+	assert.deepEqual(ctx.events, []);
 	ctx.destroyed();
 });
 

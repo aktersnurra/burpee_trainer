@@ -2,6 +2,7 @@
 
 **Date:** 2026-07-13  
 **Status:** Approved  
+**Superseded in part by** `docs/specs/2026-11-05-night-session-runner-design.md`: the rest surface and its final-five transition.  
 **Related design:** `docs/specs/2026-07-13-workout-session-redesign-design.md`
 
 ## Context

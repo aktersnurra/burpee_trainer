@@ -58,7 +58,9 @@ defmodule BurpeeTrainerWeb.SessionLive do
     |> assign(:target_pace_sec, program_target_pace_sec(program))
     |> assign(:summary, %{
       burpee_count_total: session.burpee_count_planned,
-      duration_sec_total: session.duration_sec_planned
+      duration_sec_total: session.duration_sec_planned,
+      set_count: program |> map_get(:events, []) |> Enum.count(&(map_get(&1, :kind) == "work")),
+      name: session.display_name_snapshot || BurpeeTrainerWeb.Fmt.burpee_type(session.burpee_type)
     })
     |> assign(:completion_form, to_form(Ecto.Changeset.change(session)))
   end

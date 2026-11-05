@@ -106,16 +106,10 @@ body {
   --session-surface: #FAF8F3;
   --session-surface-alt: #EFECE4;
   --session-ink: #20201D;
-  --session-active-bg: var(--color-base-100);
-  --session-active-ink: #20201D;
-  --session-active-muted: #706C64;
   --session-muted: #706C64;
   --session-soft-muted: #9A9489;
   --session-border: #DAD6CE;
   --session-track: #DDD6CF;
-  --session-work: #E86F47;
-  --session-rest-light: #D3DCEA;
-  --session-rest: #5C7096;
   --session-accent: #A77B5D;
   --session-accent-strong: #8F5F46;
   --session-toggle-bg: #F1F8FF;
@@ -130,11 +124,8 @@ body {
   --session-error-bg: #FDEBEC;
   --session-error-border: #E8B7B0;
   --session-error-ink: #C23B35;
-  --session-progress: #2383E2;
   --session-series-six: var(--session-ink);
   --session-series-seal: var(--session-accent);
-  --session-countin-bg: var(--session-bg);
-  --session-countin-ink: var(--session-ink);
 }
 
 .qs-tabular {
@@ -147,352 +138,259 @@ body {
 
 
 
-.session-camera-layout {
-  box-sizing: border-box;
-  grid-template-rows: 11rem minmax(0, 1fr) 3.5rem;
-  gap: 1.25rem;
-  padding: max(1.5rem, env(safe-area-inset-top)) 1.25rem max(1.5rem, env(safe-area-inset-bottom));
-}
-
-/* Initial countdown number — punchy scale pop on each tick. */
-@keyframes countdown-pop {
-  0%   { transform: scale(1.35); opacity: 0.6; }
-  40%  { transform: scale(1);    opacity: 1;   }
-  100% { transform: scale(1);    opacity: 1;   }
-}
-.countdown-pop { animation: countdown-pop 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
-
-#session-runner-client {
-  --session-progress-track: var(--session-track);
-}
-
-#session-work-fill {
-  background: var(--session-work);
-  transform: translate3d(0, 100%, 0);
-  will-change: transform;
-}
-
-#session-runner-client:not(.is-working) #session-work-fill {
-  visibility: hidden;
-}
-
-#session-runner-client.is-working #session-work-fill {
-  visibility: visible;
-}
-
-#session-rest-breathe-light {
-  background: var(--session-rest-light);
-  opacity: 0;
-  will-change: opacity;
-}
-
-#session-rest-breathe-dark {
-  background: var(--session-rest);
-  opacity: 0;
-  will-change: opacity;
-}
-
-@keyframes session-rest-breathe-light {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-
-@keyframes session-rest-breathe-dark {
-  0%, 100% { opacity: 0; }
-  50% { opacity: 1; }
-}
-
-#session-runner-client.is-rest {
-  background: var(--session-rest-light);
-  color: var(--session-active-ink);
-}
-
-#session-runner-client.is-rest #session-rest-breathe-light {
-  animation: session-rest-breathe-light 5s ease-in-out infinite;
-}
-
-#session-runner-client.is-rest #session-rest-breathe-dark {
-  animation: session-rest-breathe-dark 5s ease-in-out infinite;
-}
-
-#session-runner-client.is-rest.is-paused #session-rest-breathe-light,
-#session-runner-client.is-rest.is-paused #session-rest-breathe-dark {
-  animation-play-state: paused;
-}
-
-#session-runner-client.is-working,
-#session-runner-client.is-rest-count-in,
-#session-runner-client.is-count-in {
-  background: var(--session-active-bg);
-  color: var(--session-active-ink);
-}
-
-#session-runner-client.is-rest-count-in #count,
-#session-runner-client.is-count-in #count,
-#session-runner-client.is-working #pause-icon,
-#session-runner-client.is-rest #pause-icon,
-#session-runner-client.is-rest-count-in #pause-icon,
-#session-runner-client.is-count-in #pause-icon {
-  color: var(--session-active-ink);
-}
-
-#session-runner-client.is-working #count {
-  color: var(--session-active-ink);
-  font-size: clamp(15rem, min(55vw, 45dvh), 22.5rem);
-  font-weight: 500;
-  line-height: 0.84;
-}
-
-#session-runner-client.is-working #count.is-count-double {
-  font-size: clamp(12rem, min(44vw, 40dvh), 18rem);
-}
-
-#session-runner-client.is-working #count.is-count-long {
-  font-size: clamp(9rem, min(34vw, 34dvh), 14rem);
-}
-
-#session-runner-client.is-working #count.is-down-cue,
-#session-runner-client.is-rest #count.is-down-cue {
-  font-size: min(var(--down-cue-max), 40vw, 26dvh);
-}
-
-#session-runner-client.is-rest #count {
-  color: var(--session-active-ink);
-  font-size: clamp(9.375rem, min(37vw, 31dvh), 14.375rem);
-  font-weight: 500;
-  line-height: 0.88;
-}
-
-#session-runner-client.is-rest #count.is-rest-time-long {
-  font-size: clamp(7rem, min(28vw, 26dvh), 11rem);
-}
-
-#session-runner-layout {
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
-  width: 100%;
-  max-width: none;
-  min-height: 100dvh;
-}
-
-#session-top-readout {
-  position: absolute;
-  top: max(1.5rem, calc(env(safe-area-inset-top) + 0.75rem));
-  inset-inline: 0;
-  z-index: 10;
-  padding-inline: max(1.5rem, env(safe-area-inset-left)) max(1.5rem, env(safe-area-inset-right));
-}
-
-#session-runner-client.is-count-in #session-top-readout,
-#session-runner-client.is-rest-count-in #session-top-readout {
-  visibility: hidden;
-}
-
-#session-progress {
-  position: relative;
-  width: 100%;
-  height: 4px;
+/* The night runner: camera setup, the runner and pause are the app turned inside out, its ink
+   the ground and its paper the numbers. Pace and breath are the owner's no-clown-fiesta
+   colours. The completion review keeps the light tokens. */
+#burpee-session .session-night {
+  --session-ground: #262722;
+  --session-bg: var(--session-ground);
+  --session-ink: #F4F2EE;
+  --session-muted: #A9A79F;
+  --session-track: #3A3B35;
+  --session-border: #3A3B35;
+  --session-on-fill: #262722;
+  --pace-steady: #FFA557;
+  --pace-ahead: #90A959;
+  --pace-behind: #B46958;
+  --session-breath: #BAD7FF;
+  --session-last: #F4BF75;
+  --pace: var(--pace-steady);
+  --fill: 0;
+  --disc-r: 0px;
+  background: var(--session-ground);
+  color: var(--session-ink);
   overflow: hidden;
-  border-radius: 9999px;
-  background: var(--session-progress-track);
 }
+.session-night[data-pace="ahead"] { --pace: var(--pace-ahead); }
+.session-night[data-pace="behind"] { --pace: var(--pace-behind); }
 
-#session-progress-fill,
-#session-progress-reps {
+/* The title block: a title and one muted line, 150px from the top. */
+.session-night .session-title-block {
+  position: absolute;
+  z-index: 20;
+  inset-inline: 16px;
+  top: 150px;
+  text-align: center;
+  pointer-events: none;
+}
+.session-night .session-title {
+  margin: 0;
+  color: var(--session-ink);
+  font: 600 var(--text-title)/1.1 var(--font-sans);
+  letter-spacing: -0.03em;
+}
+.session-night .session-meta {
+  margin: 8px 0 0;
+  color: var(--session-muted);
+  font: 400 var(--text-body)/1.35 var(--font-sans);
+}
+.session-night [data-session-heading]:focus { outline: none; }
+
+/* The foot slot, 120px above the bottom: the screen's one secondary thing. */
+.session-night .session-foot {
+  position: absolute;
+  z-index: 20;
+  inset-inline: 0;
+  bottom: calc(120px + env(safe-area-inset-bottom));
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  pointer-events: none;
+}
+.session-night .session-foot > * { pointer-events: auto; }
+
+/* Every icon in the runner is the same chip. */
+.session-night .session-chip {
+  display: inline-grid;
+  place-items: center;
+  width: var(--pill-h);
+  height: var(--pill-h);
+  border: 0;
+  border-radius: 999px;
+  background: var(--session-track);
+  color: var(--session-ink);
+  transition: background-color var(--motion-quick) var(--ease-out);
+}
+.session-night .session-chip[hidden] { display: none; }
+.session-night .session-chip:disabled { visibility: hidden; }
+.session-night .session-chip[aria-pressed="true"] { background: var(--pace-behind); }
+
+/* Camera setup: the feed fills the screen under a vignette that keeps the title legible. */
+#session-camera-setup .session-camera-feed {
   position: absolute;
   inset: 0;
-  border-radius: inherit;
-  transform: scaleX(0);
-  transform-origin: left center;
-  will-change: transform;
+  overflow: hidden;
+  background: #000;
+}
+#session-camera-setup .session-camera-feed[hidden] { display: none; }
+#session-camera-setup .session-camera-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(to bottom, rgb(38 39 34 / .85) 0, rgb(38 39 34 / 0) 300px),
+    linear-gradient(to top, rgb(38 39 34 / .7) 0, rgb(38 39 34 / 0) 260px),
+    radial-gradient(ellipse at center, rgb(0 0 0 / 0) 55%, rgb(0 0 0 / .45) 100%);
+}
+#burpee-session .session-night .session-preflight-back {
+  position: absolute;
+  z-index: 30;
+  top: max(20px, env(safe-area-inset-top));
+  left: 16px;
+  color: var(--session-ink);
 }
 
-/* While the camera counts reps, the clock's fill fades behind them. */
-#session-progress-reps:not([hidden]) + #session-progress-fill {
-  opacity: 0.35;
+/* The runner's stage: every layer is the full screen, so the number, the fill and the
+   sink's disc share one centre. */
+#session-runner-client .session-stage {
+  position: relative;
+  min-height: 100dvh;
+  height: 100%;
+  overflow: hidden;
 }
-
-#session-runner-client.is-working :is(#session-progress-fill, #session-progress-reps),
-#session-runner-client.is-count-in :is(#session-progress-fill, #session-progress-reps) {
-  background: var(--session-work);
-}
-
-#session-runner-client.is-rest :is(#session-progress-fill, #session-progress-reps),
-#session-runner-client.is-rest-count-in :is(#session-progress-fill, #session-progress-reps) {
-  background: var(--session-rest);
-}
-
+#session-visual-layers,
+#session-sink,
+#session-work-fill,
+#session-work-line,
 #ring-container {
-  grid-row: 1;
+  position: absolute;
+  inset: 0;
+}
+#session-visual-layers { pointer-events: none; }
+#session-sink { width: 100%; height: 100%; display: none; }
+#session-runner-client:is(.is-rest, .is-rest-count-in):not(.is-paused) #session-sink { display: block; }
+
+/* A set: a block rises over each rep, in the pace colour. Draining, the block fades and
+   only its top edge stays, sinking to the bottom by the next beat. */
+#session-work-fill {
+  background: var(--pace);
+  transform-origin: bottom;
+  transform: scaleY(var(--fill));
+  opacity: 0;
+  transition: background-color var(--motion-quick) var(--ease-out), opacity var(--motion-quick) var(--ease-out);
+}
+#session-work-line {
+  transform: translateY(calc((1 - var(--fill)) * 100%));
+  opacity: 0;
+  transition: opacity var(--motion-quick) var(--ease-out);
+}
+#session-work-line > span {
+  display: block;
+  height: 4.5vw;
+  background: var(--pace);
+  transition: background-color var(--motion-quick) var(--ease-out);
+}
+#session-runner-client.is-working:not(.is-paused):not([data-draining]) #session-work-fill,
+#session-runner-client.is-working:not(.is-paused)[data-draining] #session-work-line { opacity: 1; }
+
+/* The workout line: time elapsed, below the top safe area. */
+#session-line {
+  position: absolute;
+  z-index: 20;
+  inset-inline: 16px;
+  top: calc(max(20px, env(safe-area-inset-top)) + 8px);
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--session-track);
+}
+#session-line-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--session-ink);
+  transform-origin: left;
+  transform: scaleX(0);
 }
 
+/* The hero. The number is drawn twice: once in ink, once in the on-fill colour clipped to
+   what the fill or the disc covers, so it stays sharp at any level. */
+#ring-container {
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+}
+#ring-container:focus-visible { outline-offset: -6px; }
+#ring-container > * { grid-area: 1 / 1; }
+.session-night .session-number {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  font: 700 min(46vw, 34dvh)/1 var(--font-sans);
+  letter-spacing: -0.06em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  pointer-events: none;
+}
+#count { color: var(--session-ink); }
+#count-on-fill { color: var(--session-on-fill); clip-path: inset(100% 0 0 0); }
+#session-runner-client.is-working:not([data-draining]) #count-on-fill {
+  clip-path: inset(calc((1 - var(--fill)) * 100%) 0 0 0);
+}
+#session-runner-client:is(.is-rest, .is-rest-count-in) #count-on-fill {
+  clip-path: circle(var(--disc-r) at 50% 50%);
+}
+#session-runner-client[data-last] #count { color: var(--session-last); }
+.session-number.is-count-long { font-size: min(30vw, 24dvh); }
+#session-runner-client:is(.is-rest, .is-rest-count-in) .session-number { font-size: min(17vw, 13dvh); }
+#session-runner-client:is(.is-rest, .is-rest-count-in) .session-number.is-rest-time-long { font-size: min(13vw, 10dvh); }
+#session-runner-client.is-paused .session-number { visibility: hidden; }
+
+#session-ring {
+  width: min(60vw, 46dvh);
+  aspect-ratio: 1;
+  border: 3px solid var(--session-ink);
+  border-radius: 999px;
+  opacity: 0;
+  pointer-events: none;
+}
+#session-ring.is-pace { border-color: var(--pace-steady); border-width: 4px; }
+
+/* Rest and pause: the foot holds the sets done. */
+#set-progress {
+  color: var(--session-muted);
+  font: 600 44px/1 var(--font-sans);
+  letter-spacing: -0.03em;
+}
+
+/* The title block shows for the count-in and pause, never over a set or a rest. */
+#session-runner-client #session-title-block { display: none; }
+#session-runner-client:is(.is-count-in, .is-paused) #session-title-block { display: block; }
+
+/* Pause: the title block, the pause mark, two chips under it. */
+#pause-icon {
+  display: none;
+  width: auto;
+  height: 100px;
+  color: var(--session-ink);
+}
+#session-runner-client.is-paused #pause-icon { display: block; }
 #session-pause-actions {
   position: absolute;
-  inset-inline: 1.25rem;
-  bottom: max(1rem, env(safe-area-inset-bottom));
-  margin-bottom: 0;
+  z-index: 20;
+  inset-inline: 0;
+  top: calc(50% + 90px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-quick) var(--ease-out);
 }
-
-#session-status-line {
-  width: 100%;
-  min-width: 0;
-  margin-top: clamp(1.75rem, 4dvh, 2.5rem);
-  justify-content: flex-start;
-}
-
-#set-progress {
-  position: absolute;
-  inset-block-start: calc(50% + clamp(6.875rem, 20vw, 8.75rem));
-  inset-inline-start: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  font-size: clamp(2.375rem, 7vw, 3.25rem);
-  font-weight: 500;
-  line-height: 0.9;
-  letter-spacing: -0.06em;
-}
-
-.session-finish-early-action {
-  width: 100%;
-  min-height: 3.75rem;
-  border: 0;
-  border-radius: 1.25rem;
-  background: var(--session-active-ink);
-  color: var(--session-active-bg);
-}
-
-/* Abort under Finish early: the quiet way out, in the session's ink. */
-.session-pause-abort {
-  color: var(--session-active-ink);
-}
-
-.session-choice-toggle[aria-pressed="true"] {
-  border-color: var(--session-ink);
-  background: var(--session-ink);
-  color: var(--session-bg);
-}
+#session-pause-choices { display: flex; gap: 24px; }
 
 @media (prefers-reduced-motion: reduce) {
   #session-work-fill,
-  #session-rest-breathe-light,
-  #session-rest-breathe-dark,
-  #count,
-  #session-pause-actions {
-    animation: none !important;
-    transition-duration: 1ms !important;
+  #session-work-line,
+  #session-work-line > span,
+  #session-pause-actions,
+  .session-night .session-chip {
+    transition: none !important;
   }
-
-  #session-runner-client.is-rest {
-    background: var(--session-rest-light);
-  }
-}
-
-#session-status-line #total-reps {
-  min-width: 0;
-  white-space: nowrap;
-  font-size: clamp(3.25rem, 11vw, 4.5rem);
-  font-weight: 500;
-  line-height: 0.9;
-  letter-spacing: -0.07em;
-}
-
-#session-runner-client.is-working #session-status-line span,
-#session-runner-client.is-rest #session-status-line span,
-#session-runner-client.is-rest-count-in #session-status-line span,
-#session-runner-client.is-count-in #session-status-line span {
-  color: var(--session-active-ink);
-}
-
-@media (max-width: 360px) {
-  #count {
-    font-size: clamp(6rem, 31vw, 8rem);
-  }
-}
-
-@media (orientation: landscape) and (max-height: 500px) {
-  #session-runner-layout {
-    padding-block: clamp(0.75rem, 4dvh, 1.25rem);
-  }
-
-  #session-top-readout {
-    top: max(0.75rem, calc(env(safe-area-inset-top) + 0.5rem));
-  }
-
-  #session-status-line #total-reps {
-    font-size: clamp(1.75rem, 12dvh, 2.75rem);
-  }
-
-  #set-progress {
-    inset-block-start: calc(50% + 3.75rem);
-    font-size: clamp(1.25rem, 8dvh, 1.75rem);
-  }
-
-  #session-pause-actions {
-    position: absolute;
-    inset: 50% 1.25rem auto;
-    margin-bottom: 0;
-    transform: translateY(-50%);
-  }
-
-  #session-runner-client.is-working #count {
-    font-size: clamp(7rem, 42dvh, 10rem);
-  }
-
-  #session-runner-client.is-working #count.is-count-double {
-    font-size: clamp(6rem, 36dvh, 8.5rem);
-  }
-
-  #session-runner-client.is-working #count.is-count-long {
-    font-size: clamp(5rem, 30dvh, 7rem);
-  }
-
-  #session-runner-client.is-working #count.is-down-cue,
-  #session-runner-client.is-rest #count.is-down-cue {
-    font-size: min(var(--down-cue-max), 40vw, 26dvh);
-  }
-
-  #session-runner-client.is-rest #count {
-    font-size: clamp(6rem, 34dvh, 8rem);
-  }
-}
-
-#burpee-session.is-count-in,
-#burpee-session.is-count-in #session-runner-client,
-#session-runner-client.is-count-in {
-  background: var(--session-active-bg) !important;
-  color: var(--session-active-ink) !important;
-}
-
-#session-runner-client.is-count-in #total-done,
-#session-runner-client.is-count-in #total-plan {
-  color: var(--session-active-ink) !important;
-}
-
-#count {
-  font-family: var(--font-sans);
-  font-stretch: normal;
-  font-weight: 500;
-}
-
-#count.is-down-cue {
-  /* "DOWN" is ~2.2em wide at this tracking, so cap the size to the
-     available width (and height) instead of using a fixed pixel size. */
-  --down-cue-max: 132px;
-  font-size: min(var(--down-cue-max), 40vw, 26dvh);
-  letter-spacing: -0.085em;
-  max-width: 100%;
-  white-space: nowrap;
-}
-
-@media (min-width: 640px) {
-  #count.is-down-cue {
-    --down-cue-max: 144px;
-  }
-}
-
-#count.is-count-long {
-  font-size: clamp(5rem, 24vw, 6.5rem);
-  letter-spacing: -0.075em;
 }
 
 /* iPhone notch / home-bar safe area for the bottom tab bar */
@@ -540,20 +438,6 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 #burpee-session [data-session-panel]:not(#session-runner-client) {
   background: var(--session-bg);
 }
-#burpee-session .session-preflight-chrome {
-  position: absolute;
-  z-index: 30;
-  inset-inline: 0;
-  top: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  width: calc(100% - 60px);
-  max-width: 640px;
-  margin-inline: auto;
-  padding-top: max(20px, env(safe-area-inset-top));
-}
 #burpee-session .session-preflight-back {
   display: grid;
   width: 44px;
@@ -566,19 +450,12 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 #burpee-session .session-preflight-back:hover {
   background: var(--session-border);
 }
-#burpee-session .session-preflight-workout-name {
-  overflow: hidden;
-  color: var(--session-muted);
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 /* Headings take focus so screen readers announce each step; they are not controls, so
    no outline. */
-#burpee-session [data-session-panel]:not(#session-runner-client) [data-session-heading]:focus {
+#burpee-session [data-session-panel]:not(.session-night) [data-session-heading]:focus {
   outline: none;
 }
-#burpee-session [data-session-panel]:not(#session-runner-client) h1 {
+#burpee-session [data-session-panel]:not(.session-night) h1 {
   font-family: var(--font-sans);
   font-weight: 400;
   letter-spacing: -.045em;

@@ -16,6 +16,14 @@ function classList() {
 			mutations += 1;
 		},
 		contains: (name) => values.has(name),
+		toggle: (name, force) => {
+			const on = force === undefined ? !values.has(name) : Boolean(force);
+			if (on === values.has(name)) return on;
+			if (on) values.add(name);
+			else values.delete(name);
+			mutations += 1;
+			return on;
+		},
 		mutationCount: () => mutations,
 	};
 }
@@ -138,24 +146,21 @@ function element() {
 
 function harness() {
 	const elements = {
-		"#session-work-fill": element(),
 		"#session-runner-client": element(),
-		"#session-runner-layout": element(),
+		"#session-line-fill": element(),
 		"#ring-container": element(),
+		"#session-ring": element(),
 		"#session-pause-actions": element(),
-		"#session-status-line": element(),
-		"#session-progress": element(),
-		"#session-progress-fill": element(),
 		"#session-accessible-status": element(),
 		"#count": element(),
+		"#count-on-fill": element(),
 		"#set-progress": element(),
+		"#session-meta": element(),
+		"#session-camera-lost": element(),
+		"#session-abort-btn": element(),
+		"#session-abort-error": element(),
 		"#session-time-accessible": element(),
-		"#total-reps": element(),
 		"#total-reps-accessible": element(),
-		"#total-done": element(),
-		"#total-separator": element(),
-		"#total-plan": element(),
-		"#pause-icon": element(),
 		"#session-live-status": element(),
 		"#camera-setup-failure-detail": element(),
 		"#session-begin-conflict": element(),
@@ -179,10 +184,7 @@ function harness() {
 		"#completion-primary-limiter": element(),
 		"#completion-preference-feedback": element(),
 	};
-	elements["#session-progress"].hidden = true;
-	elements["#total-reps"].hidden = true;
-	elements["#total-separator"].hidden = true;
-	elements["#total-plan"].hidden = true;
+	elements["#session-meta"].textContent = "3 sets · 20 reps";
 	const root = {
 		classList: classList(),
 		querySelector: (selector) => elements[selector] || null,
@@ -264,9 +266,9 @@ test("validation for removed fields is visible instead of silently blocking Save
 function model(state, overrides = {}) {
 	return {
 		visual: { state, progress: 0, pulse: null },
-		primaryCount: state === "rest" ? "18" : state === "work_recovery" ? "1" : 5,
+		primaryCount: state === "rest" ? "18" : 5,
 		countdownDots: null,
-		setProgress: ["rest", "work_recovery"].includes(state) ? "1/3" : null,
+		setProgress: "1/3",
 		totalDone: 8,
 		totalTarget: 20,
 		timeLeftSec: 40,
@@ -333,43 +335,103 @@ test("panel heading focus prevents scroll", () => {
 	assert.deepEqual(heading.focusOptions, { preventScroll: true });
 });
 
-test("active fill rises from neutral to full orange with a compositor transform", () => {
-	const { renderer, elements } = harness();
-	const fill = elements["#session-work-fill"];
+function withReducedMotion(reduce, run) {
+	const original = globalThis.matchMedia;
+	globalThis.matchMedia = () => ({ matches: reduce });
+	try {
+		return run();
+	} finally {
+		globalThis.matchMedia = original;
+	}
+}
 
-	renderer.updateWorkFill(0);
-	assert.equal(fill.style.transform, "translate3d(0, 100%, 0)");
+const fillOf = (elements) => Number(elements["#session-runner-client"].style["--fill"]);
 
-	renderer.updateWorkFill(0.5);
-	assert.equal(fill.style.transform, "translate3d(0, 50%, 0)");
-
-	renderer.updateWorkFill(1);
-	assert.equal(fill.style.transform, "translate3d(0, 0%, 0)");
-	assert.equal(fill.style.clipPath, undefined);
-	assert.equal(fill.style.webkitClipPath, undefined);
+test("a set's fill eases toward its target without jumping, and steps under reduced motion", () => {
+	withReducedMotion(false, () => {
+		const { renderer, elements } = harness();
+		renderer.updateWorkFill(0.2, 1_000);
+		assert.equal(fillOf(elements), 0.2);
+		renderer.updateWorkFill(1, 1_016);
+		assert.ok(fillOf(elements) > 0.2 && fillOf(elements) < 1, `${fillOf(elements)}`);
+		renderer.updateWorkFill(1, 1_400);
+		assert.equal(fillOf(elements), 1);
+	});
+	withReducedMotion(true, () => {
+		const { renderer, elements } = harness();
+		renderer.updateWorkFill(0.2, 1_000);
+		renderer.updateWorkFill(0.9, 1_016);
+		assert.equal(fillOf(elements), 0.9);
+	});
 });
 
-test("overall progress uses a clamped horizontal transform and freezes on pause", () => {
+test("a set shows its pace, its drain and its last rep on the runner", () => {
 	const { renderer, elements } = harness();
-	const track = elements["#session-progress"];
-	const fill = elements["#session-progress-fill"];
+	const surface = elements["#session-runner-client"];
+	renderer.renderDisplayModel(
+		model("work_active", {
+			visual: { state: "work_active", progress: 0.4, draining: true, pace: "ahead", pulse: null },
+			primaryCount: 3,
+		}),
+	);
+	assert.equal(surface.getAttribute("data-pace"), "ahead");
+	assert.equal(surface.hasAttribute("data-draining"), true);
+	assert.equal(surface.hasAttribute("data-last"), false);
+	assert.equal(elements["#count-on-fill"].textContent, "3");
+
+	renderer.renderDisplayModel(
+		model("work_active", {
+			visual: { state: "work_active", progress: 1, draining: false, pace: "behind", pulse: null },
+			primaryCount: 1,
+		}),
+	);
+	assert.equal(surface.getAttribute("data-pace"), "behind");
+	assert.equal(surface.hasAttribute("data-draining"), false);
+	assert.equal(surface.hasAttribute("data-last"), true);
+
+	renderer.renderDisplayModel(model("rest"));
+	assert.equal(surface.hasAttribute("data-pace"), false);
+	assert.equal(elements["#set-progress"].textContent, "1/3");
+	assert.equal(elements["#set-progress"].hidden, false);
+});
+
+test("the workout line shows the time elapsed, clamped", () => {
+	const { renderer, elements } = harness();
+	const line = elements["#session-line-fill"];
 
 	renderer.renderDisplayModel(model("work_active", { sessionProgress: 0.25 }));
-	assert.equal(track.hidden, false);
-	assert.equal(fill.style.transform, "scaleX(0.25)");
-
-	renderer.renderDisplayModel(model("rest", { sessionProgress: 0.5 }));
-	assert.equal(fill.style.transform, "scaleX(0.5)");
-
+	assert.equal(line.style.transform, "scaleX(0.25)");
 	renderer.renderDisplayModel(model("rest_count_in", { sessionProgress: 2 }));
-	assert.equal(fill.style.transform, "scaleX(1)");
-
+	assert.equal(line.style.transform, "scaleX(1)");
 	renderer.updatePauseButton(true);
-	assert.equal(fill.style.transform, "scaleX(1)");
+	assert.equal(line.style.transform, "scaleX(1)");
+});
 
-	renderer.updateSessionProgress(null);
-	assert.equal(track.hidden, true);
-	assert.equal(fill.style.transform, "scaleX(0)");
+test("the camera-lost chip shows once the camera stops counting", () => {
+	const { renderer, elements } = harness();
+	const chip = elements["#session-camera-lost"];
+	renderer.renderFlowState({ mode: "workout_running", captureMode: "camera", trackingTrust: "observing" });
+	assert.equal(chip.hidden, true);
+	renderer.renderFlowState({ mode: "workout_running", captureMode: "camera", trackingTrust: "degraded" });
+	assert.equal(chip.hidden, false);
+	renderer.renderFlowState({ mode: "workout_running", captureMode: "no_camera" });
+	assert.equal(chip.hidden, true);
+});
+
+test("abort arms on the first tap and says so, and lets go when reset", () => {
+	const { renderer, elements } = harness();
+	const abort = elements["#session-abort-btn"];
+	const status = elements["#session-live-status"];
+	renderer.armAbort(false);
+	assert.equal(renderer.abortArmed(), false);
+	renderer.armAbort(true);
+	assert.equal(renderer.abortArmed(), true);
+	assert.equal(abort.getAttribute("aria-pressed"), "true");
+	assert.equal(abort.getAttribute("aria-label"), "Tap again to abort");
+	assert.equal(status.textContent, "Tap again to abort");
+	renderer.resetAbort();
+	assert.equal(abort.getAttribute("aria-pressed"), "false");
+	assert.equal(abort.getAttribute("aria-label"), "Abort workout");
 });
 
 test("identical display models skip hot-path DOM mutations", () => {
@@ -417,10 +479,6 @@ test("duplicate visual states skip class mutations while live values still updat
 		primaryCount: 4,
 	});
 	assert.equal(surfaceClasses.mutationCount(), workMutations);
-	assert.equal(
-		elements["#session-work-fill"].style.transform,
-		"translate3d(0, 25%, 0)",
-	);
 	assert.equal(elements["#count"].textContent, "4");
 	assert.equal(surfaceClasses.contains("is-working"), true);
 	assert.equal(surfaceClasses.contains("is-work-active"), true);
@@ -430,96 +488,6 @@ test("duplicate visual states skip class mutations while live values still updat
 	assert.equal(surfaceClasses.contains("is-working"), false);
 	assert.equal(surfaceClasses.contains("is-rest"), true);
 	assert.equal(elements["#count"].textContent, "18");
-});
-
-test("DOWN cue does not force layout before animating", () => {
-	const { renderer, elements } = harness();
-	Object.defineProperty(elements["#count"], "offsetWidth", {
-		get() {
-			throw new Error("triggerDown must not read layout");
-		},
-	});
-
-	assert.doesNotThrow(() => renderer.triggerDown(4));
-	renderer.clearTimers();
-});
-
-test("DOWN cue restores the current count and normal classes after its timeout", (t) => {
-	t.mock.timers.enable({ apis: ["setTimeout"] });
-	const { renderer, elements } = harness();
-	const count = elements["#count"];
-
-	renderer.updateCurrentSetRepCount(4);
-	renderer.triggerDown(4);
-	assert.equal(count.textContent, "DOWN");
-	assert.equal(count.classList.contains("is-down-cue"), true);
-
-	t.mock.timers.tick(650);
-
-	assert.equal(count.textContent, "4");
-	assert.equal(count.classList.contains("is-down-cue"), false);
-	assert.equal(count.classList.contains("is-rest-time-long"), false);
-	assert.equal(count.classList.contains("is-count-double"), false);
-	assert.equal(count.classList.contains("is-count-long"), false);
-	assert.equal(count.classList.contains("is-countdown-dots"), false);
-	assert.equal(count.classList.contains("countdown-pop"), false);
-});
-
-test("DOWN cue uses WAAPI when reduced motion is not preferred", (t) => {
-	const originalMatchMedia = globalThis.matchMedia;
-	t.after(() => {
-		if (originalMatchMedia) globalThis.matchMedia = originalMatchMedia;
-		else delete globalThis.matchMedia;
-	});
-	globalThis.matchMedia = () => ({ matches: false });
-
-	const { renderer, elements } = harness();
-	const animations = [];
-	elements["#count"].animate = (...args) => animations.push(args);
-
-	renderer.triggerDown(4);
-
-	assert.equal(animations.length, 1);
-	renderer.clearTimers();
-});
-
-test("DOWN cue skips WAAPI when reduced motion is preferred", (t) => {
-	const originalMatchMedia = globalThis.matchMedia;
-	t.after(() => {
-		if (originalMatchMedia) globalThis.matchMedia = originalMatchMedia;
-		else delete globalThis.matchMedia;
-	});
-	globalThis.matchMedia = () => ({ matches: true });
-
-	const { renderer, elements } = harness();
-	let animations = 0;
-	elements["#count"].animate = () => animations++;
-
-	renderer.triggerDown(4);
-
-	assert.equal(animations, 0);
-	renderer.clearTimers();
-});
-
-test("work count distinguishes single, double, and triple digit values", () => {
-	const { renderer, elements } = harness();
-	const count = elements["#count"];
-
-	renderer.updateCurrentSetRepCount(9);
-	assert.equal(count.classList.contains("is-count-double"), false);
-	assert.equal(count.classList.contains("is-count-long"), false);
-
-	renderer.updateCurrentSetRepCount(10);
-	assert.equal(count.classList.contains("is-count-double"), true);
-	assert.equal(count.classList.contains("is-count-long"), false);
-
-	renderer.updateCurrentSetRepCount(100);
-	assert.equal(count.classList.contains("is-count-double"), false);
-	assert.equal(count.classList.contains("is-count-long"), true);
-
-	renderer.renderDisplayModel(model("rest", { primaryCount: "18" }));
-	assert.equal(count.classList.contains("is-count-double"), false);
-	assert.equal(count.classList.contains("is-count-long"), false);
 });
 
 test("initial count-in renders the same centered numeral as rest count-in", () => {
@@ -535,68 +503,7 @@ test("initial count-in renders the same centered numeral as rest count-in", () =
 		true,
 	);
 	assert.equal(elements["#count"].textContent, "3");
-	assert.equal(elements["#count"].children.length, 0);
-	assert.equal(
-		elements["#count"].classList.contains("is-countdown-dots"),
-		false,
-	);
 	assert.equal(elements["#set-progress"].hidden, true);
-});
-
-test("intra-rep recovery uses the full rest screen and exact seconds", () => {
-	const { renderer, elements } = harness();
-
-	renderer.renderDisplayModel(model("rest"));
-	assert.equal(
-		elements["#session-runner-client"].classList.contains("is-rest"),
-		true,
-	);
-	assert.equal(elements["#count"].textContent, "18");
-	assert.equal(elements["#set-progress"].textContent, "1/3");
-	assert.equal(elements["#set-progress"].hidden, false);
-
-	renderer.renderDisplayModel(model("work_recovery"));
-	assert.equal(
-		elements["#session-runner-client"].classList.contains("is-rest"),
-		true,
-	);
-	assert.equal(
-		elements["#session-runner-client"].classList.contains("is-work-recovery"),
-		true,
-	);
-	assert.equal(
-		elements["#session-runner-client"].classList.contains("is-working"),
-		false,
-	);
-	assert.equal(elements["#count"].textContent, "1");
-	assert.equal(elements["#set-progress"].textContent, "1/3");
-	assert.equal(elements["#set-progress"].hidden, false);
-
-	renderer.renderDisplayModel(
-		model("rest_count_in", {
-			primaryCount: 3,
-			setProgress: null,
-		}),
-	);
-	assert.equal(elements["#count"].textContent, "3");
-	assert.equal(
-		elements["#session-runner-client"].classList.contains("is-rest-count-in"),
-		true,
-	);
-	assert.equal(
-		elements["#session-runner-client"].classList.contains("is-working"),
-		false,
-	);
-	assert.equal(
-		elements["#session-runner-client"].classList.contains("is-rest"),
-		false,
-	);
-	assert.equal(elements["#set-progress"].hidden, true);
-	assert.equal(elements["#count"].classList.contains("countdown-pop"), false);
-	assert.equal(
-		elements["#count"].classList.contains("is-between-set-pulse"),
-		false,
-	);
 });
 
 test("legacy rest rendering reads as a time; ten minutes and more are sized down", () => {
@@ -647,113 +554,25 @@ test("zero transitions to work and resets the active fill", () => {
 
 	const surfaceClasses = elements["#session-runner-client"].classList;
 	assert.equal(surfaceClasses.contains("is-working"), true);
-	assert.equal(surfaceClasses.contains("is-work-active"), true);
-	assert.equal(surfaceClasses.contains("is-work-recovery"), false);
-	assert.equal(
-		elements["#session-work-fill"].style.transform,
-		"translate3d(0, 100%, 0)",
-	);
+	assert.equal(fillOf(elements), 0);
 	assert.equal(elements["#set-progress"].hidden, true);
 });
 
-test("state changes retain anchor nodes without positional inline styles", () => {
-	const { renderer, elements } = harness();
-	const anchorSelectors = [
-		"#ring-container",
-		"#session-pause-actions",
-		"#session-status-line",
-	];
-	const positionalStyleKeys = [
-		"position",
-		"top",
-		"right",
-		"bottom",
-		"left",
-		"inset",
-		"insetBlock",
-		"insetBlockStart",
-		"insetBlockEnd",
-		"insetInline",
-		"insetInlineStart",
-		"insetInlineEnd",
-		"transform",
-		"translate",
-		"margin",
-		"marginTop",
-		"marginRight",
-		"marginBottom",
-		"marginLeft",
-		"marginBlock",
-		"marginBlockStart",
-		"marginBlockEnd",
-		"marginInline",
-		"marginInlineStart",
-		"marginInlineEnd",
-	];
-	const anchors = Object.fromEntries(
-		anchorSelectors.map((selector) => [selector, elements[selector]]),
-	);
-	const assertStableAnchors = () => {
-		for (const selector of anchorSelectors) {
-			assert.equal(elements[selector], anchors[selector]);
-			for (const key of positionalStyleKeys) {
-				assert.equal(
-					elements[selector].style[key] ?? "",
-					"",
-					`${selector} must not write inline ${key}`,
-				);
-			}
-		}
-	};
-
-	for (const state of [
-		"count_in",
-		"rest",
-		"rest_count_in",
-		"work_active",
-		"work_recovery",
-	]) {
-		renderer.renderDisplayModel(model(state));
-		assertStableAnchors();
-	}
-
-	renderer.updatePauseButton(true);
-	assertStableAnchors();
-});
-
-test("running shows completed reps and pause adds the total target", () => {
+test("pause says where the workout is, and resuming puts the screen back", () => {
 	const { renderer, elements } = harness();
 	renderer.renderDisplayModel(model("rest"));
-
-	assert.equal(elements["#total-reps"].hidden, false);
-	assert.equal(elements["#total-done"].textContent, "8");
-	assert.equal(elements["#total-separator"].hidden, true);
-	assert.equal(elements["#total-plan"].hidden, true);
 
 	renderer.updatePauseButton(true);
 	assert.equal(elements["#count"].style.visibility, "hidden");
 	assert.equal(elements["#set-progress"].hidden, true);
-	assert.equal(elements["#pause-icon"].style.display, "");
-	assert.equal(elements["#total-reps"].hidden, false);
-	assert.equal(elements["#total-separator"].hidden, false);
-	assert.equal(elements["#total-plan"].hidden, false);
-	assert.equal(elements["#total-plan"].textContent, "20");
-	assert.equal(
-		elements["#session-runner-client"].classList.contains("is-paused"),
-		true,
-	);
+	assert.equal(elements["#session-meta"].textContent, "Set 1 of 3 · 0:40 left");
+	assert.equal(elements["#session-runner-client"].classList.contains("is-paused"), true);
 
 	renderer.updatePauseButton(false);
 	assert.equal(elements["#count"].style.visibility, "");
-	assert.equal(elements["#total-reps"].hidden, false);
-	assert.equal(elements["#total-separator"].hidden, true);
-	assert.equal(elements["#total-plan"].hidden, true);
 	assert.equal(elements["#set-progress"].hidden, false);
-	assert.equal(elements["#pause-icon"].style.display, "none");
-	assert.equal(
-		elements["#session-runner-client"].classList.contains("is-paused"),
-		false,
-	);
+	assert.equal(elements["#session-meta"].textContent, "3 sets · 20 reps");
+	assert.equal(elements["#session-runner-client"].classList.contains("is-paused"), false);
 });
 
 test("renderer keeps normal-rest live status stable while non-live time changes", () => {
@@ -904,7 +723,6 @@ test("a repeated rest count is restored after entering the count-in phase", () =
 	renderer.renderDisplayModel(model("rest", { primaryCount: "18" }));
 	assert.equal(elements["#count"].textContent, "18");
 
-	renderer.enterCountInPhase();
 	renderer.renderRestProgress(9);
 	assert.equal(elements["#count"].textContent, "0:09");
 
@@ -925,37 +743,12 @@ test("a repeated work rep count is restored after a ready reset", () => {
 	assert.equal(elements["#count"].textContent, "4");
 });
 
-test("steady work frames read no total counter text from the DOM", () => {
-	const { renderer, elements } = harness();
-	const workFrame = (progress) =>
-		model("work_active", {
-			visual: { state: "work_active", progress, pulse: null },
-			primaryCount: 6,
-			timeLeftSec: 40 - progress,
-			sessionProgress: 0.25 + progress / 100,
-		});
-
-	renderer.renderDisplayModel(workFrame(0));
-	const before = {
-		done: elements["#total-done"].textContentReads,
-		plan: elements["#total-plan"].textContentReads,
-	};
-
-	for (let i = 1; i <= 30; i += 1) renderer.renderDisplayModel(workFrame(i / 30));
-
-	assert.equal(elements["#total-done"].textContentReads - before.done, 0);
-	assert.equal(elements["#total-plan"].textContentReads - before.plan, 0);
-});
-
 test("updating the rep goal preserves the completed rep count", () => {
 	const { renderer, elements } = harness();
 
 	renderer.updateTotalCounter(7);
 	renderer.updateTotalGoal(25);
 
-	assert.equal(elements["#total-done"].textContent, "7");
-	assert.equal(elements["#total-plan"].textContent, "25");
-	assert.equal(elements["#total-done"].dataset.totalPlan, 25);
 	assert.equal(
 		elements["#total-reps-accessible"].textContent,
 		"Pace progress: 7 of 25 reps",

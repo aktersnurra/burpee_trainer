@@ -1,3 +1,5 @@
+const PACE_PITCH = { steady: 1, ahead: 1.26, behind: 0.75 };
+
 export class SessionAudio {
 	constructor() {
 		this.ctx = null;
@@ -84,21 +86,54 @@ export class SessionAudio {
 		});
 	}
 
-	playRepBeep() {
+	// The rep beep, pitched by pace: a third higher ahead, a fourth lower behind.
+	playRepBeep(pace = "steady") {
+		this.repBeepAt(this.currentTime() + 0.02, PACE_PITCH[pace] ?? 1);
+	}
+
+	// The last rep of a set: the rep beep, then a high chime.
+	playLastRepBeep(pace = "steady") {
 		const startAt = this.currentTime() + 0.02;
+		this.repBeepAt(startAt, PACE_PITCH[pace] ?? 1);
+		this.chimeAt(startAt + 0.16, { freq: 987.77, durMs: 300, gain: 0.5 });
+	}
+
+	repBeepAt(startAt, pitch) {
 		this.tickAt(startAt, {
-			freq: 800,
+			freq: 800 * pitch,
 			durMs: 40,
 			gain: 0.7,
 			type: "square",
 			attackMs: 2,
 		});
-		this.chimeAt(startAt, { freq: 659.25, durMs: 350, gain: 0.8 });
+		this.chimeAt(startAt, { freq: 659.25 * pitch, durMs: 350, gain: 0.8 });
 		this.tickAt(startAt, {
-			freq: 329.63,
+			freq: 329.63 * pitch,
 			durMs: 200,
 			gain: 0.4,
 			type: "triangle",
+		});
+	}
+
+	// The camera counted a rep: a quiet high click.
+	playCountedClick() {
+		this.tickAt(this.currentTime() + 0.01, { freq: 1568, durMs: 35, gain: 0.25 });
+	}
+
+	// The rest begins: two falling chimes.
+	playRestChime() {
+		const now = this.currentTime() + 0.02;
+		this.chimeAt(now, { freq: 783.99, durMs: 300, gain: 0.4 });
+		this.chimeAt(now + 0.22, { freq: 523.25, durMs: 450, gain: 0.4 });
+	}
+
+	// The camera is lost: one low buzz.
+	playLostBuzz() {
+		this.tickAt(this.currentTime() + 0.02, {
+			freq: 146.83,
+			durMs: 320,
+			gain: 0.5,
+			type: "square",
 		});
 	}
 

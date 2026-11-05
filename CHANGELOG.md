@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-11-05 — The session runner at night
+
+- **Night**: camera setup and the runner are the app turned inside out, ink ground and paper numbers. Completion review stays light. Play grows its ink from the pill to the screen; Back from camera setup shrinks it back into Play.
+- **A fill per rep**: each rep fills the screen from the bottom to its due time, holds full until the rep is done, then drains as a sinking line to the next beat. The number on the fill turns ink. With the camera the fill is green when you're ahead, orange on the beat and red when you're behind, and the rep beep rises or falls to match; a counted rep clicks and rings. The set's last rep is gold. This replaces the blue recovery screen with its clock and 3, 2, 1 inside sets; the lead beeps play only for gaps over three seconds.
+- **Sets follow the camera**: a set still short at its end runs into its rest until three seconds before the next set, which still starts on time; finishing early gives the time back to the rest. The last set waits for its last rep, or Finish early. Losing the camera buzzes once.
+- **Rests breathe**: a disc holds the time, and air whirls into it on a two-second in-breath and out on a three-second out-breath. In the last three seconds the air stops and the disc shrinks away into the count-in. A chime marks each rest. Reduced motion holds a still disc.
+- **One line on top**: a single bar for the whole workout's time replaces the set and rep readouts.
+- **Pause and abort**: paused shows the name, "Set 2 of 5 · 4:12 left", and two icon chips, Finish early and Abort. Abort arms on the first tap and aborts on the second; Escape or a tap elsewhere lets go. It replaces the Keep/Abort question.
+- **Camera setup**: the camera fills the screen with the skeleton as a thin line that turns green once the camera has you, "Hand up" over "or hold still", and icon chips to try again or continue without the camera.
+
 ## 2026-11-03 — One look on every view
 
 - **One set of colours**: ink, muted, hairline, fill, focus and bubble are tokens every view reads. Before, there were eight greys and four inks, and the studio and drawer fell back to their own muted grey and hairline because Home's were scoped to Home.

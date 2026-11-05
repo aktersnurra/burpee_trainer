@@ -11,84 +11,37 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   attr(:target_pace_sec, :any, default: nil)
   attr(:session, :map, required: true)
 
-  # The one camera screen, from starting to "hand up". Its heading is the status line.
+  # The one camera screen, from starting to "hand up": the feed fills the screen and its
+  # heading, at the top, is the status.
   def camera_setup(assigns) do
     ~H"""
-    <.panel id="session-camera-setup" heading_id="camera-setup-heading" hidden={@hidden}>
-      <.preflight_chrome id="session-camera-setup" session={@session} />
-      <div class="session-camera-layout absolute inset-0 mx-auto grid w-full max-w-[640px] text-center">
-        <div class="row-start-1 w-full max-w-[640px] place-self-center self-center px-5">
-          <h1
-            id="camera-setup-heading"
-            data-session-heading
-            tabindex="-1"
-            aria-live="polite"
-            class="qs-heading-tight text-3xl font-medium leading-tight"
-          >
-            Starting camera
-          </h1>
-          <p
-            id="camera-setup-failure-detail"
-            hidden
-            class="mx-auto mt-2 max-w-md break-words text-sm text-[var(--session-muted)]"
-          >
-          </p>
-        </div>
-
-        <div
-          id="pose-tracker"
-          phx-hook="PoseTracker"
-          phx-update="ignore"
-          data-target-pace-sec={@target_pace_sec}
-          class="contents"
-        >
-          <div
-            id="pose-tracker-preview-frame"
-            class="relative row-start-2 aspect-[3/4] h-full max-h-[36rem] w-auto max-w-full place-self-center overflow-hidden rounded-2xl border border-[var(--session-border)] bg-black"
-          >
-            <video
-              id="pose-tracker-preview"
-              class="absolute inset-0 h-full w-full object-cover scale-x-[-1]"
-              muted
-              playsinline
-            ></video>
-            <canvas id="pose-tracker-canvas" class="absolute inset-0 h-full w-full"></canvas>
-          </div>
-        </div>
-
-        <div class="row-start-3 flex flex-col items-center gap-1 place-self-center">
-          <button
-            id="camera-setup-retry"
-            type="button"
-            hidden
-            inert="inert"
-            aria-label="Try the camera again"
-            title="Try the camera again"
-            class="inline-flex size-14 items-center justify-center rounded-full bg-[var(--session-ink)] text-[var(--session-bg)]"
-          >
-            <.icon name="hero-arrow-path" class="size-6" />
-          </button>
-          <button
-            id="camera-setup-continue"
-            type="button"
-            class="px-5 py-3 text-sm text-[var(--session-muted)] underline underline-offset-4"
-          >
-            Continue without camera
-          </button>
+    <.panel
+      id="session-camera-setup"
+      heading_id="camera-setup-heading"
+      hidden={@hidden}
+      class="session-night"
+    >
+      <div
+        id="pose-tracker"
+        phx-hook="PoseTracker"
+        phx-update="ignore"
+        data-target-pace-sec={@target_pace_sec}
+        class="contents"
+      >
+        <div id="pose-tracker-preview-frame" class="session-camera-feed">
+          <video
+            id="pose-tracker-preview"
+            class="absolute inset-0 h-full w-full object-cover scale-x-[-1]"
+            muted
+            playsinline
+          ></video>
+          <canvas id="pose-tracker-canvas" class="absolute inset-0 h-full w-full"></canvas>
         </div>
       </div>
-    </.panel>
-    """
-  end
+      <div class="session-camera-vignette" aria-hidden="true"></div>
 
-  attr(:id, :string, required: true)
-  attr(:session, :map, required: true)
-
-  defp preflight_chrome(assigns) do
-    ~H"""
-    <div class="session-preflight-chrome">
       <.link
-        id={"#{@id}-back"}
+        id="session-camera-setup-back"
         navigate={~p"/"}
         aria-label="Back to Home"
         title="Back to Home"
@@ -96,152 +49,144 @@ defmodule BurpeeTrainerWeb.SessionComponents do
       >
         <.icon name="hero-arrow-left" class="size-5" />
       </.link>
-      <p class="session-preflight-workout-name">
-        {@session.display_name_snapshot || Fmt.burpee_type(@session.burpee_type)}
-      </p>
-    </div>
+
+      <div class="session-title-block">
+        <h1
+          id="camera-setup-heading"
+          data-session-heading
+          tabindex="-1"
+          aria-live="polite"
+          class="session-title"
+        >
+          Starting camera
+        </h1>
+        <p id="camera-setup-detail" class="session-meta">
+          {@session.display_name_snapshot || Fmt.burpee_type(@session.burpee_type)}
+        </p>
+        <p id="camera-setup-failure-detail" hidden class="session-meta break-words"></p>
+      </div>
+
+      <div class="session-foot">
+        <button
+          id="camera-setup-retry"
+          type="button"
+          hidden
+          inert="inert"
+          aria-label="Try the camera again"
+          title="Try the camera again"
+          class="session-chip"
+        >
+          <.icon name="hero-arrow-path" class="size-6" />
+        </button>
+        <button
+          id="camera-setup-continue"
+          type="button"
+          aria-label="Continue without camera"
+          title="Continue without camera"
+          class="session-chip"
+        >
+          <.icon name="hero-video-camera-slash" class="size-6" />
+        </button>
+      </div>
+    </.panel>
     """
   end
 
   attr(:hidden, :boolean, default: true)
   attr(:summary, :map, required: true)
 
+  # Every runner screen is the same four parts: the workout line, a title block (count-in
+  # and pause), the hero (the number, the sink's disc, the pause mark) and the foot slot.
   def runner(assigns) do
     ~H"""
-    <.panel id="session-runner-client" heading_id="session-runner-heading" hidden={@hidden}>
+    <.panel
+      id="session-runner-client"
+      heading_id="session-runner-heading"
+      hidden={@hidden}
+      class="session-night"
+    >
       <h1 id="session-runner-heading" data-session-heading tabindex="-1" class="sr-only">
         Workout in progress
       </h1>
-      <div class="relative min-h-dvh w-full overflow-hidden">
-        <div
-          id="session-visual-layers"
-          class="pointer-events-none absolute inset-0 overflow-hidden"
-          aria-hidden="true"
-        >
-          <div id="session-work-fill" class="absolute inset-0"></div>
-          <div id="session-rest-breathe-light" class="absolute inset-0" inert></div>
-          <div id="session-rest-breathe-dark" class="absolute inset-0" inert></div>
+      <div class="session-stage">
+        <div id="session-visual-layers" aria-hidden="true">
+          <canvas id="session-sink"></canvas>
+          <div id="session-work-fill"></div>
+          <div id="session-work-line"><span></span></div>
         </div>
+
+        <div id="session-line" aria-hidden="true">
+          <div id="session-line-fill"></div>
+        </div>
+        <span id="total-reps-accessible" class="sr-only">
+          Pace progress: 0 of {@summary.burpee_count_total} reps
+        </span>
+        <span id="session-time-accessible" class="sr-only">
+          Session time remaining {Fmt.duration_sec(round(@summary.duration_sec_total))}
+        </span>
+
+        <div id="session-title-block" class="session-title-block" aria-hidden="true">
+          <p class="session-title">{@summary.name}</p>
+          <p id="session-meta" class="session-meta">
+            {@summary.set_count} sets · {@summary.burpee_count_total} reps
+          </p>
+        </div>
+
         <div
-          id="session-runner-layout"
-          class="relative z-10 mx-auto grid min-h-[calc(100dvh-4rem)] w-full max-w-[430px] px-5 py-8"
+          id="ring-container"
+          role="button"
+          tabindex="0"
+          aria-label="Pause session"
         >
-          <div id="session-top-readout" class="pointer-events-none">
-            <div id="session-progress" hidden aria-hidden="true">
-              <div id="session-progress-reps" hidden></div>
-              <div id="session-progress-fill"></div>
-            </div>
-            <div id="session-status-line" class="qs-tabular flex items-start">
-              <div id="total-reps" class="flex items-baseline" hidden>
-                <span id="total-reps-accessible" class="sr-only">
-                  Pace progress: 0 of {@summary.burpee_count_total} reps
-                </span>
-                <span id="total-done" data-total-plan={@summary.burpee_count_total} aria-hidden="true">
-                  0
-                </span>
-                <span id="total-separator" aria-hidden="true" hidden>/</span>
-                <span id="total-plan" aria-hidden="true" hidden>{@summary.burpee_count_total}</span>
-              </div>
-              <span id="session-time-accessible" class="sr-only">
-                Session time remaining {Fmt.duration_sec(round(@summary.duration_sec_total))}
-              </span>
-            </div>
-          </div>
+          <span id="count" class="session-number qs-tabular" aria-hidden="true">—</span>
+          <span id="count-on-fill" class="session-number qs-tabular" aria-hidden="true">—</span>
+          <span id="session-ring" aria-hidden="true"></span>
+          <svg id="pause-icon" viewBox="0 0 48 100" fill="currentColor" aria-hidden="true">
+            <rect x="4" y="0" width="14" height="100" rx="7" />
+            <rect x="30" y="0" width="14" height="100" rx="7" />
+          </svg>
+        </div>
 
-          <div
-            id="ring-container"
-            class="relative flex min-h-0 flex-1 cursor-pointer select-none touch-manipulation items-center justify-center"
-            role="button"
-            tabindex="0"
-            aria-label="Pause session"
+        <div class="session-foot">
+          <span id="set-progress" class="qs-tabular" hidden aria-hidden="true"></span>
+          <span
+            id="session-camera-lost"
+            class="session-chip"
+            hidden
+            role="img"
+            aria-label="Camera stopped counting"
+            title="Camera stopped counting"
           >
-            <span
-              id="count"
-              class="qs-tabular text-[clamp(7rem,34vw,13rem)] font-semibold leading-none tracking-[-0.085em]"
-              aria-hidden="true"
-            >
-              —
-            </span>
-            <span
-              id="set-progress"
-              class="qs-tabular pointer-events-none text-[var(--session-active-ink)]"
-              hidden
-              aria-hidden="true"
-            ></span>
-            <svg
-              id="pause-icon"
-              viewBox="0 0 48 48"
-              fill="currentColor"
-              class="absolute size-24"
-              style="display: none;"
-              aria-hidden="true"
-            >
-              <rect x="10" y="8" width="10" height="32" rx="2" />
-              <rect x="28" y="8" width="10" height="32" rx="2" />
-            </svg>
-          </div>
+            <.icon name="hero-video-camera-slash" class="size-6" />
+          </span>
+        </div>
 
-          <div
-            id="session-pause-actions"
-            class="pointer-events-none relative z-20 opacity-0 transition-opacity duration-150"
-            aria-hidden="true"
-            inert="inert"
-          >
-            <%!-- Paused, a workout is finished early or aborted; nothing else. --%>
-            <div
-              id="session-pause-choices"
-              class="mx-auto flex w-full max-w-[360px] flex-col items-center gap-1.5"
-              aria-label="Paused session actions"
+        <div id="session-pause-actions" aria-hidden="true" inert="inert">
+          <%!-- Paused, a workout is finished early or aborted; nothing else. --%>
+          <div id="session-pause-choices" aria-label="Paused session actions" role="group">
+            <button
+              id="finish-early-btn"
+              type="button"
+              disabled
+              aria-label="Finish early"
+              title="Finish early"
+              class="session-chip"
             >
-              <button
-                id="finish-early-btn"
-                type="button"
-                disabled
-                class="session-finish-early-action px-6 py-4 text-lg font-medium disabled:invisible"
-              >
-                Finish early
-              </button>
-              <button
-                id="session-abort-btn"
-                type="button"
-                aria-controls="session-abort-confirm"
-                class="session-pause-abort min-h-14 px-6 text-base font-medium"
-              >
-                Abort
-              </button>
-              <p id="session-abort-error" role="alert" class="text-sm" hidden></p>
-            </div>
-            <%!-- Aborting deletes the started session. The question takes the choices' place. --%>
-            <div
-              id="session-abort-confirm"
-              hidden
-              role="group"
-              aria-labelledby="session-abort-question"
-              aria-describedby="session-abort-consequence"
-              class="session-pause-abort mx-auto w-full max-w-[360px] text-center"
+              <.icon name="hero-flag" class="size-6" />
+            </button>
+            <%!-- The first tap arms it, the second aborts and deletes the started session. --%>
+            <button
+              id="session-abort-btn"
+              type="button"
+              aria-pressed="false"
+              aria-label="Abort workout"
+              title="Abort workout"
+              class="session-chip"
             >
-              <p id="session-abort-question" class="text-lg font-medium">Abort this workout?</p>
-              <p id="session-abort-consequence" class="mt-1 text-sm opacity-80">
-                Nothing will be saved.
-              </p>
-              <div class="mt-5 grid grid-cols-2 gap-3">
-                <button
-                  id="session-abort-keep"
-                  type="button"
-                  class="min-h-14 rounded-full border border-current text-base font-medium"
-                >
-                  Keep
-                </button>
-                <button
-                  id="session-abort-yes"
-                  type="button"
-                  class="min-h-14 rounded-full bg-[var(--session-error-ink)] text-base font-medium text-white"
-                >
-                  Abort
-                </button>
-              </div>
-            </div>
+              <.icon name="hero-x-mark" class="size-6" />
+            </button>
           </div>
+          <p id="session-abort-error" role="alert" class="session-meta" hidden></p>
         </div>
       </div>
     </.panel>
@@ -451,6 +396,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   attr(:id, :string, required: true)
   attr(:heading_id, :string, required: true)
   attr(:hidden, :boolean, required: true)
+  attr(:class, :string, default: nil)
   slot(:inner_block, required: true)
 
   defp panel(assigns) do
@@ -461,7 +407,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
       hidden={@hidden}
       inert={@hidden && "inert"}
       aria-labelledby={@heading_id}
-      class="absolute inset-0 bg-[var(--session-bg)] text-[var(--session-ink)]"
+      class={["absolute inset-0 bg-[var(--session-bg)] text-[var(--session-ink)]", @class]}
     >
       {render_slot(@inner_block)}
     </section>
