@@ -213,7 +213,7 @@ body {
 }
 .session-night .session-chip[hidden] { display: none; }
 .session-night .session-chip:disabled { visibility: hidden; }
-.session-night .session-chip[aria-pressed="true"] { background: var(--pace-behind); }
+#session-abort-btn[aria-pressed="true"] { background: var(--pace-behind); }
 
 /* Camera setup: the feed fills the screen under a vignette that keeps the title legible. */
 #session-camera-setup .session-camera-feed {
@@ -383,12 +383,68 @@ body {
 }
 #session-pause-choices { display: flex; gap: 24px; }
 
+/* Finish early or Abort, armed: the title and the pause mark give way to its question in the
+   middle, the other chip steps aside and the armed one slides to the centre, a little larger:
+   Finish early filled in paper (the way on), Abort in the behind colour. A tap anywhere else
+   lets go and runs it back. */
+.session-pause-question {
+  position: absolute;
+  z-index: 20;
+  inset-inline: 16px;
+  top: 50%;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(calc(-50% + 8px));
+  transition:
+    opacity var(--motion-settle) var(--ease-out),
+    transform var(--motion-settle) var(--ease-out),
+    visibility 0s linear var(--motion-settle);
+}
+#session-runner-client #session-title-block,
+#pause-icon,
+#finish-early-btn,
+#session-abort-btn {
+  transition:
+    opacity var(--motion-settle) var(--ease-out),
+    transform var(--motion-settle) var(--ease-out),
+    background-color var(--motion-quick) var(--ease-out),
+    color var(--motion-quick) var(--ease-out);
+}
+#session-runner-client.is-paused[data-armed="finish"] #session-finish-question,
+#session-runner-client.is-paused[data-armed="abort"] #session-abort-question {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%);
+  transition-delay: var(--motion-stagger), var(--motion-stagger), 0s;
+}
+#session-runner-client[data-armed] #session-title-block,
+#session-runner-client[data-armed] #pause-icon {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+#session-runner-client[data-armed="abort"] #finish-early-btn,
+#session-runner-client[data-armed="finish"] #session-abort-btn { opacity: 0; transform: scale(.6); }
+/* Half a chip and half the gap: the way to the centre. */
+#session-runner-client[data-armed="finish"] #finish-early-btn {
+  background: var(--session-ink);
+  color: var(--session-ground);
+  transform: translateX(calc((var(--pill-h) + 24px) / 2)) scale(1.15);
+}
+#session-runner-client[data-armed="abort"] #session-abort-btn {
+  transform: translateX(calc(-1 * (var(--pill-h) + 24px) / 2)) scale(1.15);
+}
+
 @media (prefers-reduced-motion: reduce) {
   #session-work-fill,
   #session-work-line,
   #session-work-line > span,
   #session-pause-actions,
-  .session-night .session-chip {
+  .session-night .session-chip,
+  .session-pause-question,
+  #session-title-block,
+  #pause-icon {
     transition: none !important;
   }
 }

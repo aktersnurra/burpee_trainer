@@ -180,10 +180,15 @@ anywhere outside the icons resumes, as a tap pauses today. Below the mark, two q
 icon buttons (`--pill-h`, `--session-track`), each with an `aria-label` and `title`:
 
 - **Finish early:** `hero-flag`.
-- **Abort:** `hero-x-mark`. It follows the app's delete pattern: the first tap arms it
-  (`--pace-behind` fill), the second aborts and deletes the started session; tapping
-  elsewhere or Escape lets go. This replaces the "Abort this workout?" question with its Keep
-  and Abort pills.
+- **Abort:** `hero-x-mark`. The first tap arms it: over `--motion-settle` the title block and
+  the pause mark fade up and away while "Abort workout?" and "It won't be saved." fade in
+  where the pause mark was, Finish early shrinks out, and the abort slides to the centre,
+  a little larger, in `--pace-behind`. The second tap aborts and deletes the started session.
+  Tapping elsewhere or Escape runs it back and stays paused (a tap on the screen does not
+  resume while armed). This replaces the Keep and Abort pills: one button answers.
+- **Finish early** asks the same way: "Finish early?" and "What you've done is kept.", Abort
+  steps aside and the flag slides to the centre filled in `--session-ink`; the second tap
+  opens the finish screen.
 
 No words on the actions, per `docs/ui.md` 4a2. The workout line stays at the top.
 
@@ -272,7 +277,7 @@ Without the camera, every rep beep is the steady one and the counted click never
 - The runner keeps its screen-reader heading and its polite live region for the reps left
   and the rest's time; decorative layers stay `aria-hidden`.
 - Resume (the whole screen), Finish early and Abort keep 44 pt targets or larger; the icon
-  buttons carry `aria-label`s, and the armed Abort announces itself ("Tap again to abort").
+  buttons carry `aria-label`s, and the armed Abort announces itself ("Abort workout? It won't be saved. Tap again to abort.").
 
 ## Supersedes
 

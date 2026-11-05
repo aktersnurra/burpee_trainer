@@ -215,7 +215,7 @@ function runnerHarness(store) {
 			renderSaveErrors() {}, renderSavePending() {}, clearCountdown() {}, updateTotalCounter() {},
 			updateTotalGoal() {}, renderTimer() {}, enterWorkPhase() {}, triggerDown() {},
 			updateCurrentSetRepCount() {}, updateWorkFill() {}, enterRestPhase() {},
-			renderRestProgress() {}, updatePauseButton() {}, resetAbort() {},
+			renderRestProgress() {}, updatePauseButton() {}, resetPauseChoice() {},
 			renderDisplayModel(model) { renderedModels.push(model); },
 		},
 		audio: { ensureRunning() {}, playLeadBeep() {}, playRepBeep() {}, playLastRepBeep() {}, playCountedClick() {}, playRestChime() {}, playLostBuzz() {}, stop() {} },

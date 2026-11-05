@@ -294,6 +294,8 @@ const SessionHook = {
       const finishEarly = e.target.closest("#finish-early-btn");
       const mood = e.target.dataset?.mood;
       const tag = e.target.dataset?.tag;
+      // With a choice armed, a tap on the screen only lets go of it.
+      const armed = this.renderer.armedPauseChoice();
 
       if (retryCamera) this.dispatchFlow({ type: "RETRY_CAMERA" });
       if (continueWithoutCamera) {
@@ -302,8 +304,7 @@ const SessionHook = {
           ...this.warmupStart(),
         });
       }
-      if (ringContainer && this.canTogglePause()) this.togglePause();
-      if (finishEarly) this.onFinishEarly();
+      if (ringContainer && !armed && this.canTogglePause()) this.togglePause();
       if (tag !== undefined && this.flow.completion) {
         const tags = this.flow.completion.tags || [];
         this.editCompletion({
@@ -339,12 +340,16 @@ const SessionHook = {
       if (discardAsk && this.canDiscard()) this.renderer.showDiscardConfirm(true);
       if (discardKeep) this.renderer.showDiscardConfirm(false);
       if (discardYes) this.discardSession();
-      // Abort: the first tap arms it, the second aborts; a tap anywhere else lets go.
-      if (abort && this.canDiscard()) {
-        if (this.renderer.abortArmed()) this.discardSession();
-        else this.renderer.armAbort(true);
+      // Finish early and Abort: the first tap arms one, the second acts; a tap anywhere else
+      // lets go.
+      if (finishEarly) {
+        if (armed === "finish") this.onFinishEarly();
+        else this.renderer.armPauseChoice("finish");
+      } else if (abort && this.canDiscard()) {
+        if (armed === "abort") this.discardSession();
+        else this.renderer.armPauseChoice("abort");
       } else if (!abort) {
-        this.renderer.armAbort(false);
+        this.renderer.armPauseChoice(null);
       }
     };
     this.el.addEventListener("click", this.onRootClick);
@@ -404,7 +409,7 @@ const SessionHook = {
     this.el.addEventListener("submit", this.onCompletionSubmit);
 
     this.onRootKeydown = (e) => {
-      if (e.key === "Escape") this.renderer.armAbort(false);
+      if (e.key === "Escape") this.renderer.armPauseChoice(null);
       const ringContainer = e.target.closest("#ring-container");
       if (!ringContainer || !isPauseToggleKey(e) || !this.canTogglePause())
         return;
@@ -854,7 +859,7 @@ const SessionHook = {
       this.discarding = null;
       this.renderer.setDiscardBusy(false);
       if (aborting) {
-        this.renderer.armAbort(false);
+        this.renderer.armPauseChoice(null);
         this.renderer.showAbortError("Could not abort the workout. Try again.");
         return;
       }
@@ -1381,7 +1386,7 @@ const SessionHook = {
     if (!actions) return;
 
     const isPaused = this.paused || this.countdownPaused;
-    if (!isPaused) this.renderer.resetAbort();
+    if (!isPaused) this.renderer.resetPauseChoice();
     const canFinishEarly =
       isPaused && ["warmup", "workout"].includes(this.activeSegment);
     actions.style.opacity = isPaused ? "1" : "0";

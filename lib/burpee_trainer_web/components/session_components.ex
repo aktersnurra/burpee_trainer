@@ -132,6 +132,16 @@ defmodule BurpeeTrainerWeb.SessionComponents do
           </p>
         </div>
 
+        <%!-- Paused, Finish early and Abort ask before they act; the question shows while armed. --%>
+        <div id="session-finish-question" class="session-pause-question" aria-hidden="true">
+          <p class="session-title">Finish early?</p>
+          <p class="session-meta">What you've done is kept.</p>
+        </div>
+        <div id="session-abort-question" class="session-pause-question" aria-hidden="true">
+          <p class="session-title">Abort workout?</p>
+          <p class="session-meta">It won't be saved.</p>
+        </div>
+
         <div
           id="ring-container"
           role="button"
@@ -168,13 +178,13 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               id="finish-early-btn"
               type="button"
               disabled
+              aria-pressed="false"
               aria-label="Finish early"
               title="Finish early"
               class="session-chip"
             >
               <.icon name="hero-flag" class="size-6" />
             </button>
-            <%!-- The first tap arms it, the second aborts and deletes the started session. --%>
             <button
               id="session-abort-btn"
               type="button"

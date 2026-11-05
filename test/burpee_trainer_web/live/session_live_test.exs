@@ -94,6 +94,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     end
 
     assert has_element?(view, "#session-abort-btn[aria-pressed=false]")
+    assert has_element?(view, "#finish-early-btn[aria-pressed=false]")
 
     assert has_element?(
              view,
