@@ -237,6 +237,8 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
   end
 
   # Lag is net of the opening segment, since everyone lands some fixed time after the beep.
+  # A rep ahead of its beat lags by nothing: running ahead early and settling onto the beat
+  # later is keeping up, not slipping.
   # The slip starts at the first segment from which every later segment slipped too.
   defp slip_at(matched) do
     [opening | _] = segments = segments(matched)
@@ -273,7 +275,9 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
       (is_number(lag) and lag - baseline > @slip_lag_sec)
   end
 
-  defp lags(segment), do: for(%{t: t, at: at} <- segment, is_number(t), do: t - at)
+  defp lags(segment), do: for(%{t: t, at: at} <- segment, is_number(t), do: lag(t, at))
+
+  defp lag(t, at), do: max(t - at, 0.0)
 
   # How late the first rep after a rest lands on its beat, net of how late the workout's
   # first rep landed after the same count-in; not the gap from the set before, which
@@ -281,12 +285,12 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
   defp recovery_delta(matched) do
     reaction =
       case Enum.find(matched, &is_number(&1.t)) do
-        %{t: t, at: at, set: 0} -> t - at
+        %{t: t, at: at, set: 0} -> lag(t, at)
         _other -> 0.0
       end
 
     for %{t: t, at: at, first?: true, rest_before: r} <- matched, is_number(t) and r > 0 do
-      t - at - reaction
+      lag(t, at) - reaction
     end
     |> median()
   end

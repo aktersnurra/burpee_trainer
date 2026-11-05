@@ -36,7 +36,7 @@ could not be told from a camera that never worked, so the other fields are absen
 | `slip_at_sec` | s from session start | when they fell behind for good: the start of the first stretch from which every later stretch slipped | each rep's due time | they kept up, or opening coverage too low |
 | `decline` | ratio | the last third of reps was slower against plan than the first third; 0.08 is 8% slower | the first third of the same session | either third has no in-set pair of counted reps |
 | `pace_delta_sec` | s | median seconds slower than planned between consecutive reps of a set; negative is faster | the set's planned seconds per rep | no in-set pair of counted reps |
-| `recovery_delta_sec` | s | the first rep after a rest lands later on its beat than the workout's first rep did: slower to restart | the workout's first rep, after the same count-in | no rests, or no first rep after a rest counted |
+| `recovery_delta_sec` | s | the first rep after a rest lands later on its beat than the workout's first rep did: slower to restart; a first rep ahead of its beat counts as on it | the workout's first rep, after the same count-in | no rests, or no first rep after a rest counted |
 
 How the parts are found:
 
@@ -45,8 +45,12 @@ How the parts are found:
   is that rep done ahead of the beat.
 - **Stretches** for `slip_at_sec` are each set split evenly into pieces of at most 10
   reps. A stretch slipped when its median lag behind the beat, net of the opening
-  stretch's lag, is over 1.5 s, or when at least two and over 30% of its reps were
+  stretch's lag, is over 1.5 s (a rep ahead of its beat lags by nothing, so going
+  out fast and settling onto the beat is not a slip), or when at least two and over 30% of its reps were
   missed. One missed rep is a camera blink, never a slip on its own.
+- Running ahead of the beat is keeping up. It does show in `decline` and
+  `pace_delta_sec`: going out ahead and settling onto the beat later is a real
+  slowdown, so `decline` is positive while `kept_up` stays true. Read the two together.
 - `decline` and `pace_delta_sec` use only intervals between two counted reps of the
   same set, so rests never count as slow reps.
 
