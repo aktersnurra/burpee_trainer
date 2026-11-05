@@ -29,17 +29,22 @@ defmodule BurpeeTrainer.Insights.Metrics do
       key = sort_key(target)
       earlier = Enum.filter(sessions, &(&1.user_id == user.id and sort_key(&1) < key))
 
-      project = &compute(&1, [], context.date, context.timezone, signed_up_on)
-      projected = project.([target]) |> Map.filter(&session_fact?/1)
-
-      # Against earlier sessions only while the target itself is the latest fact, so a
-      # target missing its actuals never borrows another session's comparison.
       projected =
-        if Map.has_key?(projected, "session.reps"),
-          do: Map.merge(project.([target | earlier]) |> Map.filter(&same_workout?/1), projected),
-          else: projected
+        compute([target], [], context.date, context.timezone, signed_up_on)
+        |> Map.filter(&session_fact?/1)
 
-      {:ok, Map.merge(aggregates, projected)}
+      # Against earlier sessions only when the target itself is a fact, so a target
+      # missing its actuals never borrows another session's comparison.
+      same_workout =
+        case rows([target | earlier], context.date, context.timezone) do
+          [%{id: id} = row | earlier_rows] when id == target.id ->
+            same_workout_metrics(row, earlier_rows)
+
+          _target_not_a_fact ->
+            %{}
+        end
+
+      {:ok, aggregates |> Map.merge(projected) |> Map.merge(same_workout)}
     else
       _ -> {:error, :invalid_target}
     end
@@ -48,7 +53,6 @@ defmodule BurpeeTrainer.Insights.Metrics do
   def for_session(%Scope{}, _sessions, _goals, _target), do: {:error, :invalid_target}
 
   defp session_fact?({id, _metric}), do: String.starts_with?(id, @session_prefixes)
-  defp same_workout?({id, _metric}), do: String.starts_with?(id, "same_workout.")
 
   defp sort_key(session),
     do: {AuthoritativeSession.datetime_sort_key(session.completed_at), session.id}
@@ -73,16 +77,7 @@ defmodule BurpeeTrainer.Insights.Metrics do
   @spec compute([map()], [map()], Date.t(), String.t(), Date.t()) :: %{String.t() => metric()}
   def compute(sessions, goals, %Date{} = today, timezone, %Date{} = signed_up_on) do
     {:ok, _} = UserTime.resolve_local(today, ~T[00:00:00], timezone)
-
-    rows =
-      for s <- sessions,
-          AuthoritativeSession.authoritative?(s),
-          is_integer(s.burpee_count_actual) and s.burpee_count_actual >= 0,
-          is_integer(s.duration_sec_actual) and s.duration_sec_actual >= 0,
-          s.burpee_type in @types,
-          {:ok, date} <- [UserTime.local_date(s.completed_at, timezone)],
-          Date.compare(date, today) != :gt,
-          do: Map.put(s, :completed_on, date)
+    rows = rows(sessions, today, timezone)
 
     start = Date.beginning_of_week(today)
     credited = Enum.reject(rows, &(Map.get(&1, :tags) == "warmup"))
@@ -175,7 +170,6 @@ defmodule BurpeeTrainer.Insights.Metrics do
     base
     |> Map.merge(per_type)
     |> Map.merge(latest_metrics(latest))
-    |> Map.merge(same_workout_metrics(latest, rows))
     |> Map.merge(goal_metrics)
     |> Map.merge(last_week)
   end
@@ -391,24 +385,38 @@ defmodule BurpeeTrainer.Insights.Metrics do
     )
   end
 
-  # The latest session against the previous camera session of the same program.
-  defp same_workout_metrics(nil, _rows), do: %{}
+  # Completed facts in the owner's calendar up to `today`, each with its local date.
+  defp rows(sessions, today, timezone) do
+    for s <- sessions,
+        AuthoritativeSession.authoritative?(s),
+        is_integer(s.burpee_count_actual) and s.burpee_count_actual >= 0,
+        is_integer(s.duration_sec_actual) and s.duration_sec_actual >= 0,
+        s.burpee_type in @types,
+        {:ok, date} <- [UserTime.local_date(s.completed_at, timezone)],
+        Date.compare(date, today) != :gt,
+        do: Map.put(s, :completed_on, date)
+  end
 
-  defp same_workout_metrics(latest, rows) do
-    hash = Map.get(latest, :content_hash)
-    key = sort_key(latest)
+  # The target against the latest earlier camera session of the same program. Each
+  # candidate is broken down only until one has sets.
+  defp same_workout_metrics(target, earlier) do
+    hash = Map.get(target, :content_hash)
 
     previous =
-      rows
-      |> Enum.filter(
-        &(is_binary(hash) and Map.get(&1, :content_hash) == hash and sort_key(&1) < key and
-            camera_breakdown(&1).sets != [])
-      )
-      |> Enum.max_by(&sort_key/1, fn -> nil end)
+      if is_binary(hash) do
+        earlier
+        |> Enum.filter(&(Map.get(&1, :content_hash) == hash))
+        |> Enum.sort_by(&sort_key/1, :desc)
+        |> Enum.find_value(fn row ->
+          case camera_breakdown(row).sets do
+            [] -> nil
+            sets -> {row, sets}
+          end
+        end)
+      end
 
-    with %{} <- previous,
-         %{} = change <-
-           SetBreakdown.compare(camera_breakdown(latest).sets, camera_breakdown(previous).sets) do
+    with {previous, previous_sets} <- previous,
+         %{} = change <- SetBreakdown.compare(camera_breakdown(target).sets, previous_sets) do
       %{
         "same_workout.finish_change_sec" =>
           metric(
@@ -422,7 +430,7 @@ defmodule BurpeeTrainer.Insights.Metrics do
           metric(change["sets_compared"], :sets, "sets compared with the last time"),
         "same_workout.days_since" =>
           metric(
-            Date.diff(latest.completed_on, previous.completed_on),
+            Date.diff(target.completed_on, previous.completed_on),
             :days,
             "days since the last time"
           )

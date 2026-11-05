@@ -6,6 +6,7 @@ defmodule BurpeeTrainer.Mcp.FeedbackFatigue do
   the selected sessions, not a cause.
   """
 
+  alias BurpeeTrainer.Stats.Median
   alias BurpeeTrainer.Workouts.SetBreakdown
 
   @doc "Groups with at least one session, and `all` for every camera session selected."
@@ -54,18 +55,10 @@ defmodule BurpeeTrainer.Mcp.FeedbackFatigue do
     }
   end
 
-  defp median([]), do: nil
-
   defp median(values) do
-    sorted = Enum.sort(values)
-    n = length(sorted)
-    mid = div(n, 2)
-
-    value =
-      if rem(n, 2) == 1,
-        do: Enum.at(sorted, mid),
-        else: (Enum.at(sorted, mid - 1) + Enum.at(sorted, mid)) / 2
-
-    Float.round(value / 1, 3)
+    case Median.of(values) do
+      nil -> nil
+      value -> Float.round(value, 3)
+    end
   end
 end

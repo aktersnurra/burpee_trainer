@@ -89,12 +89,12 @@ defmodule BurpeeTrainer.Workouts.SetBreakdownTest do
   end
 
   test "a set the camera did not finish has no finish or slack" do
-    result = SetBreakdown.compute([4_000, 8_000, 12_000, 64_000], program(2, 3, 4.0, 30))
+    result = SetBreakdown.compute([4_000, 8_000, 12_000, 52_000], program(2, 3, 4.0, 30))
 
     assert [%{"reps" => 3, "slack_sec" => 30.0}, %{"reps" => 1, "slack_sec" => nil} = last] =
              result.sets
 
-    assert last["rep_times_sec"] == [22.0]
+    assert last["rep_times_sec"] == [10.0]
     assert result.window_slack == nil
     assert result.active_pace_sec == 4.0
   end
@@ -184,5 +184,29 @@ defmodule BurpeeTrainer.Workouts.SetBreakdownTest do
              "last_sec" => 2.0,
              "trend_sec_per_set" => 1.0
            }
+  end
+
+  test "two reps counted at the same instant do not break the fade" do
+    # Set one's first two reps land together: a zero gap.
+    cadence = [4_000, 4_000, 8_000, 12_000, 16_000] ++ [50_000, 54_000, 58_000, 62_000, 66_000]
+    result = SetBreakdown.compute(cadence, program(2, 5, 4.0, 30))
+    assert [%{"reps" => 5}, %{"reps" => 5}] = result.sets
+  end
+
+  test "a set after one two reps short is not complete on its count" do
+    # Set one does 3 of 5 in its window and finishes 2 after set two's beep; set two then
+    # does 3 of its own, so its window holds 5.
+    cadence = [4_000, 8_000, 12_000, 51_000, 53_000, 58_000, 62_000, 66_000]
+    [first, second] = SetBreakdown.compute(cadence, program(2, 5, 4.0, 30)).sets
+
+    assert first["reps"] == 3 and first["slack_sec"] == nil
+    assert second["reps"] == 5 and second["slack_sec"] == nil and second["finish_sec"] == nil
+  end
+
+  test "movement long after the last set is not one of its reps" do
+    cadence = [4_000, 8_000, 12_000, 46_000, 50_000, 54_000, 120_000]
+    [_, last] = SetBreakdown.compute(cadence, program(2, 3, 4.0, 30)).sets
+    assert last["reps"] == 3
+    assert last["rep_times_sec"] == [4.0, 8.0, 12.0]
   end
 end

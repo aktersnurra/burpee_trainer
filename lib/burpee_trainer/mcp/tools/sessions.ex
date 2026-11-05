@@ -306,6 +306,10 @@ defmodule BurpeeTrainer.Mcp.Tools.GetSession do
 
   def call(_, _, _), do: {:error, "get_session takes a session id"}
 
+  # Only when the camera caught the opening of this session too: the earlier one's is
+  # checked by the query.
+  defp last_time(_scope, %{kept_up: nil}, _timezone), do: nil
+
   defp last_time(scope, session, timezone) do
     with %{} = previous <- Workouts.previous_same_program(scope, session),
          current = SetBreakdown.for_session(session.cadence_ms, session.program_snapshot),

@@ -58,7 +58,9 @@ How the parts are found:
 
 One entry per planned set, in order. A set's **window** runs from its beep to the
 next set's beep: its work and the rest after it. The last set's window is its work
-plus any rest after it. A rep belongs to the window it was counted in.
+plus any rest after it, and takes reps up to half its work time past that; later
+counts are movement after the workout and are dropped. A rep belongs to the window it
+was counted in.
 
 | Field | Unit | Meaning | Null when |
 |---|---|---|---|
@@ -76,7 +78,10 @@ plus any rest after it. A rep belongs to the window it was counted in.
 | `first_rep_vs_beat_sec` | s | the first counted rep against its beat; negative is ahead | no rep counted |
 | `rep_times_sec` | s from the set's beep | when each counted rep finished | never (empty when none) |
 
-A set is complete when the camera counted at least `reps_planned` reps in its window.
+A set is complete when the camera counted at least `reps_planned` reps in its window,
+unless the set before it was two or more reps short: those reps may have been finished
+after this set's beep and counted here, so its count does not show it was done. One
+rep short is a camera blink and does not.
 
 ## `window_slack`
 

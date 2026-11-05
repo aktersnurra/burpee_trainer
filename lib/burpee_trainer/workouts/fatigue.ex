@@ -317,20 +317,7 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
     |> median()
   end
 
-  defp median([]), do: nil
-
-  defp median(values) do
-    sorted = Enum.sort(values)
-    n = length(sorted)
-    mid = div(n, 2)
-
-    value =
-      if rem(n, 2) == 1,
-        do: Enum.at(sorted, mid),
-        else: (Enum.at(sorted, mid - 1) + Enum.at(sorted, mid)) / 2
-
-    round3(value)
-  end
+  defp median(values), do: values |> BurpeeTrainer.Stats.Median.of() |> round3()
 
   defp round3(nil), do: nil
   defp round3(value), do: Float.round(value / 1, 3)

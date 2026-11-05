@@ -35,8 +35,10 @@ defmodule BurpeeTrainer.Coach.Tools.History do
 
   def call(_, _, _), do: {:error, "weeks must be an integer from 1 to 26"}
 
-  def summary(s),
-    do: %{
+  def summary(s) do
+    camera = camera(s)
+
+    %{
       "date" => DateTime.to_iso8601(s.completed_at),
       "type" => Atom.to_string(s.burpee_type),
       "reps" => s.burpee_count_actual,
@@ -50,14 +52,15 @@ defmodule BurpeeTrainer.Coach.Tools.History do
         ),
       "feedback" => Map.take(s, [:mood, :primary_limiter, :preference_feedback]),
       "fatigue" => Fatigue.summary(s),
-      "window_slack" => camera(s, :window_slack),
-      "fade" => camera(s, :fade),
-      "restart" => camera(s, :restart)
+      "window_slack" => camera.window_slack,
+      "fade" => camera.fade,
+      "restart" => camera.restart
     }
+  end
 
   # Only when the camera caught the opening, as `Fatigue.summary/1` is.
-  defp camera(%{kept_up: kept_up} = s, key) when is_boolean(kept_up),
-    do: SetBreakdown.for_session(s.cadence_ms, s.program_snapshot) |> Map.fetch!(key)
+  defp camera(%{kept_up: kept_up} = s) when is_boolean(kept_up),
+    do: SetBreakdown.for_session(s.cadence_ms, s.program_snapshot)
 
-  defp camera(_s, _key), do: nil
+  defp camera(_s), do: SetBreakdown.for_session(nil, nil)
 end

@@ -482,6 +482,19 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
       assert id == first.id
     end
 
+    test "no comparison when the camera missed this session's start", %{user: user, scope: scope} do
+      camera_session(user)
+      blind = camera_session(user)
+
+      Repo.update_all(from(s in WorkoutSession, where: s.id == ^blind.id),
+        set: [kept_up: nil, slip_at_sec: nil, fatigue_coverage: 0.4]
+      )
+
+      {:ok, %{"session" => read}} = call(scope, "get_session", %{"id" => blind.id})
+      assert read["same_workout_last_time"] == nil
+      assert read["window_slack"] == nil
+    end
+
     test "history_stats groups camera sessions by the athlete's feedback",
          %{user: user, scope: scope} do
       session = camera_session(user)

@@ -4,7 +4,8 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
   it and when, and how much of the window was left after the last rep (its slack).
 
   A set's window runs from its beep (`start_sec`) to the next set's beep: its work and the
-  rest after it. The last set's window ends with its work, plus any rest after it. A rep
+  rest after it. The last set's window ends with its work, plus any rest after it, and
+  takes reps up to half its work time past that, for a set finished behind the beat. A rep
   belongs to the window it was counted in, so a rep finished in the rest after a set is
   that set's, and one finished after the next beep is the next set's. Reps counted before
   the first set's beep are dropped.
@@ -12,6 +13,7 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
   Times are seconds from the session's start, the same clock as `slip_at_sec`.
   """
 
+  alias BurpeeTrainer.Stats.Median
   alias BurpeeTrainer.Workouts.Fatigue
 
   # A set whose later reps are this much slower than its earlier ones faded within it; a
@@ -53,7 +55,15 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
 
       windows ->
         times = cadence_ms |> Enum.sort() |> Enum.map(&(&1 / 1_000))
-        sets = windows |> assign(times) |> Enum.with_index(1) |> Enum.map(&set/1)
+
+        sets =
+          windows
+          |> assign(times)
+          |> Enum.with_index(1)
+          |> Enum.map_reduce(0, fn {window, number}, short_before ->
+            {set(window, number, short_before), max(window.reps - length(window.times), 0)}
+          end)
+          |> elem(0)
 
         %{
           sets: sets,
@@ -90,6 +100,8 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
     |> Enum.reverse()
   end
 
+  # The last set's window takes reps up to half its work time past its end, for a set
+  # finished behind the beat; later counts are movement after the workout, not reps of it.
   defp assign(windows, times) do
     last_index = length(windows) - 1
 
@@ -98,18 +110,22 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
     |> Enum.map(fn {window, index} ->
       window_end = window.work_end + window.rest_after
 
-      reps =
-        Enum.filter(times, fn t ->
-          t >= window.start and (index == last_index or t < window_end)
-        end)
+      bound =
+        if index == last_index,
+          do: window_end + (window.work_end - window.start) / 2,
+          else: window_end
 
+      reps = Enum.filter(times, &(&1 >= window.start and &1 < bound))
       Map.merge(window, %{window_end: window_end, times: reps})
     end)
   end
 
-  defp set({window, number}) do
+  # A set short by two or more reps may finish them after the next beep, where they count
+  # in the next set's window, so the set after it is not read as complete on its count. One
+  # rep short is a camera blink, as `Workouts.Fatigue` reads it.
+  defp set(window, number, short_before) do
     counted = length(window.times)
-    complete? = counted >= window.reps
+    complete? = counted >= window.reps and short_before < 2
     last = List.last(window.times)
 
     %{
@@ -157,8 +173,8 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
           "first_sec" => hd(slack),
           "last_sec" => List.last(slack),
           "min_sec" => Enum.min(slack),
-          "median_sec" => median(slack),
-          "rest_sec" => median(Enum.map(measured, & &1["rest_after_sec"])),
+          "median_sec" => round2(Median.of(slack)),
+          "rest_sec" => round2(Median.of(Enum.map(measured, & &1["rest_after_sec"]))),
           "trend_sec_per_set" => slope(Enum.map(measured, &{&1["set"], &1["slack_sec"]})),
           "sets_planned" => length(sets),
           "runs_out_at_set" => runs_out(Enum.map(measured, &{&1["set"], &1["slack_sec"]}))
@@ -183,7 +199,11 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
         case intervals(set["rep_times_sec"]) do
           [_, _, _ | _] = gaps ->
             {early, late} = Enum.split(gaps, div(length(gaps), 2))
-            [mean(Enum.take(late, -length(early))) / mean(early) - 1]
+
+            case mean(early) do
+              base when base > 0 -> [mean(Enum.take(late, -length(early))) / base - 1]
+              _two_reps_counted_at_once -> []
+            end
 
           _too_few ->
             []
@@ -193,7 +213,7 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
 
     across =
       with third when third > 0 <- div(length(complete), 3),
-           first when first != nil <- beat_ratio(Enum.take(complete, third)),
+           first when is_number(first) and first > 0 <- beat_ratio(Enum.take(complete, third)),
            last when last != nil <- beat_ratio(Enum.take(complete, -third)) do
         Float.round(last / first - 1, 3)
       else
@@ -230,19 +250,11 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
 
   defp mean(values), do: Enum.sum(values) / length(values)
 
-  defp median3([]), do: nil
-
   defp median3(values) do
-    sorted = Enum.sort(values)
-    n = length(sorted)
-    mid = div(n, 2)
-
-    value =
-      if rem(n, 2) == 1,
-        do: Enum.at(sorted, mid),
-        else: (Enum.at(sorted, mid - 1) + Enum.at(sorted, mid)) / 2
-
-    Float.round(value / 1, 3)
+    case Median.of(values) do
+      nil -> nil
+      value -> Float.round(value, 3)
+    end
   end
 
   @doc """
@@ -262,7 +274,7 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
       %{
         "sets_compared" => length(pairs),
         "sets_faster" => Enum.count(pairs, &(&1 < 0)),
-        "finish_change_sec" => pairs |> median() |> round2()
+        "finish_change_sec" => pairs |> Median.of() |> round2()
       }
     end
   end
@@ -308,16 +320,6 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
     sxy = points |> Enum.map(fn {x, y} -> (x - mean_x) * (y - mean_y) end) |> Enum.sum()
     slope = sxy / sxx
     {slope, mean_y - slope * mean_x}
-  end
-
-  defp median(values) do
-    sorted = Enum.sort(values)
-    n = length(sorted)
-    mid = div(n, 2)
-
-    if rem(n, 2) == 1,
-      do: Enum.at(sorted, mid),
-      else: round2((Enum.at(sorted, mid - 1) + Enum.at(sorted, mid)) / 2)
   end
 
   defp round2(value), do: Float.round(value / 1, 2)

@@ -10,6 +10,7 @@ defmodule BurpeeTrainer.Repo.Migrations.RecomputeFatigueRunningAhead do
   """
   use Ecto.Migration
 
+  alias BurpeeTrainer.Workouts
   alias BurpeeTrainer.Workouts.Fatigue
 
   def up do
@@ -21,26 +22,16 @@ defmodule BurpeeTrainer.Repo.Migrations.RecomputeFatigueRunningAhead do
 
     for [id, cadence, snapshot] <- rows,
         {:ok, program} <- [Jason.decode(snapshot)] do
-      fatigue = Fatigue.for_session(cadence, program)
+      # The columns as completion writes them, so the two never drift apart.
+      columns = cadence |> Fatigue.for_session(program) |> Workouts.fatigue_fields()
+      names = Map.keys(columns)
+
+      assignments =
+        names |> Enum.with_index(1) |> Enum.map_join(", ", fn {name, i} -> "#{name} = ?#{i}" end)
 
       repo().query!(
-        """
-        UPDATE workout_sessions
-        SET recovery_delta_sec = ?1, pace_delta_sec = ?2, fatigue_coverage = ?3,
-            fatigue_decline = ?4, slip_at_sec = ?5, kept_up = ?6,
-            pace_consistency = ?7
-        WHERE id = ?8
-        """,
-        [
-          fatigue.recovery_delta_sec,
-          fatigue.pace_delta_sec,
-          fatigue.coverage,
-          fatigue.decline,
-          fatigue.slip_at_sec,
-          sqlite_boolean(fatigue.kept_up),
-          fatigue.consistency,
-          id
-        ]
+        "UPDATE workout_sessions SET #{assignments} WHERE id = ?#{length(names) + 1}",
+        Enum.map(names, &sqlite_value(columns[&1])) ++ [id]
       )
     end
   end
@@ -49,6 +40,7 @@ defmodule BurpeeTrainer.Repo.Migrations.RecomputeFatigueRunningAhead do
   def down, do: :ok
 
   # Raw queries bind booleans as text; Ecto reads SQLite booleans as 0 and 1.
-  defp sqlite_boolean(nil), do: nil
-  defp sqlite_boolean(value), do: if(value, do: 1, else: 0)
+  defp sqlite_value(true), do: 1
+  defp sqlite_value(false), do: 0
+  defp sqlite_value(value), do: value
 end

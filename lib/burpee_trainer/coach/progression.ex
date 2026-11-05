@@ -98,6 +98,8 @@ defmodule BurpeeTrainer.Coach.Progression do
   end
 
   defp prescription(latest, previous, baseline) do
+    slack = slack(latest)
+
     cond do
       late_slip?(latest) ->
         repeat(planned_rate(latest), :late_fatigue)
@@ -105,10 +107,10 @@ defmodule BurpeeTrainer.Coach.Progression do
       latest.kept_up == false or missed_target?(latest) ->
         {:ease, :incomplete_or_early_fatigue, 1, max(1, div(baseline * 90, 100))}
 
-      slack_running_out?(latest) ->
+      slack_running_out?(slack) ->
         repeat(max(1, baseline), :slack_running_out)
 
-      repeated_success?(latest, previous, baseline) and headroom?(latest) ->
+      repeated_success?(latest, previous, baseline) and headroom?(slack) ->
         {:progress, :repeated_success_with_headroom, baseline + 1, baseline + 8}
 
       repeated_success?(latest, previous, baseline) ->
@@ -127,9 +129,9 @@ defmodule BurpeeTrainer.Coach.Progression do
 
   defp repeat(rate, reason), do: {:repeat, reason, max(1, div(rate * 95, 100)), rate}
 
-  defp slack_running_out?(session) do
-    case slack(session) do
-      %{"trend_sec_per_set" => trend, "last_sec" => last, "rest_sec" => rest} = slack ->
+  defp slack_running_out?(slack) do
+    case slack do
+      %{"trend_sec_per_set" => trend, "last_sec" => last, "rest_sec" => rest} ->
         (trend < 0 and last < rest * @running_out_share) or
           (is_integer(slack["runs_out_at_set"]) and
              slack["runs_out_at_set"] <= slack["sets_planned"])
@@ -139,10 +141,12 @@ defmodule BurpeeTrainer.Coach.Progression do
     end
   end
 
-  defp headroom?(session) do
-    case slack(session) do
-      %{"min_sec" => min, "rest_sec" => rest, "trend_sec_per_set" => trend, "sets_measured" => n} ->
-        min >= rest * @headroom_share and trend * (n - 1) > -rest * @running_out_share
+  # How much the window shrank is read from the first and last measured sets themselves,
+  # not the trend times the sets measured: measured sets can skip set numbers.
+  defp headroom?(slack) do
+    case slack do
+      %{"min_sec" => min, "rest_sec" => rest, "first_sec" => first, "last_sec" => last} ->
+        min >= rest * @headroom_share and first - last < rest * @running_out_share
 
       nil ->
         false
