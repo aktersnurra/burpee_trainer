@@ -14,28 +14,10 @@ defmodule BurpeeTrainer.MixProject do
       deps: deps(),
       compilers: [:phoenix_live_view] ++ Mix.compilers(),
       listeners: [Phoenix.CodeReloader],
-      usage_rules: usage_rules(),
       dialyzer: [
         plt_add_apps: [:ex_unit, :mix],
         ignore_warnings: ".dialyzer_ignore.exs",
         list_unused_filters: true
-      ]
-    ]
-  end
-
-  # `mix usage_rules.sync` writes these into AGENTS.md between its markers. Only deps we
-  # trust are listed (never :all), and no dependency-provided skills are pulled in.
-  defp usage_rules do
-    [
-      file: "AGENTS.md",
-      usage_rules: [
-        # Its own rules (docs search), plus its built-in Elixir and OTP rules.
-        :usage_rules,
-        "phoenix:elixir",
-        "phoenix:phoenix",
-        "phoenix:ecto",
-        "phoenix:html",
-        "phoenix:liveview"
       ]
     ]
   end
@@ -96,18 +78,10 @@ defmodule BurpeeTrainer.MixProject do
       {:tzdata, "~> 1.1"},
       {:remote_ip, "~> 1.2"},
       {:oidcc, "~> 3.9"},
-      # Agent tooling, dev only and pinned by mix.lock: AGENTS.md rules from an
-      # allowlist of trusted deps, and VibeKit's installer for the `mix ci` gate.
-      {:usage_rules, "~> 1.2", only: :dev, runtime: false},
-      {:igniter, "~> 0.8", only: [:dev, :test], runtime: false},
-      {:vibe_kit, "~> 0.1.7", only: [:dev, :test], runtime: false},
-      # The `mix ci` tools VibeKit added. Credo and Dialyxir are long established; ExSlop,
-      # ExDNA and Reach are young and share one maintainer, so read their upgrades.
+      # The `mix ci` checks. Dev tools run on the machine that holds the signing key, so
+      # only long-established ones: no young, single-maintainer packages.
       {:credo, "~> 1.0", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false},
-      {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
-      {:ex_dna, "~> 1.0", only: [:dev, :test], runtime: false},
-      {:reach, "~> 2.0", only: [:dev, :test], runtime: false}
+      {:dialyxir, "~> 1.0", only: [:dev, :test], runtime: false}
     ]
   end
 
@@ -162,9 +136,7 @@ defmodule BurpeeTrainer.MixProject do
         "format --check-formatted",
         "test --warnings-as-errors",
         "credo --strict",
-        "dialyzer",
-        "ex_dna --max-clones 0",
-        "reach.check --arch --smells"
+        "dialyzer"
       ]
     ]
   end

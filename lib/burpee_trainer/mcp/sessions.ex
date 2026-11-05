@@ -170,12 +170,7 @@ defmodule BurpeeTrainer.Mcp.Sessions do
   window, reps and rep times (`Workouts.SetBreakdown`), an empty list without the camera.
   """
   def encode(session, timezone, opts \\ []) do
-    reps = session.burpee_count_actual
-    duration = session.duration_sec_actual
-    measured? = is_integer(reps) and reps > 0 and is_integer(duration) and duration > 0
     breakdown = SetBreakdown.for_session(session.cadence_ms, session.program_snapshot)
-    # The summaries need the camera to have caught the opening; the raw sets do not.
-    opening? = is_boolean(session.kept_up)
 
     %{
       "id" => session.id,
@@ -185,24 +180,17 @@ defmodule BurpeeTrainer.Mcp.Sessions do
       "workout" => session.display_name_snapshot,
       "workout_id" => session.plan_id,
       "capture_mode" => to_string(session.capture_mode),
-      "reps" => reps,
+      "reps" => session.burpee_count_actual,
       "reps_planned" => session.burpee_count_planned,
-      "duration_sec" => duration,
+      "duration_sec" => session.duration_sec_actual,
       "duration_sec_planned" => session.duration_sec_planned,
       "minutes_counted" => div(History.credited_seconds(session), 60),
-      "elapsed_pace_sec" => if(measured?, do: Float.round(duration / reps, 2)),
-      "active_pace_sec" => if(opening?, do: breakdown.active_pace_sec),
-      "reps_per_20_min" =>
-        if(measured?, do: hd(Series.progress([session]).points).normalized_reps),
       "pace_consistency" => session.pace_consistency,
       "sets_completed" => session.prescribed_sets_completed,
       "fatigue" => Fatigue.summary(session),
-      "window_slack" => if(opening?, do: breakdown.window_slack),
-      "fade" => if(opening?, do: breakdown.fade),
-      "restart" => if(opening?, do: breakdown.restart),
       "mood" => session.mood,
-      "primary_limiter" => session.primary_limiter && to_string(session.primary_limiter),
-      "preference" => session.preference_feedback && to_string(session.preference_feedback),
+      "primary_limiter" => optional_string(session.primary_limiter),
+      "preference" => optional_string(session.preference_feedback),
       "low_energy" => session.context_low_energy,
       "high_energy" => session.context_high_energy,
       "heat_affected" => session.context_heat_affected,
@@ -210,12 +198,41 @@ defmodule BurpeeTrainer.Mcp.Sessions do
       "note_pre" => session.note_pre,
       "note_post" => session.note_post
     }
+    |> Map.merge(pace_fields(session))
+    # The summaries need the camera to have caught the opening; the raw sets do not.
+    |> Map.merge(opening_fields(breakdown, is_boolean(session.kept_up)))
     |> then(fn encoded ->
       if Keyword.get(opts, :sets, false),
         do: Map.put(encoded, "sets", breakdown.sets),
         else: encoded
     end)
   end
+
+  defp pace_fields(%{burpee_count_actual: reps, duration_sec_actual: duration} = session)
+       when is_integer(reps) and reps > 0 and is_integer(duration) and duration > 0 do
+    %{
+      "elapsed_pace_sec" => Float.round(duration / reps, 2),
+      "reps_per_20_min" => hd(Series.progress([session]).points).normalized_reps
+    }
+  end
+
+  defp pace_fields(_session), do: %{"elapsed_pace_sec" => nil, "reps_per_20_min" => nil}
+
+  defp opening_fields(breakdown, true) do
+    %{
+      "active_pace_sec" => breakdown.active_pace_sec,
+      "window_slack" => breakdown.window_slack,
+      "fade" => breakdown.fade,
+      "restart" => breakdown.restart
+    }
+  end
+
+  defp opening_fields(_breakdown, false) do
+    %{"active_pace_sec" => nil, "window_slack" => nil, "fade" => nil, "restart" => nil}
+  end
+
+  defp optional_string(value) when value in [nil, false], do: value
+  defp optional_string(value), do: to_string(value)
 
   @fields %{
     "reps" => "count; reps done (camera-counted when capture_mode is tracked)",

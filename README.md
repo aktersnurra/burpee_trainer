@@ -99,7 +99,7 @@ MIX_ENV=test mix precommit
 MIX_ENV=test mix ci
 ```
 
-`mix precommit` compiles with warnings treated as errors, checks for unused dependencies, formats, and runs ExUnit. `mix ci` then checks formatting and tests, strict Credo/ExSlop, Dialyzer, ExDNA (no clones), and Reach. The test policy and the authenticated browser procedure are in `docs/testing.md` and `docs/guides/workout-session-e2e.md`.
+`mix precommit` compiles with warnings treated as errors, checks for unused dependencies, formats, and runs ExUnit. `mix ci` then checks formatting and tests, strict Credo, and Dialyzer. The test policy and the authenticated browser procedure are in `docs/testing.md` and `docs/guides/workout-session-e2e.md`.
 
 ## Production configuration
 
