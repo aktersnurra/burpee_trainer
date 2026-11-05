@@ -23,7 +23,12 @@ export function resizePoseCanvas(
 	canvas.getContext("2d").setTransform(scale, 0, 0, scale, 0, 0);
 }
 
-export function drawPoseOverlay(canvas, pose, video, ink = "#BFFF00") {
+// The skeleton on camera setup: a thin line in the runner's ink at 80%, or in the pace's
+// green once the camera has the athlete.
+export const SKELETON_INK = "rgba(244, 242, 238, 0.8)";
+export const SKELETON_READY = "#90A959";
+
+export function drawPoseOverlay(canvas, pose, video, ink = SKELETON_INK) {
 	const context = canvas.getContext("2d");
 	const rect = canvas.getBoundingClientRect();
 	context.clearRect(0, 0, rect.width, rect.height);
@@ -36,7 +41,6 @@ export function drawPoseOverlay(canvas, pose, video, ink = "#BFFF00") {
 	context.save();
 	context.scale(-1, 1);
 	context.translate(-rect.width, 0);
-	// Two-tone marks stay distinct from both bright and dark camera backgrounds.
 	context.lineCap = "round";
 	context.lineJoin = "round";
 
@@ -48,9 +52,6 @@ export function drawPoseOverlay(canvas, pose, video, ink = "#BFFF00") {
 		context.beginPath();
 		context.moveTo(scaleX(a.x, video, rect), scaleY(a.y, video, rect));
 		context.lineTo(scaleX(b.x, video, rect), scaleY(b.y, video, rect));
-		context.lineWidth = 7;
-		context.strokeStyle = "#101820";
-		context.stroke();
 		context.lineWidth = 3;
 		context.strokeStyle = ink;
 		context.stroke();
@@ -64,14 +65,11 @@ export function drawPoseOverlay(canvas, pose, video, ink = "#BFFF00") {
 		context.arc(
 			scaleX(point.x, video, rect),
 			scaleY(point.y, video, rect),
-			5,
+			3,
 			0,
 			Math.PI * 2,
 		);
 		context.fill();
-		context.lineWidth = 2;
-		context.strokeStyle = "#101820";
-		context.stroke();
 	}
 
 	context.restore();

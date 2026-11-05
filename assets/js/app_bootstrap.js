@@ -17,6 +17,7 @@ import PoseTraceButton from "./hooks/pose_trace_button";
 import { startPoseTraceSync } from "./hooks/pose_trace_sync.mjs";
 import { openSessionStore } from "./hooks/session_store.mjs";
 import { viewTransitions } from "./view_transitions.mjs";
+import { sessionCurtain } from "./session_curtain.mjs";
 
 export function startApp(PoseTracker) {
 	const csrfToken = document
@@ -57,6 +58,7 @@ export function startApp(PoseTracker) {
 	});
 
 	registerHomeChooserFeedback();
+	sessionCurtain();
 	liveSocket.connect();
 	window.liveSocket = liveSocket;
 

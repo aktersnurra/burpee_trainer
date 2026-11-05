@@ -1,4 +1,3 @@
-import { recoveryLeadIn } from "./session_display_model.mjs";
 export function initialSegmentState() {
 	return {
 		mode: "idle",
@@ -25,6 +24,7 @@ export function initialSegmentState() {
 		beeps: {
 			lastRepIndex: -1,
 			lastRestCount: null,
+			chimedRest: null,
 		},
 		display: {
 			lastEventKey: null,
@@ -156,18 +156,48 @@ function endSetEarly(timeline, elapsedSec) {
 	});
 }
 
-// Camera reps per timeline event: a rep counts for the set it lands in, or for the set a
-// rest follows (the camera sees a set's last rep a moment after it ends); one after the
-// timeline counts for the last set.
-export function cameraRepsBySet(timeline, cadenceMs) {
-	const counts = timeline.map(() => 0);
+// The set before the rest at elapsedSec ended short of its reps: it runs on into that rest
+// until three seconds before the next set, whose count-in then takes over. When its last rep
+// lands, endSetEarly gives the rest back what is left. The next set keeps its beat and the
+// workout keeps its length; a rest of three seconds or less is all count-in, so it stays.
+export const COUNT_IN_SEC = 3;
+
+function runIntoRest(timeline, elapsedSec) {
+	const frame = currentFrame(timeline, elapsedSec);
+	const set = timeline[frame?.index - 1];
+	if (frame?.event?.kind !== "rest" || !isBurpeeEvent(set) || set.ran_late) return timeline;
+	const overrun = frame.event.duration_sec - COUNT_IN_SEC;
+	if (overrun <= 0) return timeline;
+	return timeline.map((event, index) => {
+		if (index === frame.index - 1) {
+			return { ...event, duration_sec: eventDurationSec(event) + overrun, ran_late: true };
+		}
+		if (index === frame.index) return { ...event, duration_sec: COUNT_IN_SEC };
+		return event;
+	});
+}
+
+// Camera reps per timeline event, as seconds from that event's start: a rep counts for the
+// set it lands in, or for the set a rest follows (the camera sees a set's last rep a moment
+// after it ends); one after the timeline counts for the last set.
+export function cameraRepTimesBySet(timeline, cadenceMs) {
+	const times = timeline.map(() => []);
+	const starts = [];
+	timeline.reduce((start, event) => {
+		starts.push(start);
+		return start + eventDurationSec(event);
+	}, 0);
 	const lastSet = timeline.findLastIndex(isBurpeeEvent);
 	for (const repMs of cadenceMs) {
 		const frame = currentFrame(timeline, repMs / 1_000);
 		const index = !frame ? lastSet : isBurpeeEvent(frame.event) ? frame.index : frame.index - 1;
-		if (isBurpeeEvent(timeline[index])) counts[index] += 1;
+		if (isBurpeeEvent(timeline[index])) times[index].push(repMs / 1_000 - starts[index]);
 	}
-	return counts;
+	return times;
+}
+
+export function cameraRepsBySet(timeline, cadenceMs) {
+	return cameraRepTimesBySet(timeline, cadenceMs).map((times) => times.length);
 }
 
 export function accountReps(previousFrame, nextFrame, reps) {
@@ -237,27 +267,35 @@ function totalBurpeeCount(timeline) {
 	}, 0);
 }
 
-function beepCommandsForFrame(beeps, frame) {
+// Beeps for a frame. In a set, `beat` (from beatState) gives the pace each rep beep is
+// pitched at and the 3, 2, 1 into a rep after a gap over three seconds; a set that runs
+// late has no beats past its planned reps.
+function beepCommandsForFrame(beeps, frame, beat) {
 	if (!frame) return { beeps, commands: [] };
 
 	const { event: timelineEvent, phase_elapsed, phase_remaining } = frame;
 
 	if (eventKind(timelineEvent) === "work") {
 		const secondsPerRep = timelineEvent.sec_per_rep;
+		const reps = timelineEvent.reps || 0;
 		const repIndex = Math.floor(phase_elapsed / secondsPerRep);
+		// A beat that arrives before the rep ahead of it is done is a behind beat, even in an
+		// unbroken set, where that rep is due exactly on this beat.
+		const pace = beat && beat.done < repIndex ? "behind" : (beat?.pace ?? "steady");
 
-		if (repIndex !== beeps.lastRepIndex) {
+		if (repIndex !== beeps.lastRepIndex && repIndex < reps) {
 			return {
-				beeps: { lastRepIndex: repIndex, lastRestCount: null },
-				commands: [{ type: "playRepBeep" }],
+				beeps: { ...beeps, lastRepIndex: repIndex, lastRestCount: null },
+				commands: [
+					{ type: repIndex === reps - 1 ? "playLastRepBeep" : "playRepBeep", pace },
+				],
 			};
 		}
 
-		// An even-paced set leads into each next rep as a rest leads into a set.
-		const lead = recoveryLeadIn(frame);
+		const lead = beat?.lead ?? null;
 		if (lead !== null && lead !== beeps.lastRestCount) {
 			return {
-				beeps: { lastRepIndex: repIndex, lastRestCount: lead },
+				beeps: { ...beeps, lastRepIndex: repIndex, lastRestCount: lead },
 				commands: [{ type: "playLeadBeep" }],
 			};
 		}
@@ -266,11 +304,15 @@ function beepCommandsForFrame(beeps, frame) {
 	}
 
 	if (eventKind(timelineEvent) !== "rest") {
-		return { beeps: { lastRepIndex: -1, lastRestCount: null }, commands: [] };
+		return { beeps: { ...beeps, lastRepIndex: -1, lastRestCount: null }, commands: [] };
 	}
 
-	if (phase_remaining > 3) {
-		return { beeps: { lastRepIndex: -1, lastRestCount: null }, commands: [] };
+	if (phase_remaining > COUNT_IN_SEC) {
+		const chime = beeps.chimedRest !== frame.index;
+		return {
+			beeps: { lastRepIndex: -1, lastRestCount: null, chimedRest: frame.index },
+			commands: chime ? [{ type: "playRestChime" }] : [],
+		};
 	}
 
 	const restCount = Math.ceil(phase_remaining);
@@ -279,8 +321,10 @@ function beepCommandsForFrame(beeps, frame) {
 	}
 
 	return {
-		beeps: { lastRepIndex: -1, lastRestCount: restCount },
-		commands: [{ type: restCount === 0 ? "playRepBeep" : "playLeadBeep" }],
+		beeps: { ...beeps, lastRepIndex: -1, lastRestCount: restCount, chimedRest: frame.index },
+		commands: [
+			restCount === 0 ? { type: "playRepBeep", pace: "steady" } : { type: "playLeadBeep" },
+		],
 	};
 }
 
@@ -317,10 +361,6 @@ function displayCommandsForFrame(display, event) {
 				type: "enterWorkPhase",
 				eventType: kind,
 				burpeeCount,
-			});
-			commands.push({
-				type: "triggerDown",
-				remainingReps,
 			});
 			nextDisplay = {
 				lastEventKey: frameEventKey,
@@ -616,7 +656,7 @@ export function segmentTransition(state, event) {
 		}
 
 		case "BEEP_FRAME": {
-			const result = beepCommandsForFrame(state.beeps, event.frame);
+			const result = beepCommandsForFrame(state.beeps, event.frame, event.beat);
 			return {
 				state: { ...state, beeps: result.beeps },
 				commands: result.commands,
@@ -627,6 +667,14 @@ export function segmentTransition(state, event) {
 			if (state.mode !== "running") return { state, commands: [] };
 			return {
 				state: { ...state, timeline: endSetEarly(state.timeline, event.elapsedSec) },
+				commands: [],
+			};
+		}
+
+		case "SET_SHORT": {
+			if (state.mode !== "running") return { state, commands: [] };
+			return {
+				state: { ...state, timeline: runIntoRest(state.timeline, event.elapsedSec) },
 				commands: [],
 			};
 		}

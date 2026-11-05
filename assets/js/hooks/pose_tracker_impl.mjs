@@ -11,7 +11,12 @@ import {
 } from "./pose_start_gesture.mjs";
 import { sampleFromPose } from "./pose_signal.mjs";
 import { buildFinishPayload } from "./pose_trace.mjs";
-import { drawPoseOverlay, resizePoseCanvas } from "./pose_overlay.mjs";
+import {
+	drawPoseOverlay,
+	resizePoseCanvas,
+	SKELETON_INK,
+	SKELETON_READY,
+} from "./pose_overlay.mjs";
 import { shouldSamplePose } from "./pose_sampler.mjs";
 import { waitForVideoFrame, webglAvailable } from "./pose_video.mjs";
 import {
@@ -390,7 +395,10 @@ export function createPoseTracker(hook, runtime = {}) {
 
 			sample = poseSample(poses[0], sampledAt - startedAt, video, lastFeature);
 		}
-		if (previewVisible) drawPoseOverlay(canvas, poses[0], video);
+		if (previewVisible) {
+			const ready = ["ready", "optimal"].includes(readiness.status);
+			drawPoseOverlay(canvas, poses[0], video, ready ? SKELETON_READY : SKELETON_INK);
+		}
 		lastFeature = sample.features;
 
 		const nextReadiness = stepPoseReadiness(readiness, {

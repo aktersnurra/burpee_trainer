@@ -60,18 +60,52 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     assert {:ok, view, _} = live(conn, ~p"/session/#{session.id}")
 
-    for panel <- ~w[session-camera-setup] do
-      assert has_element?(view, "##{panel} .session-preflight-workout-name", plan.name)
+    assert has_element?(view, "#session-camera-setup #camera-setup-detail", plan.name)
+    assert has_element?(view, "#session-runner-client #session-title-block", plan.name)
 
+    assert has_element?(
+             view,
+             "#session-camera-setup .session-preflight-back[aria-label='Back to Home'][href='/'] .hero-arrow-left"
+           )
+
+    refute has_element?(view, "#session-runner-client .session-preflight-back")
+    refute has_element?(view, "#session-completion-review .session-preflight-back")
+    assert Repo.aggregate(WorkoutSession, :count) == 1
+  end
+
+  test "the runner's icon actions carry their names for screen readers", %{conn: conn, user: user} do
+    plan = plan_fixture(user)
+
+    assert {:ok, session} =
+             Workouts.start_plan(Scope.for_user(user), plan.id, Ecto.UUID.generate())
+
+    assert {:ok, view, _} = live(conn, ~p"/session/#{session.id}")
+
+    for {id, label, icon} <- [
+          {"camera-setup-continue", "Continue without camera", "hero-video-camera-slash"},
+          {"camera-setup-retry", "Try the camera again", "hero-arrow-path"},
+          {"finish-early-btn", "Finish early", "hero-flag"},
+          {"session-abort-btn", "Abort workout", "hero-x-mark"}
+        ] do
       assert has_element?(
                view,
-               "##{panel} .session-preflight-back[aria-label='Back to Home'][href='/'] .hero-arrow-left"
+               "button##{id}[type=button][aria-label='#{label}'][title='#{label}'] .#{icon}"
              )
     end
 
-    refute has_element?(view, "#session-runner-client .session-preflight-chrome")
-    refute has_element?(view, "#session-completion-review .session-preflight-chrome")
-    assert Repo.aggregate(WorkoutSession, :count) == 1
+    assert has_element?(view, "#session-abort-btn[aria-pressed=false]")
+
+    assert has_element?(
+             view,
+             "#session-camera-lost[role=img][aria-label='Camera stopped counting'][hidden]"
+           )
+
+    assert has_element?(
+             view,
+             "#ring-container[role=button][tabindex='0'][aria-label='Pause session']"
+           )
+
+    refute has_element?(view, "#session-abort-confirm")
   end
 
   test "back to Home preserves the started session for resume", %{conn: conn, user: user} do

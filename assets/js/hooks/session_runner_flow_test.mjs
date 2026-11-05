@@ -218,7 +218,7 @@ function runnerHarness(store) {
 			renderRestProgress() {}, updatePauseButton() {}, resetAbort() {},
 			renderDisplayModel(model) { renderedModels.push(model); },
 		},
-		audio: { ensureRunning() {}, playLeadBeep() {}, playRepBeep() {}, stop() {} },
+		audio: { ensureRunning() {}, playLeadBeep() {}, playRepBeep() {}, playLastRepBeep() {}, playCountedClick() {}, playRestChime() {}, playLostBuzz() {}, stop() {} },
 		wakeLock: { acquire() {}, release() {} },
 		pushEvent(name, payload, reply) {
 			context.savedPayload = payload;

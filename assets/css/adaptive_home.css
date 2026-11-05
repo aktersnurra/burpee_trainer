@@ -1113,6 +1113,9 @@ html[data-vt="drop"]::view-transition-new(root) { animation: vt-recede var(--mot
 @keyframes vt-rise { from { transform: translateY(100%); } }
 @keyframes vt-drop { to { transform: translateY(100%); } }
 @keyframes vt-recede { to { opacity: .6; transform: scale(.97); } }
+/* Into the runner: Play's ink grows from the pill to the screen, and back into it on the way
+   out (js/session_curtain.mjs). */
+.session-curtain { position: fixed; inset: 0; z-index: 100; background: var(--ink); pointer-events: none; }
 /* A workout handed to Home: its name flies into Home's title while the list or the studio leaves
    (the list as one piece, the way it came). */
 ::view-transition-group(workout-title) { animation-duration: var(--motion-settle); }
