@@ -1,6 +1,7 @@
 import { SessionAudio } from "./session_audio.mjs";
 import {
-  cameraRepsBySet,
+  cameraRepTimesBySet,
+  COUNT_IN_SEC,
   currentFrame,
   initialSegmentState,
   segmentTransition,
@@ -70,12 +71,29 @@ function repStepFor(target) {
   return null;
 }
 
-// The first moments of a rest that follows work, when a set's last rep can still land.
+// The first moments of a rest that follows work, when a set's last rep can still land. A set
+// that ran late into its rest and was cut off by the count-in gets no grace: its missing reps
+// stay missing.
 function justAfterWork(timeline, frame) {
+  const set = timeline?.[frame?.index - 1];
   return (
     frame?.event?.kind === "rest" &&
     (frame.phase_elapsed || 0) * 1_000 <= LATE_REP_GRACE_MS &&
-    timeline?.[frame.index - 1]?.kind === "work"
+    set?.kind === "work" &&
+    !(set.ran_late && !set.ended_early)
+  );
+}
+
+// The rest at `frame` follows a set the camera has not finished, with time to run into it.
+function setRanShort(timeline, frame, repTimes) {
+  const set = timeline?.[frame?.index - 1];
+  return (
+    frame?.event?.kind === "rest" &&
+    frame.phase_remaining > COUNT_IN_SEC &&
+    set?.kind === "work" &&
+    !set.ran_late &&
+    !set.ended_early &&
+    (repTimes[frame.index - 1]?.length ?? 0) < (set.reps || 0)
   );
 }
 
@@ -106,10 +124,9 @@ const SessionHook = {
     this.countdownStepElapsed = 0;
 
     this.doneReps = 0;
-    this.lastDownCueKey = null;
     this.hiddenAt = null;
     this.tracking = initialTrackingObserver();
-    this.cameraSetReps = [];
+    this.cameraSetRepTimes = [];
     this.trackerReadiness = "not_ready";
     this.trackingCompletion = null;
     this.armedPoseStep = null;
@@ -271,9 +288,7 @@ const SessionHook = {
       const discardAsk = e.target.closest("#session-discard-btn");
       const discardKeep = e.target.closest("#session-discard-keep");
       const discardYes = e.target.closest("#session-discard-yes");
-      const abortAsk = e.target.closest("#session-abort-btn");
-      const abortKeep = e.target.closest("#session-abort-keep");
-      const abortYes = e.target.closest("#session-abort-yes");
+      const abort = e.target.closest("#session-abort-btn");
       const continueWithoutCamera = e.target.closest("#camera-setup-continue");
       const ringContainer = e.target.closest("#ring-container");
       const finishEarly = e.target.closest("#finish-early-btn");
@@ -324,9 +339,13 @@ const SessionHook = {
       if (discardAsk && this.canDiscard()) this.renderer.showDiscardConfirm(true);
       if (discardKeep) this.renderer.showDiscardConfirm(false);
       if (discardYes) this.discardSession();
-      if (abortAsk && this.canDiscard()) this.renderer.showAbortConfirm(true);
-      if (abortKeep) this.renderer.showAbortConfirm(false);
-      if (abortYes) this.discardSession();
+      // Abort: the first tap arms it, the second aborts; a tap anywhere else lets go.
+      if (abort && this.canDiscard()) {
+        if (this.renderer.abortArmed()) this.discardSession();
+        else this.renderer.armAbort(true);
+      } else if (!abort) {
+        this.renderer.armAbort(false);
+      }
     };
     this.el.addEventListener("click", this.onRootClick);
 
@@ -385,6 +404,7 @@ const SessionHook = {
     this.el.addEventListener("submit", this.onCompletionSubmit);
 
     this.onRootKeydown = (e) => {
+      if (e.key === "Escape") this.renderer.armAbort(false);
       const ringContainer = e.target.closest("#ring-container");
       if (!ringContainer || !isPauseToggleKey(e) || !this.canTogglePause())
         return;
@@ -834,7 +854,7 @@ const SessionHook = {
       this.discarding = null;
       this.renderer.setDiscardBusy(false);
       if (aborting) {
-        this.renderer.showAbortConfirm(false);
+        this.renderer.armAbort(false);
         this.renderer.showAbortError("Could not abort the workout. Try again.");
         return;
       }
@@ -1036,7 +1056,13 @@ const SessionHook = {
         this.audio.playLeadBeep();
         break;
       case "playRepBeep":
-        this.audio.playRepBeep();
+        this.audio.playRepBeep(command.pace);
+        break;
+      case "playLastRepBeep":
+        this.audio.playLastRepBeep(command.pace);
+        break;
+      case "playRestChime":
+        this.audio.playRestChime();
         break;
       case "scheduleCountdownTick":
         this.scheduleCountdownTick(command.nextValue, command.delayMs);
@@ -1062,9 +1088,6 @@ const SessionHook = {
       case "enterWorkPhase":
         this.renderer.enterWorkPhase();
         break;
-      case "triggerDown":
-        this.renderer.triggerDown(command.remainingReps);
-        break;
       case "renderCurrentSetRepCount":
         this.renderer.updateCurrentSetRepCount(command.remainingReps);
         break;
@@ -1087,7 +1110,8 @@ const SessionHook = {
         break;
       case "segmentDone": {
         // The camera sees a rep when you stand up, which can be a moment after the timer
-        // ends; with tracking on, the count waits briefly for that last rep.
+        // ends; with tracking on, the count waits briefly for that last rep. A last set
+        // still short of its reps waits until the camera counts them or Finish early.
         // Finishing early happens while paused, when there is no rep to wait for.
         if (
           this.activeSegment === "workout" &&
@@ -1096,10 +1120,12 @@ const SessionHook = {
           !this.finishingEarly
         ) {
           this.pendingWorkoutResult = command.result;
-          this.finalRepGraceTimeoutId = setTimeout(
-            () => this.completeWorkoutSegment(),
-            LATE_REP_GRACE_MS,
-          );
+          if (!this.lastSetShort()) {
+            this.finalRepGraceTimeoutId = setTimeout(
+              () => this.completeWorkoutSegment(),
+              LATE_REP_GRACE_MS,
+            );
+          }
           break;
         }
         const result =
@@ -1220,7 +1246,6 @@ const SessionHook = {
         detail: { segment: segment === "workout" ? "main" : segment },
       }),
     );
-    this.lastDownCueKey = null;
     this.segment = initialSegmentState();
     this.dispatchSegment({
       type: "SEGMENT_READY",
@@ -1238,16 +1263,16 @@ const SessionHook = {
     this.dispatchSegment({ type: "TICK", elapsedSec: elapsed });
   },
 
-  renderRunningFrame(elapsed, frame) {
+  renderRunningFrame(elapsed, frameAtTick) {
     this.syncRepStateFromSegment();
     // While the camera is counting, the screen shows its reps; otherwise the schedule's.
     const paced = this.cameraPaced();
-    const doneInEvent = paced ? (this.cameraSetReps[frame?.index] ?? 0) : this.doneReps;
+    let frame = frameAtTick;
+    if (paced && setRanShort(this.timeline, frame, this.cameraSetRepTimes)) {
+      this.dispatchSegment({ type: "SET_SHORT", elapsedSec: elapsed });
+      frame = currentFrame(this.timeline, elapsed);
+    }
     const totalDone = paced ? this.tracking.cadenceMs.length : this.segment.reps.burpeeCountDone;
-    const remainingReps = Math.max(
-      (frame?.event?.reps || 0) - doneInEvent,
-      0,
-    );
 
     const totalDurationSec = this.segment.clock.totalDurationSec;
     const sessionProgress =
@@ -1262,30 +1287,12 @@ const SessionHook = {
       repProgress: paced ? totalDone / programBurpeeCount(this.timeline) : null,
       totalDone,
       totalTarget: this.segment.reps.burpeeCountTarget,
-      doneInEvent,
+      countedAtSec: paced ? (this.cameraSetRepTimes[frame?.index] ?? []) : undefined,
+      cameraTrusted: paced,
     });
     this.renderer.renderDisplayModel(model);
-    this.triggerDownCueForFrame(frame, remainingReps);
 
-    this.dispatchSegment({ type: "BEEP_FRAME", frame });
-  },
-
-  triggerDownCueForFrame(frame, remainingReps) {
-    const event = frame?.event;
-    if (event?.kind !== "work") {
-      this.lastDownCueKey = null;
-      return;
-    }
-
-    const secondsPerRep = event.sec_per_rep;
-    if (!secondsPerRep || secondsPerRep <= 0) return;
-
-    const repIndex = Math.floor((frame.phase_elapsed || 0) / secondsPerRep);
-    const cueKey = `${this.activeSegment}:${frame.index}:${repIndex}`;
-    if (cueKey === this.lastDownCueKey) return;
-
-    this.lastDownCueKey = cueKey;
-    this.renderer.triggerDown(remainingReps);
+    this.dispatchSegment({ type: "BEEP_FRAME", frame, beat: model.beat });
   },
 
   togglePause() {
@@ -1400,7 +1407,7 @@ const SessionHook = {
   startPoseObservation() {
     this.resetPoseTracker();
     this.tracking = startTrackingObserver(this.tracking, this.trackerReadiness);
-    this.cameraSetReps = [];
+    this.cameraSetRepTimes = [];
   },
 
   cameraPaced() {
@@ -1446,6 +1453,7 @@ const SessionHook = {
   },
 
   observePoseRep({ index, lagMs = 0 }) {
+    const countedBefore = this.tracking.cadenceMs.length;
     // A rep that lands while the workout waits for its last one counts at its end.
     if (this.pendingWorkoutResult) {
       this.tracking = observeTrackingRep(this.tracking, {
@@ -1457,6 +1465,9 @@ const SessionHook = {
         eligible:
           this.activeSegment === "workout" && document.visibilityState === "visible",
       });
+      this.cameraSetRepTimes = cameraRepTimesBySet(this.timeline, this.tracking.cadenceMs);
+      if (this.tracking.cadenceMs.length > countedBefore) this.repCounted();
+      if (!this.finalRepGraceTimeoutId && !this.lastSetShort()) this.completeWorkoutSegment();
       return;
     }
 
@@ -1479,27 +1490,45 @@ const SessionHook = {
       eligible,
     });
     if (!this.cameraPaced()) return;
+    if (this.tracking.cadenceMs.length > countedBefore) this.repCounted();
 
     // Once the camera has counted the set's reps, its rest starts.
-    this.cameraSetReps = cameraRepsBySet(this.timeline, this.tracking.cadenceMs);
+    this.cameraSetRepTimes = cameraRepTimesBySet(this.timeline, this.tracking.cadenceMs);
     const now = this.segment.clock.elapsedSec || 0;
     const current = currentFrame(this.timeline, now);
     if (
       current?.event?.kind === "work" &&
-      this.cameraSetReps[current.index] >= (current.event.reps || 0)
+      this.cameraSetRepTimes[current.index].length >= (current.event.reps || 0)
     ) {
       this.dispatchSegment({ type: "END_SET", elapsedSec: now });
     }
   },
 
   updatePoseStatus({ state, reason }) {
+    const wasTrusted = this.flow.trackingTrust !== "degraded";
     this.tracking = updateTrackingStatus(this.tracking, state);
     if (state === "lost" && this.flow.captureMode === "camera") {
+      if (wasTrusted && this.activeSegment === "workout") this.audio.playLostBuzz();
       this.dispatchFlow({
         type: "TRACKING_DEGRADED",
         reason: reason || "tracking_lost",
       });
+      // Nothing is left to wait for: the camera will not count the last set's reps.
+      if (this.pendingWorkoutResult) this.completeWorkoutSegment();
     }
+  },
+
+  // The camera counted a rep: a quiet click and a ring from the number.
+  repCounted() {
+    this.audio.playCountedClick();
+    this.renderer.pulseCounted?.();
+  },
+
+  // The workout's last set, after its time, without all its reps from the camera.
+  lastSetShort() {
+    const last = this.timeline.findLastIndex((event) => event.kind === "work");
+    if (last < 0) return false;
+    return (this.cameraSetRepTimes[last]?.length ?? 0) < (this.timeline[last].reps || 0);
   },
 
   // Ends the workout after the grace for its last rep; the count is final from here.
@@ -1557,6 +1586,17 @@ const SessionHook = {
   onFinishEarly() {
     if (!(this.paused || this.countdownPaused)) return;
     if (!["warmup", "workout"].includes(this.activeSegment)) return;
+    // The last set's open wait: the timer is done, so finish with its result.
+    if (this.pendingWorkoutResult) {
+      const pending = this.pendingWorkoutResult;
+      this.pendingWorkoutResult = null;
+      this.dispatchFlow({
+        type: "FINISH_EARLY",
+        segment: "workout",
+        result: this.workoutCompletionResult(pending),
+      });
+      return;
+    }
     if (
       this.activeSegment === "warmup" ||
       this.countdownCount !== null ||

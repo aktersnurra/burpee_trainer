@@ -19,20 +19,27 @@ function blockFor(marker) {
 	assert.fail(`${marker} should be closed`);
 }
 
-test("reduced motion disables full-screen rest breathing without hiding runner information", () => {
+test("reduced motion steps the set's fill without hiding runner information", () => {
 	const reducedMotion = blockFor("@media (prefers-reduced-motion: reduce)");
 	assert.match(
 		reducedMotion,
-		/#session-rest-breathe-light,[\s\S]*#session-rest-breathe-dark[\s\S]*animation:\s*none\s*!important;/,
+		/#session-work-fill,[\s\S]*#session-work-line[\s\S]*transition:\s*none\s*!important;/,
 	);
-	for (const selector of ["#count", "#session-status-line", "#session-pause-actions"]) {
+	for (const selector of ["#count", "#session-pause-actions", "#set-progress"]) {
 		assert.doesNotMatch(
 			reducedMotion,
 			new RegExp(`${selector}[^{]*\\{[^}]*(?:display:\\s*none|visibility:\\s*hidden|opacity:\\s*0)`),
-			`${selector} must remain available during reduced-motion rest`,
+			`${selector} must remain available under reduced motion`,
 		);
 	}
-	assert.match(reducedMotion, /#count,[\s\S]*#session-pause-actions[\s\S]*animation:\s*none\s*!important;/);
+});
+
+test("the runner's chips keep a 44px touch target", () => {
+	const chip = blockFor(".session-night .session-chip {");
+	assert.match(chip, /width:\s*var\(--pill-h\);/);
+	assert.match(chip, /height:\s*var\(--pill-h\);/);
+	const tokens = readFileSync(new URL("../../css/adaptive_home.css", import.meta.url), "utf8");
+	assert.match(tokens, /--pill-h:\s*(4[4-9]|[5-9]\d)px/);
 });
 
 test("the preflight back control retains a 44px touch target", () => {

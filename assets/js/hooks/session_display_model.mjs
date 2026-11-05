@@ -34,37 +34,47 @@ export function runningDisplayModel({
 	repProgress = null,
 	totalDone,
 	totalTarget,
-	doneInEvent = 0,
+	countedAtSec,
+	cameraTrusted = false,
 }) {
 	const event = frame?.event;
 	const kind = eventKind(event);
 	const isRest = kind === "rest";
 	const isWork = kind === "work";
 	const remainingSec = frame?.phase_remaining ?? timeLeftSec ?? 0;
-	const visual = visualStateForFrame({ isRest, isWork, remainingSec, frame });
-	const recoveryRemainingSec =
-		visual.state === "work_recovery" ? recoveryRemainingForFrame(frame) : null;
+	const beat = isWork
+		? beatState({
+				event,
+				phaseElapsedSec: frame?.phase_elapsed || 0,
+				countedAtSec,
+				cameraTrusted,
+			})
+		: null;
+	const visual = beat
+		? {
+				state: "work_active",
+				progress: beat.fill,
+				draining: beat.draining,
+				pace: beat.pace,
+				lead: beat.lead,
+				pulse: null,
+			}
+		: visualStateForFrame({ isRest, remainingSec });
 
 	return {
 		visual,
+		beat,
 		primaryCount:
-			visual.state === "work_recovery"
-				? formatClock(recoveryRemainingSec)
-				: visual.state === "rest_count_in"
-					? (recoveryLeadIn(frame) ?? Math.max(Math.ceil(remainingSec), 1))
-					: isRest
-						? formatClock(remainingSec)
-						: isWork
-							? Math.max((event?.reps || 0) - doneInEvent, 0)
-							: 0,
+			visual.state === "rest_count_in"
+				? Math.max(Math.ceil(remainingSec), 1)
+				: isRest
+					? formatClock(remainingSec)
+					: beat
+						? Math.max((event?.reps || 0) - beat.done, 0)
+						: 0,
 		countdownDots: null,
-		restTimeLeftSec: isRest ? remainingSec : recoveryRemainingSec,
-		setProgress:
-			["rest", "work_recovery"].includes(visual.state)
-				? setProgressForFrame(timeline, frame)
-				: null,
-		// What comes after a rest, so it is never a surprise: the next set's reps.
-		nextReps: visual.state === "rest" ? nextSetReps(timeline, frame) : null,
+		restTimeLeftSec: isRest ? remainingSec : null,
+		setProgress: visual.state === "rest" ? setProgressForFrame(timeline, frame) : null,
 		sessionProgress,
 		repProgress,
 		totalDone,
@@ -73,9 +83,7 @@ export function runningDisplayModel({
 	};
 }
 
-function visualStateForFrame({ isRest, isWork, remainingSec, frame }) {
-	if (isWork) return workVisualState(frame);
-
+function visualStateForFrame({ isRest, remainingSec }) {
 	// The timeline has ended, but the camera may still be settling its final rep.
 	if (!isRest) {
 		return { state: "work_active", progress: 1, pulse: null };
@@ -88,65 +96,66 @@ function visualStateForFrame({ isRest, isWork, remainingSec, frame }) {
 	return { state: "rest_count_in", progress: 0, pulse: null };
 }
 
-function workVisualState(frame) {
-	const cadenceSec = Number(frame?.event?.sec_per_rep) || 0;
-	if (cadenceSec <= 0) {
-		return { state: "work_active", progress: 0, activeRatio: 1, pulse: null };
+// Small enough to absorb float error at a beat or due time, never a real moment.
+const EPS = 1e-9;
+
+// A set as a run of beats. Rep k (from 1) has its beat at (k-1)c and is due at (k-1)c + a.
+// A rep is done when the camera counts it (countedAtSec, seconds from the set's start, in
+// order) or, without the camera, at its due time. The fill rises from the beat to the due
+// time, holds full until the rep is done, then drains from where it stood to empty at the
+// next beat. The set's last rep has no gap: once it is done the set is over.
+export function beatState({ event, phaseElapsedSec, countedAtSec, cameraTrusted = false }) {
+	const reps = event?.reps || 0;
+	const c = Number(event?.sec_per_rep) || 0;
+	const configured = Number(event?.sec_per_burpee);
+	const a = configured > 0 ? Math.min(configured, c) : c;
+	const t = Math.max(Number(phaseElapsedSec) || 0, 0);
+	if (reps <= 0 || c <= 0) {
+		return { repOn: 1, done: 0, fill: 1, draining: false, pace: "steady", lead: null };
 	}
 
-	// The last three seconds before the next rep of an even-paced set count in like the
-	// end of a rest, so every rep that follows a pause is announced the same way.
-	if (recoveryLeadIn(frame) !== null) {
-		return { state: "rest_count_in", progress: 0, pulse: null };
-	}
+	const beatOf = (k) => (k - 1) * c;
+	const dueOf = (k) => beatOf(k) + a;
+	const doneAt = cameraTrusted
+		? (countedAtSec || []).slice(0, reps)
+		: Array.from({ length: reps }, (_, i) => dueOf(i + 1));
+	const doneBy = (time) => doneAt.filter((at) => at <= time + EPS).length;
 
-	const configuredActiveSec = Number(frame?.event?.sec_per_burpee);
-	const activeSec =
-		configuredActiveSec > 0
-			? Math.min(configuredActiveSec, cadenceSec)
-			: cadenceSec;
-	const repElapsedSec = (frame?.phase_elapsed || 0) % cadenceSec;
-	const recoverySec = cadenceSec - activeSec;
-
-	const recovery = recoverySec > 0 && repElapsedSec >= activeSec;
-
-	return {
-		state: recovery ? "work_recovery" : "work_active",
-		progress: recovery ? 0 : clamp(repElapsedSec / activeSec),
-		pulse: null,
+	// The fill at `time` with `n` reps done.
+	const fillWith = (time, n) => {
+		const next = beatOf(n + 1);
+		if (n >= 1 && time < next - EPS) {
+			const d = doneAt[n - 1];
+			const from = fillWith(d, n - 1);
+			return from * (1 - (time - d) / (next - d));
+		}
+		return clamp((time - next) / a);
 	};
-}
 
-// Seconds (3, 2 or 1) until the next rep of this set, while recovering from the one
-// before; null otherwise: for a gap of three seconds or less, and after the set's last
-// rep, whose next phase counts itself in.
-export function recoveryLeadIn(frame) {
-	const event = frame?.event;
-	const cadenceSec = Number(event?.sec_per_rep) || 0;
-	if (event?.kind !== "work" || cadenceSec <= 0) return null;
+	const done = doneBy(t);
+	if (done >= reps) {
+		return { repOn: reps, done, fill: 0, draining: false, pace: lastPace(), lead: null };
+	}
 
-	const configuredActiveSec = Number(event?.sec_per_burpee);
-	const activeSec =
-		configuredActiveSec > 0 ? Math.min(configuredActiveSec, cadenceSec) : cadenceSec;
-	// Only a real pause is counted in; a gap of three seconds or less stays a clock.
-	if (cadenceSec - activeSec <= 3) return null;
+	const repOn = done + 1;
+	const next = beatOf(repOn);
+	const draining = done >= 1 && t < next - EPS;
+	const fill = fillWith(t, done);
+	const gap = done >= 1 ? next - doneAt[done - 1] : 0;
+	const left = next - t;
+	const lead = draining && gap > 3 + EPS && left <= 3 + EPS ? Math.ceil(left - EPS) : null;
+	const pace = !cameraTrusted
+		? "steady"
+		: t > dueOf(repOn) + EPS
+			? "behind"
+			: lastPace();
 
-	const elapsed = frame?.phase_elapsed || 0;
-	const repIndex = Math.floor(elapsed / cadenceSec);
-	if (repIndex + 1 >= (event?.reps || 0)) return null;
+	return { repOn, done, fill, draining, pace, lead };
 
-	const intoRep = elapsed - repIndex * cadenceSec;
-	if (intoRep < activeSec) return null;
-
-	const lead = Math.ceil(cadenceSec - intoRep);
-	return lead >= 1 && lead <= 3 ? lead : null;
-}
-
-function recoveryRemainingForFrame(frame) {
-	const cadenceSec = Number(frame?.event?.sec_per_rep) || 0;
-	if (cadenceSec <= 0) return 0;
-	const repElapsedSec = (frame?.phase_elapsed || 0) % cadenceSec;
-	return Math.max(cadenceSec - repElapsedSec, 0);
+	function lastPace() {
+		if (!cameraTrusted || done < 1) return "steady";
+		return dueOf(done) - doneAt[done - 1] >= 0.2 * a - EPS ? "ahead" : "steady";
+	}
 }
 
 function setProgressForFrame(timeline, frame) {
@@ -158,13 +167,6 @@ function setProgressForFrame(timeline, frame) {
 		eventKind(frame?.event) === "work" ? completed + 1 : completed;
 
 	return total > 1 ? `${position}/${total}` : null;
-}
-
-function nextSetReps(timeline, frame) {
-	const next = timeline
-		.slice((frame?.index ?? 0) + 1)
-		.find((event) => eventKind(event) === "work");
-	return next?.reps ?? null;
 }
 
 function eventKind(event) {

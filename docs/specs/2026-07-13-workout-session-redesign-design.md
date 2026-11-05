@@ -2,6 +2,7 @@
 
 Date: 2026-07-13
 Status: Approved for implementation planning
+**Superseded in part by** `docs/specs/2026-11-05-night-session-runner-design.md`: the visual language, the active work state and rest sections, and the 8.4 s breathing cycle.
 
 ## Context
 

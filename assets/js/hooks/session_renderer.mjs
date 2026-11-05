@@ -1,13 +1,20 @@
 import { formatClock } from "./session_display_model.mjs";
 import { countOrigin } from "./session_flow_fsm.mjs";
+import { createSink } from "./session_sink.mjs";
 const VISUAL_STATE_CLASSES = [
 	"is-working",
 	"is-work-active",
-	"is-work-recovery",
 	"is-rest",
 	"is-rest-count-in",
 	"is-count-in",
 ];
+
+// The fill eases toward its target, about 50 ms behind it, so it never jumps.
+const FILL_EASE_SEC = 0.05;
+
+function reducedMotion() {
+	return Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
+}
 
 function flowAnnouncement(state) {
 	if (state.mode === "camera_starting") return "Starting camera";
@@ -24,8 +31,6 @@ export class SessionRenderer {
 	constructor(root) {
 		this.root = root;
 		this.lastDisplayed = -1;
-		this.downTimeout = null;
-		this.downCueActive = false;
 		this.paused = false;
 		this.lastPulseValue = null;
 		this.appliedVisualState = undefined;
@@ -34,24 +39,49 @@ export class SessionRenderer {
 		this.nodes = Object.fromEntries(
 			[
 				"#session-runner-client",
-				"#session-work-fill",
-				"#session-progress",
-				"#session-progress-fill",
+				"#session-line-fill",
 				"#ring-container",
+				"#session-ring",
 				"#session-accessible-status",
 				"#session-time-accessible",
 				"#count",
-				"#down-word",
+				"#count-on-fill",
 				"#set-progress",
-				"#total-reps",
-				"#total-done",
-				"#total-separator",
-				"#total-plan",
+				"#session-meta",
+				"#session-camera-lost",
 				"#total-reps-accessible",
-				"#pause-icon",
 			].map((selector) => [selector, root.querySelector(selector)]),
 		);
-		this.downAnimationFrame = null;
+		this.countInMeta = this.node("#session-meta")?.textContent?.trim() ?? "";
+		this.fill = 0;
+		this.fillAt = null;
+		this.timeLeftSec = null;
+		const sinkCanvas = root.querySelector("#session-sink");
+		this.sink = sinkCanvas
+			? createSink(sinkCanvas, {
+					reducedMotion,
+					onDisc: (radius) =>
+						this.setSurfaceVar("--disc-r", `${Math.max(radius, 0).toFixed(1)}px`),
+				})
+			: null;
+		this.sinkRunning = false;
+	}
+
+	setSurfaceVar(name, value) {
+		const surface = this.node("#session-runner-client");
+		if (!surface?.style || this.rendered[name] === value) return;
+		this.rendered[name] = value;
+		surface.style.setProperty?.(name, value);
+	}
+
+	setSurfaceData(name, value) {
+		const surface = this.node("#session-runner-client");
+		const key = `data-${name}`;
+		const next = value == null || value === false ? null : String(value);
+		if (!surface || this.rendered[key] === next) return;
+		this.rendered[key] = next;
+		if (next === null) surface.removeAttribute(key);
+		else surface.setAttribute(key, next);
 	}
 
 	node(selector) {
@@ -97,7 +127,10 @@ export class SessionRenderer {
 		this.rendered.restCountVisibility = undefined;
 		this.rendered.currentSetRep = undefined;
 
-		if (text !== undefined) this.setText(count, text, "countText");
+		if (text !== undefined) {
+			this.setText(count, text, "countText");
+			this.setText(this.node("#count-on-fill"), text, "countOnFillText");
+		}
 		this.setStyle(count, "visibility", visibility, "countVisibility");
 		this.setStyle(count, "color", color, "countColor");
 
@@ -114,14 +147,7 @@ export class SessionRenderer {
 	}
 
 	clearTimers() {
-		if (this.downTimeout) clearTimeout(this.downTimeout);
-		if (this.downAnimationFrame != null) {
-			globalThis.cancelAnimationFrame?.(this.downAnimationFrame);
-			clearTimeout(this.downAnimationFrame);
-		}
-		this.downTimeout = null;
-		this.downAnimationFrame = null;
-		this.downCueActive = false;
+		this.sink?.hold();
 	}
 
 	renderFlowState(state) {
@@ -142,6 +168,11 @@ export class SessionRenderer {
 
 		this.renderCameraSetup(state);
 		this.renderCompletionControls(state);
+		this.setHidden(
+			this.node("#session-camera-lost"),
+			!(state.captureMode === "camera" && state.trackingTrust === "degraded"),
+			"cameraLostHidden",
+		);
 		if (visibleId !== this.visiblePanelId) {
 			this.visiblePanelId = visibleId;
 			this.focusPanelHeading(visibleId);
@@ -162,13 +193,17 @@ export class SessionRenderer {
 		let status = "Step into frame";
 		if (state.mode === "camera_starting") status = "Starting camera";
 		else if (failed) status = "Camera unavailable";
-		else if (cameraReady) status = "Hand up or hold still";
+		else if (cameraReady) status = "Hand up";
 
 		this.setText(
 			this.root.querySelector("#camera-setup-heading"),
 			status,
 			"cameraSetupStatus",
 		);
+		const detailLine = this.root.querySelector("#camera-setup-detail");
+		this.workoutName ??= detailLine?.textContent?.trim() ?? "";
+		this.setText(detailLine, cameraReady && !failed ? "or hold still" : this.workoutName, "cameraSetupDetail");
+		this.setHidden(detailLine, failed, "cameraSetupDetailHidden");
 		this.setHidden(
 			this.root.querySelector("#pose-tracker-preview-frame"),
 			failed,
@@ -278,18 +313,22 @@ export class SessionRenderer {
 		else if (wasVisible) this.root.querySelector("#session-discard-btn")?.focus();
 	}
 
-	// Paused, the abort question takes the place of Finish early and Abort.
-	showAbortConfirm(visible) {
-		const confirm = this.root.querySelector("#session-abort-confirm");
-		if (!confirm) return;
-		const choices = this.root.querySelector("#session-pause-choices");
-		const wasVisible = !confirm.hidden;
-		confirm.hidden = !visible;
-		if (choices) choices.hidden = visible;
-		if (visible) {
+	// Abort follows the app's delete pattern: the first tap arms it, the second aborts.
+	armAbort(armed) {
+		const abort = this.root.querySelector("#session-abort-btn");
+		if (!abort) return;
+		const wasArmed = abort.getAttribute("aria-pressed") === "true";
+		abort.setAttribute("aria-pressed", armed ? "true" : "false");
+		abort.setAttribute("aria-label", armed ? "Tap again to abort" : "Abort workout");
+		abort.setAttribute("title", armed ? "Tap again to abort" : "Abort workout");
+		if (armed) {
 			this.showAbortError(null);
-			this.root.querySelector("#session-abort-keep")?.focus();
-		} else if (wasVisible) this.root.querySelector("#session-abort-btn")?.focus();
+			if (!wasArmed) this.announce("Tap again to abort");
+		}
+	}
+
+	abortArmed() {
+		return this.root.querySelector("#session-abort-btn")?.getAttribute("aria-pressed") === "true";
 	}
 
 	showAbortError(text) {
@@ -299,12 +338,9 @@ export class SessionRenderer {
 		error.hidden = !text;
 	}
 
-	// Resuming puts the paused choices back as they were, without moving focus.
+	// Resuming lets go of an armed abort, without moving focus.
 	resetAbort() {
-		const confirm = this.root.querySelector("#session-abort-confirm");
-		if (confirm) confirm.hidden = true;
-		const choices = this.root.querySelector("#session-pause-choices");
-		if (choices) choices.hidden = false;
+		this.armAbort(false);
 		this.showAbortError(null);
 	}
 
@@ -313,8 +349,7 @@ export class SessionRenderer {
 		for (const id of [
 			"#session-discard-keep",
 			"#session-discard-yes",
-			"#session-abort-keep",
-			"#session-abort-yes",
+			"#session-abort-btn",
 		]) {
 			this.root.querySelector(id)?.toggleAttribute("disabled", busy);
 		}
@@ -521,6 +556,7 @@ export class SessionRenderer {
 	}
 
 	renderTimer(timeLeftSec) {
+		this.timeLeftSec = timeLeftSec;
 		const formattedTime = this.formatTime(timeLeftSec);
 		this.setText(
 			this.node("#session-time-accessible"),
@@ -529,32 +565,15 @@ export class SessionRenderer {
 		);
 	}
 
-	// The fill is the clock; while the camera counts, a solid fill of the reps done runs
-	// over it, so being ahead or behind the clock shows at a glance.
-	updateSessionProgress(progress, repProgress = null) {
-		const track = this.node("#session-progress");
-		const fill = this.node("#session-progress-fill");
-		const reps = this.node("#session-progress-reps");
-		const numericProgress = Number(progress);
-		const visible = progress != null && Number.isFinite(numericProgress);
-		const clampedProgress = visible
-			? Math.min(Math.max(numericProgress, 0), 1)
-			: 0;
-		const paced = visible && repProgress != null && Number.isFinite(repProgress);
-
-		this.setHidden(track, !visible, "sessionProgressHidden");
+	// The workout line: time elapsed.
+	updateSessionProgress(progress) {
+		const numeric = Number(progress);
+		const elapsed = Number.isFinite(numeric) ? Math.min(Math.max(numeric, 0), 1) : 0;
 		this.setStyle(
-			fill,
+			this.node("#session-line-fill"),
 			"transform",
-			`scaleX(${clampedProgress})`,
-			"sessionProgressTransform",
-		);
-		this.setHidden(reps, !paced, "sessionRepProgressHidden");
-		this.setStyle(
-			reps,
-			"transform",
-			`scaleX(${paced ? Math.min(Math.max(repProgress, 0), 1) : 0})`,
-			"sessionRepProgressTransform",
+			`scaleX(${elapsed})`,
+			"sessionLineTransform",
 		);
 	}
 
@@ -568,7 +587,6 @@ export class SessionRenderer {
 		const classNames = {
 			work: ["is-working", "is-work-active"],
 			work_active: ["is-working", "is-work-active"],
-			work_recovery: ["is-rest", "is-work-recovery"],
 			rest: ["is-rest"],
 			rest_count_in: ["is-rest-count-in"],
 			count_in: ["is-count-in"],
@@ -582,18 +600,37 @@ export class SessionRenderer {
 		this.appliedVisualState = state;
 	}
 
-	updateWorkFill(progress) {
-		const fill = this.node("#session-work-fill");
-		if (!fill) return;
+	// The set's fill, eased toward its target; reduced motion steps it.
+	updateWorkFill(progress, now = globalThis.performance?.now?.() ?? Date.now()) {
+		const target = Math.min(Math.max(Number(progress) || 0, 0), 1);
+		if (reducedMotion() || this.fillAt === null) {
+			this.fill = target;
+		} else {
+			const dt = Math.min(Math.max((now - this.fillAt) / 1000, 0), 1);
+			this.fill += (target - this.fill) * (1 - Math.exp(-dt / FILL_EASE_SEC));
+			if (Math.abs(target - this.fill) < 0.001) this.fill = target;
+		}
+		this.fillAt = now;
+		this.setSurfaceVar("--fill", this.fill.toFixed(4));
+	}
 
-		const clampedProgress = Math.min(Math.max(Number(progress) || 0, 0), 1);
-		const translateY = (1 - clampedProgress) * 100;
-		this.setStyle(
-			fill,
-			"transform",
-			`translate3d(0, ${translateY}%, 0)`,
-			"workFillTransform",
+	// A ring pulses out from the number: ink when the camera counts a rep, orange on each
+	// second of a count-in. None under reduced motion.
+	pulseRing(kind) {
+		const ring = this.node("#session-ring");
+		if (!ring || reducedMotion() || typeof ring.animate !== "function") return;
+		ring.classList.toggle("is-pace", kind === "count");
+		ring.animate(
+			[
+				{ transform: "scale(0.6)", opacity: 0.9 },
+				{ transform: "scale(1.2)", opacity: 0 },
+			],
+			{ duration: 600, easing: "cubic-bezier(.22,1,.36,1)" },
 		);
+	}
+
+	pulseCounted() {
+		this.pulseRing("counted");
 	}
 
 	updateAccessibleState({ state, primaryCount, setProgress }) {
@@ -602,17 +639,11 @@ export class SessionRenderer {
 		const accessibleSetProgress = this.formatSetProgress(setProgress);
 		const statusText = ["work", "work_active"].includes(state)
 			? `${primaryCount} reps remaining`
-			: state === "work_recovery"
-				? `Recovery time remaining ${primaryCount}${
-						accessibleSetProgress ? `, set progress ${accessibleSetProgress}` : ""
-					}`
-				: state === "rest"
-					? `Rest${
-							accessibleSetProgress ? `, set progress ${accessibleSetProgress}` : ""
-						}`
-					: state === "rest_count_in"
-						? `Rest time remaining ${primaryCount}`
-						: "Workout starting";
+			: state === "rest"
+				? `Rest${accessibleSetProgress ? `, set progress ${accessibleSetProgress}` : ""}`
+				: state === "rest_count_in"
+					? `Rest time remaining ${primaryCount}`
+					: "Workout starting";
 
 		this.setAttribute(
 			target,
@@ -623,41 +654,24 @@ export class SessionRenderer {
 		this.setText(status, statusText, "accessibleStatus");
 	}
 
+	// Paused: the title block says where the workout is, "Set 7 of 20 · 12:40 left".
 	updatePauseButton(paused) {
 		this.paused = paused;
-		const pauseIcon = this.root.querySelector("#pause-icon");
-		const countEl = this.node("#count");
-		const downEl = this.root.querySelector("#down-word");
-		const ringContainer = this.root.querySelector("#ring-container");
-		const surface = this.root.querySelector("#session-runner-client");
-		const setProgress = this.root.querySelector("#set-progress");
-		const totalReps = this.root.querySelector("#total-reps");
-		const totalSeparator = this.root.querySelector("#total-separator");
-		const totalPlan = this.root.querySelector("#total-plan");
-
-		if (paused) {
-			this.clearTimers();
-			if (countEl) {
-				countEl.classList.remove("is-down-cue", "countdown-pop");
-				this.writeCount({ visibility: "hidden" });
-			}
-			if (downEl) downEl.style.display = "none";
-			if (pauseIcon) pauseIcon.style.display = "";
-			if (totalReps) totalReps.hidden = false;
-			if (totalSeparator) totalSeparator.hidden = false;
-			if (totalPlan) totalPlan.hidden = false;
-			ringContainer?.classList.remove("is-down-cue-active");
-			this.setHidden(setProgress, true, "setProgressHidden");
-			surface?.classList.add("is-paused");
-		} else {
-			if (pauseIcon) pauseIcon.style.display = "none";
-			if (totalReps) totalReps.hidden = false;
-			if (totalSeparator) totalSeparator.hidden = true;
-			if (totalPlan) totalPlan.hidden = true;
-			surface?.classList.remove("is-paused");
-			if (countEl) this.writeCount({});
-			this.updateSetProgress(this.currentSetProgress, this.currentNextReps);
-		}
+		const surface = this.node("#session-runner-client");
+		surface?.classList.toggle("is-paused", paused);
+		const position = String(this.currentSetProgress ?? "").match(/^(\d+)\/(\d+)$/);
+		const left = this.timeLeftSec == null ? null : `${this.formatTime(this.timeLeftSec)} left`;
+		const pausedMeta = [position && `Set ${position[1]} of ${position[2]}`, left]
+			.filter(Boolean)
+			.join(" · ");
+		this.setText(
+			this.node("#session-meta"),
+			paused ? pausedMeta : this.countInMeta,
+			"sessionMeta",
+		);
+		if (paused) this.sink?.hold();
+		this.writeCount({ visibility: paused ? "hidden" : "" });
+		this.updateSetProgress(this.currentSetProgress);
 
 		this.updateAccessibleState({
 			state: this.currentVisualState,
@@ -670,106 +684,96 @@ export class SessionRenderer {
 	resetReady() {
 		this.clearTimers();
 		this.setVisualState(null);
-		this.updateSessionProgress(null);
+		this.updateSessionProgress(0);
+		this.fillAt = null;
 		this.updateWorkFill(0);
+		this.setSurfaceData("pace", null);
+		this.setSurfaceData("draining", null);
+		this.setSurfaceData("last", null);
 		this.lastPulseValue = null;
 		this.currentSetProgress = null;
 		this.updateSetProgress(null);
 		const countEl = this.node("#count");
 		if (countEl) {
-			countEl.classList.remove(
-				"is-down-cue",
-				"is-rest-time-long",
-				"is-count-double",
-				"is-count-long",
-				"is-countdown-dots",
-				"countdown-pop",
-			);
+			this.setCountLengthClass(countEl, "");
+			countEl.classList.remove("is-rest-time-long");
 			this.writeCount({ text: "—" });
 		}
-		const downEl = this.root.querySelector("#down-word");
-		if (downEl) downEl.style.display = "none";
-		const pauseIcon = this.root.querySelector("#pause-icon");
-		if (pauseIcon) pauseIcon.style.display = "none";
-		const totalReps = this.root.querySelector("#total-reps");
-		const totalSeparator = this.root.querySelector("#total-separator");
-		const totalPlan = this.root.querySelector("#total-plan");
-		if (totalReps) totalReps.hidden = true;
-		if (totalSeparator) totalSeparator.hidden = true;
-		if (totalPlan) totalPlan.hidden = true;
 	}
 
 	renderDisplayModel(model) {
 		if (!model) return;
-		const visual = model.visual || {
-			state: "work_active",
-			progress: 0,
-			pulse: null,
-		};
+		const visual = model.visual || { state: "work_active", progress: 0, pulse: null };
 		this.currentVisualState = visual.state;
 		this.currentPrimaryCount = model.primaryCount;
 		if (visual.state === "count_in") {
 			this.announce(`Workout starts in ${model.primaryCount}`);
 		}
 		this.currentSetProgress = model.setProgress;
-		this.currentNextReps = model.nextReps ?? null;
 		this.updateAccessibleState({
 			state: visual.state,
 			primaryCount: model.primaryCount,
 			setProgress: model.setProgress,
 		});
 		this.setVisualState(visual.state);
-		this.updateSessionProgress(model.sessionProgress, model.repProgress);
+		this.updateSessionProgress(model.sessionProgress);
 
-		if (visual.state === "count_in") {
-			this.lastPulseValue = null;
-			this.renderRestState(model);
-		} else if (["work", "work_active"].includes(visual.state)) {
-			this.lastPulseValue = null;
+		const working = ["work", "work_active"].includes(visual.state);
+		const resting = ["rest", "rest_count_in"].includes(visual.state);
+		this.setSurfaceData("pace", working ? (visual.pace ?? "steady") : null);
+		this.setSurfaceData("draining", working && visual.draining ? "" : null);
+		this.setSurfaceData("last", working && model.primaryCount === 1 ? "" : null);
+
+		if (working) {
 			this.updateWorkFill(visual.progress);
 			this.updateCurrentSetRepCount(model.primaryCount);
-		} else if (
-			["work_recovery", "rest", "rest_count_in"].includes(visual.state)
-		) {
+		} else {
+			this.fillAt = null;
 			this.updateWorkFill(0);
-			this.renderRestState(model);
 		}
+		if (visual.state === "count_in" || visual.state === "rest_count_in") {
+			if (model.primaryCount !== this.lastPulseValue) this.pulseRing("count");
+			this.lastPulseValue = model.primaryCount;
+		} else {
+			this.lastPulseValue = null;
+		}
+		if (resting || visual.state === "count_in") this.renderRestState(model);
+		this.renderSink(resting && !this.paused, model.restTimeLeftSec);
 
-		this.updateSetProgress(model.setProgress, model.nextReps);
+		this.updateSetProgress(resting ? model.setProgress : null);
 		if (model.timeLeftSec !== undefined) this.renderTimer(model.timeLeftSec);
-		if (model.totalDone !== undefined) {
-			this.updateTotalCounter(model.totalDone);
-			this.setHidden(this.node("#total-reps"), false, "totalRepsHidden");
-		}
+		if (model.totalDone !== undefined) this.updateTotalCounter(model.totalDone);
 		if (model.totalTarget !== undefined) this.updateTotalGoal(model.totalTarget);
+	}
+
+	// The sink runs only while the rest shows; a new rest starts the breath in.
+	renderSink(resting, remainingSec) {
+		if (!this.sink) return;
+		if (!resting) {
+			if (this.sinkRunning) this.sink.hold();
+			this.sinkRunning = false;
+			if (this.currentVisualState !== "rest" && this.currentVisualState !== "rest_count_in") {
+				this.restStarted = false;
+			}
+			return;
+		}
+		if (!this.restStarted) this.sink.start();
+		this.restStarted = true;
+		this.sinkRunning = true;
+		this.sink.frame(remainingSec ?? 0);
 	}
 
 	enterWorkPhase() {
 		this.setVisualState("work_active");
+		this.fillAt = null;
 		this.updateWorkFill(0);
 		this.updateSetProgress(null);
 		this.lastPulseValue = null;
-	}
-
-	enterCountInPhase() {
-		this.setVisualState("count_in");
-		this.updateWorkFill(0);
-		this.updateSetProgress(null);
-		this.lastPulseValue = null;
-		const countEl = this.node("#count");
-		if (countEl) {
-			countEl.classList.remove(
-				"is-down-cue",
-				"is-count-double",
-				"is-count-long",
-				"countdown-pop",
-			);
-			this.writeCount({});
-		}
 	}
 
 	enterRestPhase() {
 		this.setVisualState("rest");
+		this.fillAt = null;
 		this.updateWorkFill(0);
 	}
 
@@ -779,170 +783,62 @@ export class SessionRenderer {
 
 		const text = String(model.primaryCount ?? "");
 		const visibility = this.paused ? "hidden" : "";
-		if (
-			this.rendered.restCount === text &&
-			this.rendered.restCountVisibility === visibility
-		) {
-			this.lastPulseValue = null;
+		if (this.rendered.restCount === text && this.rendered.restCountVisibility === visibility) {
 			return;
 		}
 
-		count.classList.remove(
-			"is-down-cue",
-			"is-count-double",
-			"is-count-long",
-			"is-countdown-dots",
-			"countdown-pop",
-		);
+		this.setCountLengthClass(count, "");
+		// Ten minutes and more need a fifth character; it gets a smaller size.
+		count.classList.toggle("is-rest-time-long", text.length >= 5);
+		this.node("#count-on-fill")?.classList.toggle("is-rest-time-long", text.length >= 5);
 		this.writeCount({ text, visibility, identity: "restCount" });
-		this.lastPulseValue = null;
 	}
 
-	updateSetProgress(value, nextReps = null) {
+	// Sets done over sets in the workout, in the foot slot during rest.
+	updateSetProgress(value) {
 		const setProgress = this.node("#set-progress");
-		const parts = [value, nextReps == null ? null : `next ${nextReps}`].filter(
-			(part) => part != null,
-		);
-		const text = parts.length ? parts.join(" · ") : null;
+		const text = value ?? null;
 		this.setText(setProgress, text, "setProgressText");
-		this.setHidden(
-			setProgress,
-			this.paused || text == null,
-			"setProgressHidden",
-		);
+		this.setHidden(setProgress, this.paused || text == null, "setProgressHidden");
 	}
 
 	renderRestProgress(timeLeftSec) {
-		const countEl = this.node("#count");
-		if (countEl) {
-			const timeText = this.formatClock(timeLeftSec);
-			countEl.classList.remove(
-				"is-down-cue",
-				"is-rest-time-long",
-				"is-count-double",
-				"is-count-long",
-				"is-countdown-dots",
-			);
-			// Ten minutes and more need a fifth character; it gets a smaller size.
-			if (timeText.length >= 5) countEl.classList.add("is-rest-time-long");
-			this.writeCount({ text: timeText });
-		}
-		const downEl = this.root.querySelector("#down-word");
-		if (downEl) downEl.style.display = "none";
-	}
-
-	triggerDown(repsLeft) {
-		this.clearTimers();
-		const countEl = this.node("#count");
-		const downEl = this.root.querySelector("#down-word");
-		if (!countEl) return;
-
-		if (downEl) downEl.style.display = "none";
-		this.downCueActive = true;
-		const ringContainer = this.root.querySelector("#ring-container");
-		if (ringContainer) ringContainer.classList.add("is-down-cue-active");
-		countEl.classList.remove(
-			"is-rest-time-long",
-			"is-count-double",
-			"is-count-long",
-			"is-countdown-dots",
-		);
-		countEl.classList.add("is-down-cue");
-		this.writeCount({ text: "DOWN" });
-		countEl.classList.remove("countdown-pop");
-		const reducedMotion = globalThis.matchMedia?.(
-			"(prefers-reduced-motion: reduce)",
-		)?.matches;
-		if (!reducedMotion && typeof countEl.animate === "function") {
-			countEl.animate(
-				[
-					{ transform: "scale(1.35)", opacity: 0.6 },
-					{ transform: "scale(1)", opacity: 1, offset: 0.4 },
-					{ transform: "scale(1)", opacity: 1 },
-				],
-				{
-					duration: 350,
-					easing: "cubic-bezier(0.22, 1, 0.36, 1)",
-					fill: "both",
-				},
-			);
-		} else if (!reducedMotion) {
-			const scheduleFrame =
-				globalThis.requestAnimationFrame || ((callback) => setTimeout(callback, 0));
-			this.downAnimationFrame = scheduleFrame(() => {
-				this.downAnimationFrame = null;
-				if (this.downCueActive && !this.paused)
-					countEl.classList.add("countdown-pop");
-			});
-		}
-
-		this.downTimeout = setTimeout(() => {
-			this.downTimeout = null;
-			this.downCueActive = false;
-			if (ringContainer) ringContainer.classList.remove("is-down-cue-active");
-			if (!this.paused) this.updateCurrentSetRepCount(repsLeft);
-		}, 650);
+		this.renderRestState({ primaryCount: this.formatClock(timeLeftSec) });
 	}
 
 	updateCurrentSetRepCount(repsLeft) {
-		if (this.downCueActive) return;
 		const countEl = this.node("#count");
 		if (!countEl) return;
 
 		const text = String(repsLeft);
 		const visibility = this.paused ? "hidden" : "";
-		if (
-			this.rendered.currentSetRep === text &&
-			this.rendered.countVisibility === visibility
-		)
+		if (this.rendered.currentSetRep === text && this.rendered.countVisibility === visibility)
 			return;
 
-		countEl.classList.remove(
-			"is-down-cue",
-			"is-rest-time-long",
-			"is-countdown-dots",
-			"countdown-pop",
-		);
+		countEl.classList.remove("is-rest-time-long");
+		this.node("#count-on-fill")?.classList.remove("is-rest-time-long");
 		this.setCountLengthClass(countEl, text);
 		this.writeCount({ text, visibility, identity: "currentSetRep" });
 		this.lastDisplayed = repsLeft;
 	}
 
 	setCountLengthClass(countEl, text) {
-		const length = String(text).length;
-		if (length === 2) {
-			countEl.classList.add("is-count-double");
-		} else {
-			countEl.classList.remove("is-count-double");
-		}
-		if (length >= 3) {
-			countEl.classList.add("is-count-long");
-		} else {
-			countEl.classList.remove("is-count-long");
-		}
+		const long = String(text).length >= 3;
+		countEl.classList.toggle("is-count-long", long);
+		this.node("#count-on-fill")?.classList.toggle("is-count-long", long);
 	}
 
 	updateTotalCounter(n) {
-		const el = this.node("#total-done");
-		this.setText(el, n, "totalDone");
-		this.setStyle(el, "color", "", "totalDoneColor");
+		this.rendered.totalDone = String(n);
 		this.updateTotalAccessibility();
 	}
 
 	updateTotalGoal(n) {
-		const counter = this.node("#total-done");
-		if (counter?.dataset && this.rendered.totalPlanData !== String(n)) {
-			this.rendered.totalPlanData = String(n);
-			counter.dataset.totalPlan = n;
-		}
-		this.setText(this.node("#total-plan"), n, "totalPlan");
-		// Re-render the counter so the pace announcement picks up the new goal,
-		// keeping the rep count the cache already holds.
-		this.updateTotalCounter(this.rendered.totalDone ?? "");
+		this.rendered.totalPlan = String(n);
+		this.updateTotalAccessibility();
 	}
 
-	// Both totals come from the render cache rather than the DOM: this runs on
-	// every animation frame, and the cache is authoritative for what is shown.
+	// Both totals come from the render cache: this runs on every animation frame.
 	updateTotalAccessibility() {
 		const done = this.rendered.totalDone;
 		const target = this.rendered.totalPlan;

@@ -2,6 +2,7 @@
 
 **Date:** 2026-07-28
 **Status:** Approved
+**Superseded in part by** `docs/specs/2026-11-05-night-session-runner-design.md`: "Which camera reps count" and "Intra-rep recovery and rest".
 **Scope:** Replace split client/server pre-workout ownership with a lean client-authoritative runtime through completion review; make final Save and deferred pose-trace upload the only network boundaries
 **Source review:** `.rpiv/artifacts/reviews/2026-07-28_workout-session-redesign.md`
 

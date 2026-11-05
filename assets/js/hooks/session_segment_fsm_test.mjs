@@ -7,6 +7,10 @@ import {
 	initialSegmentState,
 	segmentTransition,
 } from "./session_segment_fsm.mjs";
+import { beatState } from "./session_display_model.mjs";
+
+const steadyBeat = (frame) =>
+	beatState({ event: frame.event, phaseElapsedSec: frame.phase_elapsed });
 
 function restFrame(remaining) {
 	return {
@@ -37,23 +41,27 @@ test("between-set countdown emits one lead beep for 3, 2, and 1", () => {
 	}
 });
 
-test("rest does not emit countdown beeps before three seconds", () => {
+test("rest does not lead in before three seconds", () => {
 	const result = segmentTransition(initialSegmentState(), {
 		type: "BEEP_FRAME",
 		frame: restFrame(4),
 	});
 
-	assert.deepEqual(result.commands, []);
+	assert.equal(result.commands.some((command) => command.type === "playLeadBeep"), false);
 });
 
-test("an even-paced set beeps each rep in like a set: 3, 2, 1, then the rep", () => {
+test("an even-paced set leads into each rep with 3, 2, 1 and marks the last rep", () => {
 	const event = { kind: "work", reps: 3, sec_per_rep: 20, sec_per_burpee: 6 };
 	const frame = (elapsed) => ({ event, phase_elapsed: elapsed, phase_remaining: 60 - elapsed, index: 0 });
 	let state = initialSegmentState();
 	const beeps = [];
 
 	for (let elapsed = 0; elapsed < 41; elapsed += 0.25) {
-		const result = segmentTransition(state, { type: "BEEP_FRAME", frame: frame(elapsed) });
+		const result = segmentTransition(state, {
+			type: "BEEP_FRAME",
+			frame: frame(elapsed),
+			beat: steadyBeat(frame(elapsed)),
+		});
 		for (const command of result.commands) beeps.push([elapsed, command.type]);
 		state = result.state;
 	}
@@ -67,7 +75,7 @@ test("an even-paced set beeps each rep in like a set: 3, 2, 1, then the rep", ()
 		[37, "playLeadBeep"],
 		[38, "playLeadBeep"],
 		[39, "playLeadBeep"],
-		[40, "playRepBeep"],
+		[40, "playLastRepBeep"],
 	]);
 });
 
@@ -80,16 +88,35 @@ test("unbroken reps and short gaps beep only for each rep", () => {
 		const kinds = [];
 
 		for (let elapsed = 0; elapsed < event.reps * event.sec_per_rep; elapsed += 0.25) {
+			const frame = { event, phase_elapsed: elapsed, phase_remaining: 0, index: 0 };
 			const result = segmentTransition(state, {
 				type: "BEEP_FRAME",
-				frame: { event, phase_elapsed: elapsed, phase_remaining: 0, index: 0 },
+				frame,
+				beat: steadyBeat(frame),
 			});
 			for (const command of result.commands) kinds.push(command.type);
 			state = result.state;
 		}
 
-		assert.deepEqual(kinds, ["playRepBeep", "playRepBeep", "playRepBeep"]);
+		assert.deepEqual(kinds, ["playRepBeep", "playRepBeep", "playLastRepBeep"]);
 	}
+});
+
+test("the rep beep carries the pace, and no beep sounds past the set's planned reps", () => {
+	const event = { kind: "work", reps: 2, sec_per_rep: 4, sec_per_burpee: 4 };
+	let state = initialSegmentState();
+	const heard = [];
+	for (let elapsed = 0; elapsed < 14; elapsed += 0.25) {
+		const frame = { event, phase_elapsed: elapsed, phase_remaining: 0, index: 0 };
+		const beat = beatState({ event, phaseElapsedSec: elapsed, countedAtSec: [], cameraTrusted: true });
+		const result = segmentTransition(state, { type: "BEEP_FRAME", frame, beat });
+		for (const command of result.commands) heard.push([elapsed, command.type, command.pace]);
+		state = result.state;
+	}
+	assert.deepEqual(heard, [
+		[0, "playRepBeep", "steady"],
+		[4, "playLastRepBeep", "behind"],
+	]);
 });
 
 test("resume excludes overlapping hidden and paused time exactly once", () => {
@@ -701,4 +728,91 @@ test("camera reps count for the set they land in, or the set a rest follows", ()
 
 	// 9 s is the start of the rest; 26 s is the workout's end.
 	assert.deepEqual(cameraRepsBySet(timeline, [3_000, 7_000, 9_000, 20_000, 26_000]), [3, 0, 2]);
+});
+
+test("a set short when its time ends runs into its rest, and its last rep gives the rest back", () => {
+	const timeline = [
+		{ kind: "work", reps: 3, sec_per_rep: 10 },
+		{ kind: "rest", duration_sec: 30 },
+		{ kind: "work", reps: 2, sec_per_rep: 10 },
+	];
+	let state = pacedSegment(timeline);
+	state = segmentTransition(state, { type: "TICK", elapsedSec: 30.5 }).state;
+	state = segmentTransition(state, { type: "SET_SHORT", elapsedSec: 30.5 }).state;
+
+	// The set stays on screen until three seconds before the next one.
+	assert.equal(currentFrame(state.timeline, 40).index, 0);
+	assert.equal(currentFrame(state.timeline, 56.9).index, 0);
+	assert.equal(currentFrame(state.timeline, 57).event.kind, "rest");
+	assert.equal(currentFrame(state.timeline, 60).index, 2);
+	assert.equal(state.timeline[0].ran_late, true);
+	assert.equal(totalSec(state.timeline), 80);
+
+	// The last rep lands at 41 s: the rest starts, shorter by the overrun.
+	state = segmentTransition(state, { type: "END_SET", elapsedSec: 41 }).state;
+	const rest = currentFrame(state.timeline, 41.5);
+	assert.equal(rest.event.kind, "rest");
+	assert.equal(Math.round(rest.phase_remaining * 10) / 10, 18.5);
+	assert.equal(currentFrame(state.timeline, 60).index, 2);
+	assert.equal(totalSec(state.timeline), 80);
+
+	// The schedule credits the set's planned reps once.
+	const done = segmentTransition(state, { type: "TICK", elapsedSec: 80 });
+	assert.equal(
+		done.commands.find((command) => command.type === "segmentDone").result.scheduledRepsDone,
+		5,
+	);
+});
+
+test("a set still short three seconds before the next ends there, and the next keeps its beat", () => {
+	const timeline = [
+		{ kind: "work", reps: 3, sec_per_rep: 10 },
+		{ kind: "rest", duration_sec: 30 },
+		{ kind: "work", reps: 2, sec_per_rep: 10 },
+	];
+	let state = pacedSegment(timeline);
+	state = segmentTransition(state, { type: "TICK", elapsedSec: 30.2 }).state;
+	state = segmentTransition(state, { type: "SET_SHORT", elapsedSec: 30.2 }).state;
+	const countIn = currentFrame(state.timeline, 58);
+	assert.equal(countIn.event.kind, "rest");
+	assert.equal(countIn.phase_remaining, 2);
+	assert.equal(currentFrame(state.timeline, 60).index, 2);
+	assert.equal(currentFrame(state.timeline, 60).phase_elapsed, 0);
+});
+
+test("a set runs into its rest only when the rest is longer than its count-in", () => {
+	for (const rest of [3, 2]) {
+		const timeline = [
+			{ kind: "work", reps: 3, sec_per_rep: 10 },
+			{ kind: "rest", duration_sec: rest },
+			{ kind: "work", reps: 2, sec_per_rep: 10 },
+		];
+		let state = pacedSegment(timeline);
+		state = segmentTransition(state, { type: "TICK", elapsedSec: 30.1 }).state;
+		const after = segmentTransition(state, { type: "SET_SHORT", elapsedSec: 30.1 }).state;
+		assert.deepEqual(after.timeline, state.timeline);
+	}
+	const lastSet = [{ kind: "work", reps: 3, sec_per_rep: 10 }];
+	const state = pacedSegment(lastSet);
+	assert.deepEqual(
+		segmentTransition(state, { type: "SET_SHORT", elapsedSec: 29 }).state.timeline,
+		lastSet,
+	);
+});
+
+test("a rest chimes once as it begins, but a rest that is only a count-in does not", () => {
+	let state = initialSegmentState();
+	const heard = [];
+	for (const remaining of [30, 29.5, 4, 3, 2]) {
+		const result = segmentTransition(state, { type: "BEEP_FRAME", frame: restFrame(remaining) });
+		heard.push(...result.commands.map((command) => command.type));
+		state = result.state;
+	}
+	assert.deepEqual(heard, ["playRestChime", "playLeadBeep", "playLeadBeep"]);
+
+	const countInOnly = segmentTransition(initialSegmentState(), {
+		type: "BEEP_FRAME",
+		frame: { event: { kind: "rest", duration_sec: 3 }, phase_elapsed: 0, phase_remaining: 3, index: 1 },
+	});
+	assert.deepEqual(countInOnly.commands, [{ type: "playLeadBeep" }]);
 });

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+	beatState,
 	countdownDisplayModel,
 	runningDisplayModel,
 	sessionProgressForElapsed,
@@ -22,7 +23,6 @@ function runningModel(timeline, index, frameOverrides = {}) {
 		sessionProgress: 0.25,
 		totalDone: 4,
 		totalTarget: 20,
-		doneInEvent: 1,
 	});
 }
 
@@ -58,13 +58,13 @@ const threeSetTimeline = Object.freeze([
 
 const runningKeys = [
 	"visual",
+	"beat",
 	"primaryCount",
 	"countdownDots",
 	"restTimeLeftSec",
 	"sessionProgress",
 	"repProgress",
 	"setProgress",
-	"nextReps",
 	"totalDone",
 	"totalTarget",
 	"timeLeftSec",
@@ -116,110 +116,6 @@ test("overall session progress is clamped and monotonic across event boundaries"
 	);
 });
 
-test("active fill completes before full-screen recovery shows exact remaining time", () => {
-	const activeStart = runningModel(threeSetTimeline, 0, {
-		phase_elapsed: 0,
-		phase_remaining: 24,
-	});
-	const activeMidpoint = runningModel(threeSetTimeline, 0, {
-		phase_elapsed: 1.5,
-		phase_remaining: 22.5,
-	});
-	const recoveryStart = runningModel(threeSetTimeline, 0, {
-		phase_elapsed: 3,
-		phase_remaining: 21,
-	});
-	const recoveryMidpoint = runningModel(threeSetTimeline, 0, {
-		phase_elapsed: 3.5,
-		phase_remaining: 20.5,
-	});
-
-	assert.deepEqual(activeStart.visual, {
-		state: "work_active",
-		progress: 0,
-		pulse: null,
-	});
-	assert.deepEqual(activeMidpoint.visual, {
-		state: "work_active",
-		progress: 0.5,
-		pulse: null,
-	});
-	assert.deepEqual(recoveryStart.visual, {
-		state: "work_recovery",
-		progress: 0,
-		pulse: null,
-	});
-	assert.deepEqual(recoveryMidpoint.visual, {
-		state: "work_recovery",
-		progress: 0,
-		pulse: null,
-	});
-	assert.equal(recoveryMidpoint.primaryCount, "0:01");
-	assert.equal(recoveryMidpoint.restTimeLeftSec, 0.5);
-	assert.equal(recoveryMidpoint.sessionProgress, 0.25);
-	assert.equal(recoveryMidpoint.setProgress, "1/3");
-	assertLeanContract(recoveryMidpoint, runningKeys);
-});
-
-test("an even-paced rest leads into the next rep with 3, 2, 1, but not after the last rep", () => {
-	const timeline = [{ kind: "work", reps: 3, sec_per_rep: 20, sec_per_burpee: 6 }];
-	const at = (elapsed) =>
-		runningModel(timeline, 0, { phase_elapsed: elapsed, phase_remaining: 60 - elapsed });
-
-	assert.equal(at(10).visual.state, "work_recovery");
-	assert.equal(at(10).primaryCount, "0:10");
-	assert.equal(at(17.5).visual.state, "rest_count_in");
-	assert.equal(at(17.5).primaryCount, 3);
-	assert.equal(at(19.5).primaryCount, 1);
-	assert.equal(at(20.5).visual.state, "work_active");
-	// After the last rep the next phase counts itself in.
-	assert.equal(at(57.5).visual.state, "work_recovery");
-	assert.equal(at(57.5).primaryCount, "0:03");
-});
-
-test("a short gap between reps stays a clock, without a count-in", () => {
-	const timeline = [{ kind: "work", reps: 3, sec_per_rep: 9, sec_per_burpee: 6 }];
-	const model = runningModel(timeline, 0, { phase_elapsed: 7, phase_remaining: 20 });
-	assert.equal(model.visual.state, "work_recovery");
-	assert.equal(model.primaryCount, "0:02");
-});
-
-test("single-set recovery hides redundant 1/1 position", () => {
-	const timeline = [
-		{ kind: "work", reps: 6, sec_per_rep: 4, sec_per_burpee: 3 },
-	];
-	const recovery = runningModel(timeline, 0, {
-		phase_elapsed: 3.5,
-		phase_remaining: 20.5,
-	});
-
-	assert.equal(recovery.visual.state, "work_recovery");
-	assert.equal(recovery.primaryCount, "0:01");
-	assert.equal(recovery.setProgress, null);
-});
-
-test("unbroken work fills across each cadence interval instead of staying solid", () => {
-	const timeline = [
-		{ kind: "work", reps: 6, sec_per_rep: 4, sec_per_burpee: 4 },
-	];
-	const start = runningModel(timeline, 0, { phase_elapsed: 0 });
-	const midpoint = runningModel(timeline, 0, { phase_elapsed: 2 });
-	const end = runningModel(timeline, 0, { phase_elapsed: 3.999 });
-
-	assert.deepEqual(start.visual, {
-		state: "work_active",
-		progress: 0,
-		pulse: null,
-	});
-	assert.deepEqual(midpoint.visual, {
-		state: "work_active",
-		progress: 0.5,
-		pulse: null,
-	});
-	assert.equal(end.visual.state, "work_active");
-	assert.ok(end.visual.progress > 0.999);
-});
-
 test("normal rest reads as a time and derives set progress from immutable work events", () => {
 	const firstRest = runningModel(threeSetTimeline, 1, {
 		phase_elapsed: 12,
@@ -236,8 +132,6 @@ test("normal rest reads as a time and derives set progress from immutable work e
 	assert.equal(secondRest.visual.state, "rest");
 	assert.equal(secondRest.primaryCount, "0:04");
 	assert.equal(secondRest.setProgress, "2/3");
-	// A rest says what follows it: the next set's reps.
-	assert.equal(firstRest.nextReps, threeSetTimeline[2].reps);
 	assert.equal(Object.hasOwn(threeSetTimeline[1], "setProgress"), false);
 	assertLeanContract(firstRest, runningKeys);
 });
@@ -304,7 +198,6 @@ test("terminal explicit work duration leaves no trailing recovery frame", () => 
 		timeLeftSec: 0.001,
 		totalDone: 3,
 		totalTarget: 4,
-		doneInEvent: 1,
 	});
 
 	assert.equal(lastModel.visual.state, "work_active");
@@ -322,7 +215,8 @@ test("the completed timeline shows zero remaining and a full fill during final-r
 	});
 
 	assert.equal(model.primaryCount, 0);
-	assert.deepEqual(model.visual, { state: "work_active", progress: 1, pulse: null });
+	assert.equal(model.visual.state, "work_active");
+	assert.equal(model.visual.progress, 1);
 	assert.equal(model.sessionProgress, 1);
 });
 
@@ -340,7 +234,6 @@ test("the exact rest boundary enters work at zero per-rep progress", () => {
 			timeLeftSec: 56.001,
 			totalDone: 6,
 			totalTarget: 20,
-			doneInEvent: 0,
 		}).visual.state,
 		"rest_count_in",
 	);
@@ -358,14 +251,120 @@ test("the exact rest boundary enters work at zero per-rep progress", () => {
 		timeLeftSec: 56,
 		totalDone: 6,
 		totalTarget: 20,
-		doneInEvent: 0,
 	});
 
 	assert.deepEqual(boundaryModel.visual, {
 		state: "work_active",
 		progress: 0,
+		draining: false,
+		pace: "steady",
+		lead: null,
 		pulse: null,
 	});
 	assert.equal(boundaryModel.primaryCount, 6);
 	assert.equal(boundaryModel.setProgress, null);
+});
+
+// Beats: rep k has its beat at (k-1)c and is due at (k-1)c + a.
+const unbroken = Object.freeze({ kind: "work", reps: 8, sec_per_rep: 4, sec_per_burpee: 4 });
+const even = Object.freeze({ kind: "work", reps: 5, sec_per_rep: 10, sec_per_burpee: 4 });
+const beat = (event, t, countedAtSec, cameraTrusted = countedAtSec !== undefined) =>
+	beatState({ event, phaseElapsedSec: t, countedAtSec, cameraTrusted });
+const near = (actual, expected) =>
+	assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} is not ${expected}`);
+
+test("the fill rises from a rep's beat to its due time", () => {
+	near(beat(unbroken, 0).fill, 0);
+	near(beat(unbroken, 1).fill, 0.25);
+	near(beat(even, 2).fill, 0.5);
+	assert.equal(beat(even, 2).draining, false);
+	assert.equal(beat(even, 2).repOn, 1);
+});
+
+test("without the camera each rep is done at its due time and drains to the next beat", () => {
+	const gap = beat(even, 7);
+	assert.equal(gap.done, 1);
+	assert.equal(gap.repOn, 2);
+	assert.equal(gap.draining, true);
+	near(gap.fill, 0.5);
+	near(beat(even, 10).fill, 0);
+	assert.equal(beat(even, 10).draining, false);
+	assert.equal(beat(unbroken, 4).done, 1);
+	assert.equal(beat(unbroken, 4).pace, "steady");
+});
+
+test("a counted rep drains from where it stood to empty at the next beat", () => {
+	const early = beat(unbroken, 3, [3]);
+	assert.equal(early.done, 1);
+	assert.equal(early.draining, true);
+	near(early.fill, 0.75);
+	near(beat(unbroken, 3.5, [3]).fill, 0.375);
+	near(beat(unbroken, 4, [3]).fill, 0);
+	assert.equal(beat(unbroken, 4, [3]).draining, false);
+});
+
+test("a rep past its due time holds the fill full and reads behind until it is counted", () => {
+	const late = beat(unbroken, 5, []);
+	assert.equal(late.repOn, 1);
+	assert.equal(late.fill, 1);
+	assert.equal(late.pace, "behind");
+	assert.equal(late.draining, false);
+	assert.equal(beat(unbroken, 5.5, [5.2]).pace, "steady");
+	near(beat(unbroken, 5.5, [5.2]).fill, 0.375);
+});
+
+test("ahead needs the last counted rep a fifth of its rep time early", () => {
+	assert.equal(beat(unbroken, 3.3, [3.2]).pace, "ahead");
+	assert.equal(beat(unbroken, 3.3, [3.21]).pace, "steady");
+	assert.equal(beat(unbroken, 1, []).pace, "steady");
+	assert.equal(beat(unbroken, 3.3, [3.2], false).pace, "steady");
+});
+
+test("a gap over three seconds leads into the next beat with 3, 2, 1", () => {
+	assert.equal(beat(even, 6.5).lead, null);
+	assert.equal(beat(even, 7.5).lead, 3);
+	assert.equal(beat(even, 9.5).lead, 1);
+	assert.equal(beat(even, 10.5).lead, null);
+	assert.equal(beat(unbroken, 3.5, [1]).lead, null);
+	assert.equal(beat(unbroken, 2, [0.5]).lead, 2);
+});
+
+test("the set's last rep has no gap after it", () => {
+	const last = beat(even, 44.5);
+	assert.equal(last.done, 5);
+	assert.equal(last.repOn, 5);
+	assert.equal(last.fill, 0);
+	assert.equal(last.lead, null);
+});
+
+test("a set shows the reps left by the beats, not a recovery clock", () => {
+	const model = runningDisplayModel({
+		timeline: [even],
+		frame: { event: even, index: 0, phase_elapsed: 7, phase_remaining: 37 },
+		timeLeftSec: 37,
+	});
+	assert.equal(model.visual.state, "work_active");
+	assert.equal(model.primaryCount, 4);
+	assert.equal(model.visual.draining, true);
+});
+
+test("the fill stays in range and the rep you are on never goes back", () => {
+	let seed = 7;
+	const random = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+	for (let run = 0; run < 200; run++) {
+		const c = 2 + random() * 10;
+		const event = { kind: "work", reps: 1 + Math.floor(random() * 12), sec_per_rep: c, sec_per_burpee: c * (0.3 + random() * 0.7) };
+		const camera = random() < 0.6;
+		const counted = [];
+		for (let t = 0; t < event.reps * c * 1.5; t += random() * 4) {
+			if (counted.length < event.reps) counted.push(t);
+		}
+		let previous = 0;
+		for (let t = 0; t <= event.reps * c * 1.6; t += 0.05) {
+			const state = beat(event, t, camera ? counted.filter((at) => at <= t) : undefined, camera);
+			assert.ok(state.fill >= 0 && state.fill <= 1, `fill ${state.fill}`);
+			assert.ok(state.repOn >= previous);
+			previous = state.repOn;
+		}
+	}
 });

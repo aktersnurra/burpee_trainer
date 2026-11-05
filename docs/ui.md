@@ -57,25 +57,30 @@
 --color-accent-content:  #FFF8F0   text on accent fills
 ```
 
-### Phase colors (session runner)
+### The session at night (`.session-night`, camera setup and the runner)
+
+The runner is the app turned inside out: `--ink` is the ground and the paper the numbers.
+Pace and breath are data, never decoration. Completion review keeps the light tokens.
 
 ```
---phase-work:          #20201D   work set — ink emphasis
---phase-work-bg:       #EFECE4
---phase-work-content:  #20201D
-
---phase-warmup:        #A77B5D   warmup — muted clay
---phase-warmup-bg:     #FFF8F0
---phase-warmup-content:#20201D
-
---phase-rest:          #6F7F8F   rest — softened slate
---phase-rest-bg:       #F2F0EA
---phase-rest-content:  #20201D
-
---phase-done:          #6F7D55   done — subdued olive
---phase-done-bg:       #EEF1E6
---phase-done-content:  #20201D
+--session-ground:   #262722   the ground of every runner screen (--ink)
+--session-ink:      #F4F2EE   the number, icons, the workout line's elapsed part
+--session-muted:    #A9A79F   secondary text (sets done in a rest, pause, camera setup)
+--session-track:    #3A3B35   the workout line's track; quiet chips
+--session-on-fill:  #262722   the number where a fill or the sink's disc covers it
+--pace-steady:      #FFA557   the rep fill on the beat; the final-three ring
+--pace-ahead:       #90A959   the rep fill ahead; the skeleton once the camera has you
+--pace-behind:      #B46958   the rep fill behind
+--session-breath:   #BAD7FF   the sink's disc and its air
+--session-last:     #F4BF75   the number on the set's last rep
 ```
+
+Screens are four parts: the workout line on top, the title block (name and a muted line),
+the number or the sink in the middle, and the foot (rest's `7/20` or the camera-lost chip).
+Actions are 44px round chips with an icon, an `aria-label` and a `title`: continue without
+camera, try the camera again, finish early, abort. Abort arms on the first tap (filled,
+`aria-pressed`, "Tap again to abort") and aborts on the second; Escape or a tap elsewhere lets
+go. Design: `docs/specs/2026-11-05-night-session-runner-design.md`.
 
 ### One set of tokens (`assets/css/adaptive_home.css`, on `:root`)
 
@@ -301,7 +306,9 @@ bottom over 360ms while Home recedes a little, and `"drop"` sends the studio bac
 `data-vt-from`, the workout's name travels: the element it names before the update and Home's
 title after it share the `workout-title` transition name, so a name picked from the list or kept
 from the studio flies into Home's title (`"attach"` is that flight with the list leaving as one
-piece). Buttons that start or change something (Play, the start
+piece). Play grows into the runner: an ink curtain opens from the pill's box to the screen over
+360ms (`js/session_curtain.mjs`, since Play is a live navigation the patch transitions cannot
+see), and leaving a night screen by live navigation shrinks it back into Play. Buttons that start or change something (Play, the start
 choices, steppers, icon buttons) press in to 96% under the finger. Reduced motion turns it all off.
 
 ## 5. Navigation and screens
@@ -331,8 +338,10 @@ screen leads to the next in context:
   chart with both types on their own axes. Design:
   `docs/specs/2026-10-14-coach-on-home-design.md`.
 - **Session** (`/session/:session_id`, `/videos/:video_id/session/:session_id`) runs a
-  workout. Design: `docs/specs/2026-07-13-workout-session-redesign-design.md` and the
-  session and camera specs that follow it.
+  workout at night: the inverted palette above, a fill per rep that follows the camera, and a
+  breathing sink in rests. Design: `docs/specs/2026-11-05-night-session-runner-design.md`,
+  over `docs/specs/2026-07-13-workout-session-redesign-design.md` and the session and camera
+  specs that follow it.
 
 Every screen uses the `--color-base-100` page background, Geist, and Home's centred
 column: Home and Progress render in the same `.adaptive-home` container on the

@@ -465,6 +465,10 @@ async function runControlledSessionFixture(frames) {
 			close() {},
 			playLeadBeep() {},
 			playRepBeep() {},
+			playLastRepBeep() {},
+			playCountedClick() {},
+			playRestChime() {},
+			playLostBuzz() {},
 		};
 		session.wakeLock = {
 			acquire() {},
