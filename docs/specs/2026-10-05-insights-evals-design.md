@@ -18,8 +18,8 @@ metric IDs to `%{value: number, unit: atom, label: String.t()}`. Initial set:
 | `week.minutes` | Minutes completed this week |
 | `week.target_minutes` | Weekly target (80) |
 | `week.reps.six_count`, `week.reps.navy_seal` | Reps this week per type |
-| `session.reps`, `session.duration_min`, `session.pace_sec` | The latest session |
-| `pace.change_6w.<type>` | Change in seconds per rep vs. the average of the previous 6 weeks |
+| `session.reps`, `session.duration_min`, `session.elapsed_pace_sec` | The latest session (elapsed pace includes rests); camera sessions add `session.*` fatigue, slack, fade and restart facts and `same_workout.*` (`2026-10-19-fatigue-insights-design.md`) |
+| `active_pace.change_6w.<type>` | Change in seconds per rep inside sets (camera sessions, rests excluded) vs. the previous 6 weeks |
 | `streak.weeks` | Consecutive weeks meeting the target |
 | `goal.<id>.progress_pct` | Progress toward each active goal |
 | `level.<type>` | Current level per type |

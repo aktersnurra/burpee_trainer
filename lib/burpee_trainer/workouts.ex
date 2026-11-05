@@ -1742,6 +1742,30 @@ defmodule BurpeeTrainer.Workouts do
 
   def get_session(%Scope{}, _invalid_id), do: nil
 
+  @doc """
+  The latest completed camera session of the same program before `session`, or nil: what
+  "the last time you did this workout" compares against.
+  """
+  @spec previous_same_program(Scope.t(), WorkoutSession.t()) :: WorkoutSession.t() | nil
+  def previous_same_program(
+        %Scope{user: %User{id: user_id}},
+        %WorkoutSession{content_hash: hash, completed_at: %DateTime{} = at, id: id}
+      )
+      when is_binary(hash) do
+    Repo.one(
+      from(s in WorkoutSession,
+        where:
+          s.user_id == ^user_id and s.state == :completed and s.content_hash == ^hash and
+            s.capture_mode == :tracked and not is_nil(s.kept_up) and
+            (s.completed_at < ^at or (s.completed_at == ^at and s.id < ^id)),
+        order_by: [desc: s.completed_at, desc: s.id],
+        limit: 1
+      )
+    )
+  end
+
+  def previous_same_program(%Scope{}, _session), do: nil
+
   @spec list_sessions_for_chart(Scope.t(), atom) :: [WorkoutSession.t()]
   def list_sessions_for_chart(%Scope{user: %User{id: user_id}}, burpee_type)
       when is_atom(burpee_type) do

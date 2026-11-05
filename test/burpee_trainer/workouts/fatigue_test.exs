@@ -48,6 +48,24 @@ defmodule BurpeeTrainer.Workouts.FatigueTest do
     end
   end
 
+  property "running ahead of the beat, then settling onto it, is keeping up" do
+    check all(
+            {sets, reps, spr, rest} <- shape(),
+            ahead <- float(min: 0.1, max: 0.4),
+            fast_sets <- integer(1..(sets - 1))
+          ) do
+      # The first sets each rep a share of the interval sooner, the rest on the beat.
+      lag = fn set, rep -> if set < fast_sets, do: -rep * ahead * spr, else: 0.0 end
+
+      fatigue =
+        Fatigue.compute(on_beat(sets, reps, spr, rest, lag), program(sets, reps, spr, rest))
+
+      assert fatigue.kept_up
+      assert fatigue.slip_at_sec == nil
+      if rest > 0, do: assert(abs(fatigue.recovery_delta_sec) < 0.01)
+    end
+  end
+
   property "one missed or extra detection does not shift the reps after it" do
     check all(
             {sets, reps, spr, rest} <- shape(),
@@ -148,6 +166,17 @@ defmodule BurpeeTrainer.Workouts.FatigueTest do
       Fatigue.compute(beats.(fn rep -> if rem(rep, 2) == 0, do: 0.2, else: 0.0 end), events)
 
     assert uneven.consistency < 0.9
+  end
+
+  property "a set run evenly ahead of the beat is as even as one on it" do
+    check all({sets, reps, spr, rest} <- shape(), ahead <- float(min: 0.1, max: 0.4)) do
+      lag = fn set, rep -> if set == 0, do: -rep * ahead * spr, else: 0.0 end
+
+      fatigue =
+        Fatigue.compute(on_beat(sets, reps, spr, rest, lag), program(sets, reps, spr, rest))
+
+      assert fatigue.consistency == 1.0
+    end
   end
 
   test "finishing the last set early is not falling behind" do

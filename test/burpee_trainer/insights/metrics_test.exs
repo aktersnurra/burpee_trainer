@@ -29,7 +29,7 @@ defmodule BurpeeTrainer.Insights.MetricsTest do
     assert m["week.minutes"].value == 40
     assert m["week.reps.six_count"].value == 120
     assert m["session.reps"].value == 60
-    assert Metrics.format(m["session.pace_sec"]) == "20.0"
+    assert Metrics.format(m["session.elapsed_pace_sec"]) == "20.0"
   end
 
   test "local midnight, missing actuals and zero reps" do
@@ -41,14 +41,14 @@ defmodule BurpeeTrainer.Insights.MetricsTest do
     m = Metrics.compute(rows, [], ~D[2026-10-07], "America/New_York", ~D[2024-01-01])
     assert m["week.minutes"].value == 0
     assert m["session.reps"].value == 0
-    refute Map.has_key?(m, "session.pace_sec")
+    refute Map.has_key?(m, "session.elapsed_pace_sec")
   end
 
   test "empty input has no session or comparative metrics" do
     m = Metrics.compute([], [], ~D[2026-10-07], "Etc/UTC", ~D[2024-01-01])
     assert m["week.minutes"].value == 0
     refute Map.has_key?(m, "session.reps")
-    refute Map.has_key?(m, "pace.change_6w.six_count")
+    refute Map.has_key?(m, "active_pace.change_6w.six_count")
   end
 
   test "scope excludes foreign facts and goals, and timestamps after now" do
@@ -111,7 +111,8 @@ defmodule BurpeeTrainer.Insights.MetricsTest do
 
     m = Metrics.compute(rows, goals, ~D[2026-10-07], "Etc/UTC", ~D[2024-01-01])
     assert m["streak.weeks"].value == 2
-    assert m["pace.change_6w.six_count"].value == -36.0
+    # Elapsed pace moves with the rests chosen; without the camera there is no pace trend.
+    refute Map.has_key?(m, "active_pace.change_6w.six_count")
     assert m["goal.7.progress_pct"].value == 100
     refute Map.has_key?(m, "goal.8.progress_pct")
 
@@ -158,7 +159,7 @@ defmodule BurpeeTrainer.Insights.MetricsTest do
     missing = %{target | burpee_count_actual: nil}
     assert {:ok, m} = Metrics.for_session(scope, [missing, newer], [], missing)
     refute Map.has_key?(m, "session.reps")
-    refute Map.has_key?(m, "session.pace_sec")
+    refute Map.has_key?(m, "session.elapsed_pace_sec")
   end
 
   property "weekly minutes sum seconds before rounding and input order is irrelevant" do
@@ -268,5 +269,57 @@ defmodule BurpeeTrainer.Insights.MetricsTest do
       m = Metrics.compute(rows, [], ~D[2026-10-13], "Etc/UTC", ~D[2024-01-01])
       assert m["last_week.minutes"].value == div(Enum.sum(previous), 60)
     end
+  end
+
+  # Three sets of five at 4 s with 30 s between, finished `early` seconds before each beat
+  # runs out, seen by the camera from the start.
+  defp camera(id, at, early) do
+    work = %{"kind" => "work", "reps" => 5, "sec_per_rep_us" => 4_000_000}
+    rest = %{"kind" => "rest", "duration_ms" => 30_000}
+
+    cadence =
+      for k <- 0..2, rep <- 1..5, do: round((k * 50 + rep * (4 - early.(k) / 5)) * 1_000)
+
+    Map.merge(session(id, at, 15, 110), %{
+      source_kind: :plan,
+      capture_mode: :tracked,
+      content_hash: "same",
+      display_name_snapshot: "Threes",
+      fatigue_coverage: 1.0,
+      kept_up: true,
+      slip_at_sec: nil,
+      program_snapshot: %{"events" => [work, rest, work, rest, work]},
+      cadence_ms: Jason.encode!(cadence)
+    })
+  end
+
+  test "a camera session's insight sees its slack, fade and the last time it was done" do
+    scope = %BurpeeTrainer.Accounts.Scope{
+      user: %BurpeeTrainer.Accounts.User{
+        id: 1,
+        timezone: "Etc/UTC",
+        inserted_at: ~U[2024-01-01 00:00:00Z]
+      }
+    }
+
+    before = camera(1, ~U[2026-10-01 12:00:00Z], fn _ -> 0 end)
+    target = camera(2, ~U[2026-10-06 12:00:00Z], fn k -> 4 - 2 * k end)
+
+    assert {:ok, m} = Metrics.for_session(scope, [target, before], [], target)
+    assert m["session.kept_up"].value == "kept up"
+    assert m["session.camera_coverage_pct"].value == 100
+    assert m["session.slack_first_sec"].value == 34.0
+    assert m["session.slack_last_sec"].value == 32.0
+    assert m["session.slack_trend_sec"].value == -2.0
+    assert m["same_workout.finish_change_sec"].value == -2.0
+    assert m["same_workout.sets_faster"].value == 2
+    assert m["same_workout.days_since"].value == 5
+    assert Map.has_key?(m, "session.fade")
+
+    # The camera missing the opening leaves only its coverage.
+    blind = %{target | kept_up: nil, fatigue_coverage: 0.4}
+    assert {:ok, m} = Metrics.for_session(scope, [blind, before], [], blind)
+    assert m["session.camera_coverage_pct"].value == 40
+    refute Enum.any?(Map.keys(m), &(&1 =~ ~r/slack|fade|kept_up|same_workout/))
   end
 end

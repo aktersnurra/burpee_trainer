@@ -82,7 +82,7 @@ defmodule BurpeeTrainer.Insights.Validator do
 
     text =
       Enum.reduce(cited, text, fn
-        %{unit: :level, value: value}, acc when is_binary(value) ->
+        %{value: value}, acc when is_binary(value) ->
           Regex.replace(
             Regex.compile!(
               "(?<![\\p{L}\\p{N}_])" <> Regex.escape(value) <> "(?![\\p{L}\\p{N}_])",

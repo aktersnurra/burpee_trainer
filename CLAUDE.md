@@ -24,13 +24,14 @@
 | `BurpeeTrainer.Coach.{Summary, SummaryJob}` | The owner's two-sentence progress summary (validated against metrics, deterministic fallback) and the job that refreshes it after a completion or a confirmed goal, and when the app opens with a summary from an earlier week |
 | `BurpeeTrainer.Coach.{Client, Ledger, LlmCall}` | Provider boundary (`chat/2`, and `decide/3` for the Decisions API) and the per-call ledger with daily budgets for automated and owner-started calls |
 | `BurpeeTrainer.Coach.enabled?/1` | Whether the app's own coach runs for a user (a Pocket ID claim, `users.coach_enabled`); `Client.chat/2` refuses without it |
-| `BurpeeTrainer.Mcp` / `BurpeeTrainer.Mcp.{Token, Sessions, Workouts, CoachPrompt, WorkoutFormat}` | The MCP server Claude coaches through: JSON-RPC dispatch, Pocket ID token checks, and the history, workout, prompt and format shapes Claude reads and writes |
+| `BurpeeTrainer.Mcp` / `BurpeeTrainer.Mcp.{Token, Sessions, Workouts, CoachPrompt, WorkoutFormat, AnalyticsGuide, FatigueGuide, FeedbackFatigue}` | The MCP server Claude coaches through: JSON-RPC dispatch, Pocket ID token checks, the history, workout, prompt and format shapes Claude reads and writes, the guides it reads them by, and camera fatigue grouped by feedback |
 | `BurpeeTrainer.Mcp.Tools.*` | The MCP tools, each a `Coach.Tool`; see `docs/specs/2026-10-16-mcp-design.md` and `docs/guides/mcp-setup.md` |
 | `BurpeeTrainerWeb.{McpAuth, McpController, McpMetadataController}` | Bearer sign-in for `/mcp`, the endpoint, and its protected-resource metadata |
 | `BurpeeTrainer.Coach.{Catalog, Policy, CatchUpPolicy, AuthoritativeSession}` | Deterministic workout selection and policy facts |
 | `BurpeeTrainer.Coach.Policy.Week` | A training week as data: its target and catch-up days (the sign-up week is pro-rated with no catch-up); every weekly target reads it |
 | `BurpeeTrainer.Insights` / `BurpeeTrainer.Insights.*` | Computed metrics, validated LLM narration with deterministic fallback, and the narration job |
 | `BurpeeTrainer.Evals.*` / `mix burpee_trainer.eval` | Owner-run authoring evals with a mandatory call budget and response recording |
+| `BurpeeTrainer.Workouts.{Fatigue, SetBreakdown}` | How a camera session went inside it: fatigue against the beat, and each set's window, slack, fade and comparison with the last time (pure, property-tested) |
 | `BurpeeTrainer.PlanCompiler` and `BurpeeTrainer.PlanCompiler.*` | Validation and compilation of workout definitions into programs |
 | `BurpeeTrainer.Workouts` and `BurpeeTrainer.Workouts.*` | Workout library, Home selection (a starter until the first completed session, then the Steady 10 fallback), immutable session snapshots, completion, and pose capture persistence |
 | `BurpeeTrainer.Videos` / `BurpeeTrainer.Workouts.WorkoutVideo` | Video workout lookup and session sources |

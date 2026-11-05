@@ -7,7 +7,7 @@ defmodule BurpeeTrainer.Mcp.Sessions do
   alias BurpeeTrainer.{History, UserTime}
   alias BurpeeTrainer.Coach.AuthoritativeSession
   alias BurpeeTrainer.Stats.Series
-  alias BurpeeTrainer.Workouts.Fatigue
+  alias BurpeeTrainer.Workouts.{Fatigue, SetBreakdown}
 
   @types %{"six_count" => :six_count, "navy_seal" => :navy_seal}
   @capture_modes %{"tracked" => :tracked, "timed" => :timed, "logged" => :logged}
@@ -165,11 +165,17 @@ defmodule BurpeeTrainer.Mcp.Sessions do
   @doc "Only sessions the app counts as real: completed, from a plan, a video or a log."
   def authoritative(sessions), do: Enum.filter(sessions, &AuthoritativeSession.authoritative?/1)
 
-  @doc "A session as Claude reads it."
-  def encode(session, timezone) do
+  @doc """
+  A session as Claude reads it. With `sets: true` it also carries `sets`: each set's
+  window, reps and rep times (`Workouts.SetBreakdown`), an empty list without the camera.
+  """
+  def encode(session, timezone, opts \\ []) do
     reps = session.burpee_count_actual
     duration = session.duration_sec_actual
     measured? = is_integer(reps) and reps > 0 and is_integer(duration) and duration > 0
+    breakdown = SetBreakdown.for_session(session.cadence_ms, session.program_snapshot)
+    # The summaries need the camera to have caught the opening; the raw sets do not.
+    opening? = is_boolean(session.kept_up)
 
     %{
       "id" => session.id,
@@ -184,12 +190,16 @@ defmodule BurpeeTrainer.Mcp.Sessions do
       "duration_sec" => duration,
       "duration_sec_planned" => session.duration_sec_planned,
       "minutes_counted" => div(History.credited_seconds(session), 60),
-      "pace_sec" => if(measured?, do: Float.round(duration / reps, 2)),
+      "elapsed_pace_sec" => if(measured?, do: Float.round(duration / reps, 2)),
+      "active_pace_sec" => if(opening?, do: breakdown.active_pace_sec),
       "reps_per_20_min" =>
         if(measured?, do: hd(Series.progress([session]).points).normalized_reps),
       "pace_consistency" => session.pace_consistency,
       "sets_completed" => session.prescribed_sets_completed,
       "fatigue" => Fatigue.summary(session),
+      "window_slack" => if(opening?, do: breakdown.window_slack),
+      "fade" => if(opening?, do: breakdown.fade),
+      "restart" => if(opening?, do: breakdown.restart),
       "mood" => session.mood,
       "primary_limiter" => session.primary_limiter && to_string(session.primary_limiter),
       "preference" => session.preference_feedback && to_string(session.preference_feedback),
@@ -200,7 +210,48 @@ defmodule BurpeeTrainer.Mcp.Sessions do
       "note_pre" => session.note_pre,
       "note_post" => session.note_post
     }
+    |> then(fn encoded ->
+      if Keyword.get(opts, :sets, false),
+        do: Map.put(encoded, "sets", breakdown.sets),
+        else: encoded
+    end)
   end
+
+  @fields %{
+    "reps" => "count; reps done (camera-counted when capture_mode is tracked)",
+    "duration_sec" => "s; wall-clock length of the session, rests included",
+    "minutes_counted" => "min; what the session credits toward the weekly target",
+    "elapsed_pace_sec" =>
+      "s/rep; duration_sec / reps, rests included, so a workout with long rests reads slow",
+    "active_pace_sec" =>
+      "s/rep; per complete set, beep to last rep, summed over sets / their reps; rests " <>
+        "excluded; null without the camera",
+    "reps_per_20_min" => "reps; reps scaled to 20 minutes of elapsed time",
+    "pace_consistency" =>
+      "0..1; each set's evenness (1 - coefficient of variation of its rep intervals against " <>
+        "its planned beat), averaged over sets; null without the camera",
+    "sets_completed" => "count; planned sets fully covered by the reps done, in order",
+    "fatigue" => "camera-only; see burpee://fatigue-guide for every field",
+    "window_slack" =>
+      "camera-only; seconds of each set's window (work + following rest) left after its " <>
+        "last rep; runs_out_at_set projects the trend to zero; see burpee://fatigue-guide",
+    "fade" =>
+      "camera-only; within_set and across_sets are fractions slower (0.1 is 10%), pattern " <>
+        "names where the pace faded; see burpee://fatigue-guide",
+    "restart" =>
+      "camera-only; each set's first rep against its beat (negative is ahead): first_sec, " <>
+        "last_sec and trend_sec_per_set, positive is starting each set later",
+    "same_workout_last_time" =>
+      "get_session only; this session's sets against the last camera session of the same " <>
+        "workout: finish_change_sec negative is faster",
+    "sets" =>
+      "per set: planned window and seconds from the session start, reps counted, rep_times_sec " <>
+        "from the set's beep; see burpee://fatigue-guide",
+    "mood" => "-1 rough, 0 OK, 1 good"
+  }
+
+  @doc "What each non-obvious session field means, with its unit: a response's `fields`."
+  def fields, do: @fields
 
   def tags(tags) when is_binary(tags),
     do:

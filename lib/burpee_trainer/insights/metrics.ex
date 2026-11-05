@@ -5,15 +5,17 @@ defmodule BurpeeTrainer.Insights.Metrics do
   alias BurpeeTrainer.Coach.AuthoritativeSession
   alias BurpeeTrainer.Coach.Policy.Week
   alias BurpeeTrainer.Goals.Goal
+  alias BurpeeTrainer.Workouts.SetBreakdown
 
   @type id :: String.t()
-  @type numeric_unit :: :minutes | :reps | :weeks | :seconds | :percent | :days
-  # Levels are existing domain categories, not fabricated numeric ordinals.
+  @type numeric_unit :: :minutes | :reps | :weeks | :seconds | :percent | :days | :sets
+  # Levels and statuses are named categories, not fabricated numeric ordinals.
   @type metric ::
           %{value: number(), unit: numeric_unit(), label: String.t()}
-          | %{value: String.t(), unit: :level, label: String.t()}
+          | %{value: String.t(), unit: :level | :status, label: String.t()}
   @types [:six_count, :navy_seal]
-  @session_ids ~w[session.reps session.duration_min session.pace_sec]
+  # Facts about one session: the latest, or the one being narrated.
+  @session_prefixes ["session.", "same_workout."]
 
   @doc "Projects only session.* from the exact owned target; missing actual facts never borrow from history."
   @spec for_session(Scope.t(), [map()], [map()], map()) :: {:ok, map()} | {:error, atom()}
@@ -23,19 +25,37 @@ defmodule BurpeeTrainer.Insights.Metrics do
          %DateTime{} = at <- Map.get(target, :completed_at),
          {:ok, context} <- UserTime.context(user, at),
          {:ok, signed_up_on} <- UserTime.local_date(user.inserted_at, context.timezone) do
-      aggregates = for_scope(scope, sessions, goals, at) |> Map.drop(@session_ids)
+      aggregates = for_scope(scope, sessions, goals, at) |> Map.reject(&session_fact?/1)
+      key = sort_key(target)
+      earlier = Enum.filter(sessions, &(&1.user_id == user.id and sort_key(&1) < key))
 
       projected =
         compute([target], [], context.date, context.timezone, signed_up_on)
-        |> Map.take(@session_ids)
+        |> Map.filter(&session_fact?/1)
 
-      {:ok, Map.merge(aggregates, projected)}
+      # Against earlier sessions only when the target itself is a fact, so a target
+      # missing its actuals never borrows another session's comparison.
+      same_workout =
+        case rows([target | earlier], context.date, context.timezone) do
+          [%{id: id} = row | earlier_rows] when id == target.id ->
+            same_workout_metrics(row, earlier_rows)
+
+          _target_not_a_fact ->
+            %{}
+        end
+
+      {:ok, aggregates |> Map.merge(projected) |> Map.merge(same_workout)}
     else
       _ -> {:error, :invalid_target}
     end
   end
 
   def for_session(%Scope{}, _sessions, _goals, _target), do: {:error, :invalid_target}
+
+  defp session_fact?({id, _metric}), do: String.starts_with?(id, @session_prefixes)
+
+  defp sort_key(session),
+    do: {AuthoritativeSession.datetime_sort_key(session.completed_at), session.id}
 
   @spec for_scope(Scope.t(), [map()], [map()], DateTime.t()) :: map()
   def for_scope(%Scope{user: user}, sessions, goals, now) do
@@ -57,25 +77,13 @@ defmodule BurpeeTrainer.Insights.Metrics do
   @spec compute([map()], [map()], Date.t(), String.t(), Date.t()) :: %{String.t() => metric()}
   def compute(sessions, goals, %Date{} = today, timezone, %Date{} = signed_up_on) do
     {:ok, _} = UserTime.resolve_local(today, ~T[00:00:00], timezone)
-
-    rows =
-      for s <- sessions,
-          AuthoritativeSession.authoritative?(s),
-          is_integer(s.burpee_count_actual) and s.burpee_count_actual >= 0,
-          is_integer(s.duration_sec_actual) and s.duration_sec_actual >= 0,
-          s.burpee_type in @types,
-          {:ok, date} <- [UserTime.local_date(s.completed_at, timezone)],
-          Date.compare(date, today) != :gt,
-          do: Map.put(s, :completed_on, date)
+    rows = rows(sessions, today, timezone)
 
     start = Date.beginning_of_week(today)
     credited = Enum.reject(rows, &(Map.get(&1, :tags) == "warmup"))
     week = between(credited, start, today)
 
-    latest =
-      Enum.max_by(rows, &{AuthoritativeSession.datetime_sort_key(&1.completed_at), &1.id}, fn ->
-        nil
-      end)
+    latest = Enum.max_by(rows, &sort_key/1, fn -> nil end)
 
     base = %{
       "week.minutes" =>
@@ -94,8 +102,8 @@ defmodule BurpeeTrainer.Insights.Metrics do
       for type <- @types, reduce: %{} do
         acc ->
           typed = Enum.filter(credited, &(&1.burpee_type == type))
-          current = avg_pace(between(typed, start, today))
-          previous = avg_pace(between(typed, Date.add(start, -42), Date.add(start, -1)))
+          current = active_pace(between(typed, start, today))
+          previous = active_pace(between(typed, Date.add(start, -42), Date.add(start, -1)))
 
           acc =
             acc
@@ -120,11 +128,12 @@ defmodule BurpeeTrainer.Insights.Metrics do
             do:
               Map.put(
                 acc,
-                "pace.change_6w.#{type}",
+                "active_pace.change_6w.#{type}",
                 metric(
                   Float.round(current - previous, 1),
                   :seconds,
-                  "change in seconds per rep vs previous six weeks"
+                  "change in seconds per rep inside sets, rests excluded, camera sessions " <>
+                    "this week vs the previous six weeks; negative is faster"
                 )
               ),
             else: acc
@@ -184,7 +193,7 @@ defmodule BurpeeTrainer.Insights.Metrics do
   def format(%{value: value}) when is_float(value),
     do: :erlang.float_to_binary(value, decimals: 1)
 
-  def format(%{value: value, unit: :level}) when is_binary(value), do: value
+  def format(%{value: value}) when is_binary(value), do: value
 
   defp metric(value, unit, label), do: %{value: value, unit: unit, label: label}
   defp sum(rows, field), do: Enum.sum(Enum.map(rows, &Map.fetch!(&1, field)))
@@ -196,13 +205,35 @@ defmodule BurpeeTrainer.Insights.Metrics do
         &(Date.compare(&1.completed_on, from) != :lt and Date.compare(&1.completed_on, to) != :gt)
       )
 
-  defp avg_pace(rows) do
-    rows = Enum.filter(rows, &(&1.burpee_count_actual > 0 and &1.duration_sec_actual > 0))
+  # Seconds per rep inside sets over the camera sessions with complete sets: their time from
+  # each set's beep to its last rep, over their reps. Elapsed pace is no trend: it moves
+  # with how long the chosen workouts rest, and a timed session's is the plan's.
+  defp active_pace(rows) do
+    totals =
+      for row <- rows,
+          sets = camera_breakdown(row).sets,
+          set <- sets,
+          set["finish_sec"],
+          reduce: {0.0, 0} do
+        {seconds, reps} -> {seconds + set["finish_sec"], reps + set["reps"]}
+      end
 
-    if rows != [],
+    case totals do
+      {_seconds, 0} -> nil
+      {seconds, reps} -> seconds / reps
+    end
+  end
+
+  # Only a session whose camera caught the opening is broken down: otherwise its sets
+  # could be a camera that was not working, not the athlete.
+  defp camera_breakdown(session) do
+    if Map.get(session, :capture_mode) == :tracked and is_boolean(Map.get(session, :kept_up)),
       do:
-        Enum.sum(Enum.map(rows, &(&1.duration_sec_actual / &1.burpee_count_actual))) /
-          length(rows)
+        SetBreakdown.for_session(
+          Map.get(session, :cadence_ms),
+          Map.get(session, :program_snapshot)
+        ),
+      else: SetBreakdown.for_session(nil, nil)
   end
 
   # A week before the sign-up week was never a training week, so it has no last-week facts.
@@ -225,19 +256,192 @@ defmodule BurpeeTrainer.Insights.Metrics do
         metric(div(s.duration_sec_actual, 60), :minutes, "minutes last session")
     }
 
-    if s.burpee_count_actual > 0,
-      do:
-        Map.put(
-          base,
-          "session.pace_sec",
-          metric(
-            Float.round(s.duration_sec_actual / s.burpee_count_actual, 1),
-            :seconds,
-            "seconds per rep last session"
-          )
-        ),
-      else: base
+    base =
+      if s.burpee_count_actual > 0,
+        do:
+          Map.put(
+            base,
+            "session.elapsed_pace_sec",
+            metric(
+              Float.round(s.duration_sec_actual / s.burpee_count_actual, 1),
+              :seconds,
+              "seconds per rep last session, rests included"
+            )
+          ),
+        else: base
+
+    Map.merge(base, camera_metrics(s))
   end
+
+  defp camera_metrics(s) do
+    case {Map.get(s, :fatigue_coverage), Map.get(s, :kept_up)} do
+      {nil, _} ->
+        %{}
+
+      # The camera missed the opening: how the session went inside it is not known.
+      {coverage, nil} ->
+        %{"session.camera_coverage_pct" => coverage_metric(coverage)}
+
+      {coverage, kept_up} ->
+        breakdown = camera_breakdown(s)
+
+        %{
+          "session.camera_coverage_pct" => coverage_metric(coverage),
+          "session.kept_up" =>
+            metric(
+              if(kept_up, do: "kept up", else: "fell behind"),
+              :status,
+              "whether they stayed on or ahead of the beat to the end"
+            )
+        }
+        |> put_some(
+          "session.slip_at_min",
+          Map.get(s, :slip_at_sec),
+          &metric(Float.round(&1 / 60, 1), :minutes, "minute they fell behind the beat for good")
+        )
+        |> put_some(
+          "session.active_pace_sec",
+          breakdown.active_pace_sec,
+          &metric(Float.round(&1, 1), :seconds, "seconds per rep inside sets, rests excluded")
+        )
+        |> Map.merge(slack_metrics(breakdown.window_slack))
+        |> Map.merge(fade_metrics(breakdown.fade))
+        |> Map.merge(restart_metrics(breakdown.restart))
+    end
+  end
+
+  defp coverage_metric(coverage),
+    do: metric(round(coverage * 100), :percent, "share of planned reps the camera caught")
+
+  defp slack_metrics(nil), do: %{}
+
+  defp slack_metrics(slack) do
+    %{
+      "session.slack_first_sec" =>
+        metric(
+          Float.round(slack["first_sec"], 1),
+          :seconds,
+          "seconds left of the first set's window"
+        ),
+      "session.slack_last_sec" =>
+        metric(
+          Float.round(slack["last_sec"], 1),
+          :seconds,
+          "seconds left of the last measured set's window"
+        ),
+      "session.slack_trend_sec" =>
+        metric(
+          Float.round(slack["trend_sec_per_set"], 1),
+          :seconds,
+          "change in window left per set; negative is the window shrinking"
+        ),
+      "session.slack_sets" =>
+        metric(slack["sets_measured"], :sets, "sets behind the slack figures"),
+      "session.sets_planned" => metric(slack["sets_planned"], :sets, "sets the workout had")
+    }
+    |> put_some(
+      "session.slack_runs_out_at_set",
+      slack["runs_out_at_set"],
+      &metric(&1, :sets, "set at which the shrinking window, carried on, leaves no rest")
+    )
+  end
+
+  defp restart_metrics(nil), do: %{}
+
+  defp restart_metrics(restart) do
+    %{
+      "session.restart_trend_sec" =>
+        metric(
+          Float.round(restart["trend_sec_per_set"] / 1, 1),
+          :seconds,
+          "change per set in how late each set's first rep landed; positive is starting later"
+        )
+    }
+  end
+
+  @patterns %{
+    "none" => "held their pace",
+    "within_sets" => "slowed inside each set",
+    "across_sets" => "slowed from set to set",
+    "both" => "slowed inside sets and from set to set"
+  }
+
+  defp fade_metrics(nil), do: %{}
+
+  defp fade_metrics(fade) do
+    %{
+      "session.fade" =>
+        metric(Map.fetch!(@patterns, fade["pattern"]), :status, "where the pace faded")
+    }
+    |> put_some(
+      "session.within_set_slowdown_pct",
+      fade["within_set"],
+      &metric(round(&1 * 100), :percent, "how much slower the end of a set was than its start")
+    )
+    |> put_some(
+      "session.across_sets_slowdown_pct",
+      fade["across_sets"],
+      &metric(round(&1 * 100), :percent, "how much slower the last sets were than the first")
+    )
+  end
+
+  # Completed facts in the owner's calendar up to `today`, each with its local date.
+  defp rows(sessions, today, timezone) do
+    for s <- sessions,
+        AuthoritativeSession.authoritative?(s),
+        is_integer(s.burpee_count_actual) and s.burpee_count_actual >= 0,
+        is_integer(s.duration_sec_actual) and s.duration_sec_actual >= 0,
+        s.burpee_type in @types,
+        {:ok, date} <- [UserTime.local_date(s.completed_at, timezone)],
+        Date.compare(date, today) != :gt,
+        do: Map.put(s, :completed_on, date)
+  end
+
+  # The target against the latest earlier camera session of the same program. Each
+  # candidate is broken down only until one has sets.
+  defp same_workout_metrics(target, earlier) do
+    hash = Map.get(target, :content_hash)
+
+    previous =
+      if is_binary(hash) do
+        earlier
+        |> Enum.filter(&(Map.get(&1, :content_hash) == hash))
+        |> Enum.sort_by(&sort_key/1, :desc)
+        |> Enum.find_value(fn row ->
+          case camera_breakdown(row).sets do
+            [] -> nil
+            sets -> {row, sets}
+          end
+        end)
+      end
+
+    with {previous, previous_sets} <- previous,
+         %{} = change <- SetBreakdown.compare(camera_breakdown(target).sets, previous_sets) do
+      %{
+        "same_workout.finish_change_sec" =>
+          metric(
+            Float.round(change["finish_change_sec"] / 1, 1),
+            :seconds,
+            "median change in each set's finish vs the last time; negative is faster"
+          ),
+        "same_workout.sets_faster" =>
+          metric(change["sets_faster"], :sets, "sets finished faster than the last time"),
+        "same_workout.sets_compared" =>
+          metric(change["sets_compared"], :sets, "sets compared with the last time"),
+        "same_workout.days_since" =>
+          metric(
+            Date.diff(target.completed_on, previous.completed_on),
+            :days,
+            "days since the last time"
+          )
+      }
+    else
+      _ -> %{}
+    end
+  end
+
+  defp put_some(map, _id, nil, _build), do: map
+  defp put_some(map, id, value, build), do: Map.put(map, id, build.(value))
 
   defp streak(rows, start, signed_up_on) do
     totals =

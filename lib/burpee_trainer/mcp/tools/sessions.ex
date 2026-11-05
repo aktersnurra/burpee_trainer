@@ -264,3 +264,63 @@ defmodule BurpeeTrainer.Mcp.Tools.DeleteSession do
 
   def call(_, _, _), do: {:error, "delete_session takes a session id"}
 end
+
+defmodule BurpeeTrainer.Mcp.Tools.GetSession do
+  @behaviour BurpeeTrainer.Coach.Tool
+  alias BurpeeTrainer.Coach.{AuthoritativeSession, Tool}
+  alias BurpeeTrainer.Mcp.Sessions
+  alias BurpeeTrainer.Workouts
+  alias BurpeeTrainer.Workouts.SetBreakdown
+
+  def name, do: "get_session"
+
+  def description,
+    do:
+      "One completed session by id, in full: everything query_history returns, plus, for " <>
+        "camera sessions, each set's window, reps, finish, slack and rep times. `fields` " <>
+        "gives each field's unit and meaning; burpee://fatigue-guide defines fatigue, sets " <>
+        "and slack."
+
+  def schema, do: Tool.object(%{"id" => %{"type" => "integer", "minimum" => 1}}, ["id"])
+
+  def call(%{user: user} = scope, %{"id" => id} = args, _)
+      when is_integer(id) and map_size(args) == 1 do
+    case Workouts.get_session(scope, id) do
+      %{} = session ->
+        if AuthoritativeSession.authoritative?(session),
+          do:
+            {:ok,
+             %{
+               "session" =>
+                 session
+                 |> Sessions.encode(user.timezone, sets: true)
+                 |> Map.put("same_workout_last_time", last_time(scope, session, user.timezone)),
+               "fields" => Sessions.fields()
+             }},
+          else: {:error, "no completed session #{id} of the athlete's"}
+
+      nil ->
+        {:error, "no completed session #{id} of the athlete's"}
+    end
+  end
+
+  def call(_, _, _), do: {:error, "get_session takes a session id"}
+
+  # Only when the camera caught the opening of this session too: the earlier one's is
+  # checked by the query.
+  defp last_time(_scope, %{kept_up: nil}, _timezone), do: nil
+
+  defp last_time(scope, session, timezone) do
+    with %{} = previous <- Workouts.previous_same_program(scope, session),
+         current = SetBreakdown.for_session(session.cadence_ms, session.program_snapshot),
+         before = SetBreakdown.for_session(previous.cadence_ms, previous.program_snapshot),
+         %{} = change <- SetBreakdown.compare(current.sets, before.sets) do
+      Map.merge(change, %{
+        "session_id" => previous.id,
+        "date" => Sessions.local_date(previous.completed_at, timezone)
+      })
+    else
+      _ -> nil
+    end
+  end
+end

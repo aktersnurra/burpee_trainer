@@ -2,7 +2,7 @@ defmodule BurpeeTrainer.Mcp.Tools.HistoryStats do
   @behaviour BurpeeTrainer.Coach.Tool
   alias BurpeeTrainer.{History, Workouts}
   alias BurpeeTrainer.Coach.Tool
-  alias BurpeeTrainer.Mcp.{HistoryContext, HistorySummary, Sessions}
+  alias BurpeeTrainer.Mcp.{FeedbackFatigue, HistoryContext, HistorySummary, Sessions}
 
   @max_sessions 100_000
 
@@ -13,7 +13,10 @@ defmodule BurpeeTrainer.Mcp.Tools.HistoryStats do
       "Complete range summary with optional day, week (Monday first), or month periods. " <>
         "Actual seconds and reps, weekly credit, measurement coverage and per-type weighted pace. " <>
         "Weekly targets describe whole-week, all-type history, not the filtered cohort. " <>
-        "See burpee://analytics-guide for comparability and completeness rules."
+        "camera_by_feedback groups camera sessions by the athlete's feedback (limiter, " <>
+        "mood, energy, heat) with how often they kept up and their slack curves. " <>
+        "See burpee://analytics-guide for comparability and completeness rules and " <>
+        "burpee://fatigue-guide for the camera fields."
 
   def schema,
     do:
@@ -42,6 +45,7 @@ defmodule BurpeeTrainer.Mcp.Tools.HistoryStats do
          "group_by" => group_by,
          "summary" => HistorySummary.summarize(sessions, user.timezone),
          "periods" => periods(sessions, group_by, user.timezone, filters, targets),
+         "camera_by_feedback" => FeedbackFatigue.summarize(sessions),
          "context" =>
            HistoryContext.build(
              args,

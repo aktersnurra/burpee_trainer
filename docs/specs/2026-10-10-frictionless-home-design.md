@@ -100,7 +100,7 @@ owner arrives, and the owner never has to describe a workout just to get started
   metrics. No cron: owners who stop opening the app cost no provider calls.
 - The job computes metrics with `Insights.Metrics` plus per-goal trajectory metrics
   (`goal.<id>.best_reps`, `goal.<id>.target_reps`, `goal.<id>.days_left`, and the
-  existing `goal.<id>.progress_pct`, `pace.change_6w.<type>`, `streak.weeks`,
+  existing `goal.<id>.progress_pct`, `active_pace.change_6w.<type>`, `streak.weeks`,
   `level.<type>`). One `Client.chat/2` call with a strict schema
   `{"text": string ≤ 280, "metric_ids": [string]}` and ledger purpose `summary`.
 - The same validator rules as insights apply: every number in the text equals the

@@ -55,6 +55,17 @@ plan's intervals and its detections together leaves `decline` unchanged.
 - `Coach.Tools.History.summary/1` (planner context) and the MCP `query_history` session
   shape gain `kept_up`, `slip_at_sec`, `decline`, `coverage` when present.
 
+### Session insights
+
+The post-session insight's metrics (`Insights.Metrics`) carry the camera's view when it
+caught the opening: `session.kept_up` and `session.slip_at_min`, active pace, the slack
+curve (first, last, trend), where the pace faded (inside sets or from set to set,
+`SetBreakdown` `fade`), and `same_workout.*`: each set's finish against the last camera
+session of the same program. With only coverage, the insight says nothing about how the
+session went inside. The six-week pace trend is `active_pace.change_6w.<type>`, seconds
+per rep inside sets over camera sessions: elapsed pace moves with the rests chosen and a
+timed session's is the plan's, so it is no trend.
+
 ### Progression rule (planner prompt)
 
 - Kept up, mood fine: next time about +5 reps, or the same reps with shorter rests.
@@ -62,6 +73,12 @@ plan's intervals and its detections together leaves `decline` unchanged.
 - Slipped early or stopped: one step back.
 - No camera data: use reps and minutes done against planned, and mood. The planner's session
   summaries carry the planned reps and minutes for this.
+- Kept up, but the slack curve (`Workouts.SetBreakdown`: the window left after each set)
+  is shrinking and the last set had under a quarter of its rest left: repeat
+  (`slack_running_out`). It warns before the athlete falls behind.
+- Two successes with half the rest or more left in every set, shrinking by under a quarter
+  of a rest over the session: up to +8 reps instead of +5
+  (`repeated_success_with_headroom`).
 - Ending sessions with a few unpaced minutes, so the ceiling stays measured, waits for an
   unpaced work kind.
 

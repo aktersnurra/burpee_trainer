@@ -53,7 +53,7 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   The context that follows is JSON. goals: their active and proposed goals. current_level: the level they hold now. landmarks: the \
   reps each level needs in 20 minutes, per burpee type. recent_sessions: their latest \
   sessions first, with reps and reps_planned, duration_sec and duration_sec_planned, pace_sec \
-  (seconds per rep) and their feedback (mood: -1 rough, 0 OK, 1 good). \
+  (elapsed seconds per rep, rests included) and their feedback (mood: -1 rough, 0 OK, 1 good). \
   fatigue is null without the camera; camera_coverage is the share of planned reps it caught, \
   and when it missed the start that is all there is. kept_up: they stayed on or ahead of the \
   beat to the end (finishing a set early is keeping up); slip_at_sec: when they fell behind \
@@ -62,6 +62,14 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   ahead); recovery_delta_sec: median seconds later the first rep after a rest lands on its \
   beat than the workout's first rep did (positive is slower to restart). pace_consistency: how \
   even the reps inside each set were against its planned pace, 1 perfectly even. \
+  window_slack: seconds of each set's window (its work and the rest after it) left after \
+  its last rep, over the sets with a rest after them: first_sec, last_sec, min_sec, \
+  rest_sec, trend_sec_per_set (negative is the window shrinking as they tire), and \
+  runs_out_at_set, the set where that trend reaches zero, against sets_planned. restart: \
+  each set's first rep against its beat (negative is ahead); trend_sec_per_set positive is \
+  starting each set later. fade: \
+  within_set is how much slower the end of a set was than its start, across_sets how much \
+  slower the last sets were than the first (0.1 is 10%); pattern names which. \
   slot: their next session, with its burpee_type and duration_sec; strategy catch_up means \
   today's share of missed minutes across the remaining weekend days; completed_sec, remaining_sec and \
   weekly_target_sec describe this week's training time. progression: the deterministic rate \

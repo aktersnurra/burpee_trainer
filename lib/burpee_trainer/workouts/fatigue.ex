@@ -98,17 +98,29 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
   (string or atom keys). Every field is nil without detected reps or a program.
   """
   @spec for_session(String.t() | nil, map() | nil) :: t()
-  def for_session(cadence_json, program_snapshot)
-      when is_binary(cadence_json) and is_map(program_snapshot) do
-    with {:ok, [_ | _] = cadence} <- Jason.decode(cadence_json),
-         true <- Enum.all?(cadence, &(is_integer(&1) and &1 >= 0)) do
-      compute(cadence, snapshot_events(program_snapshot))
-    else
-      _ -> @empty
+  def for_session(cadence_json, program_snapshot) do
+    case decode(cadence_json, program_snapshot) do
+      {:ok, cadence, events} -> compute(cadence, events)
+      :error -> @empty
     end
   end
 
-  def for_session(_cadence_json, _program_snapshot), do: @empty
+  @doc """
+  A stored session's detected rep times (ms) and its program's events, as `compute/2`
+  takes them; `:error` without detected reps or a program.
+  """
+  @spec decode(String.t() | nil, map() | nil) :: {:ok, [non_neg_integer()], [map()]} | :error
+  def decode(cadence_json, program_snapshot)
+      when is_binary(cadence_json) and is_map(program_snapshot) do
+    with {:ok, [_ | _] = cadence} <- Jason.decode(cadence_json),
+         true <- Enum.all?(cadence, &(is_integer(&1) and &1 >= 0)) do
+      {:ok, cadence, snapshot_events(program_snapshot)}
+    else
+      _ -> :error
+    end
+  end
+
+  def decode(_cadence_json, _program_snapshot), do: :error
 
   defp snapshot_events(snapshot) do
     for event <- List.wrap(get(snapshot, :events)), is_map(event) do
@@ -210,21 +222,45 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
 
   defp ratio(slots), do: slots |> work_pairs() |> Enum.map(fn {a, p} -> a / p end) |> median()
 
-  # 1 minus the coefficient of variation of each rep's interval against its set's planned
-  # one: rests and a ladder's changing pace are the plan, not unevenness.
+  # How even each set was on its own: 1 minus the coefficient of variation of its reps'
+  # intervals against its planned one, averaged over sets weighted by their intervals.
+  # Rests, a ladder's changing pace and a set run ahead of the beat at an even pace are
+  # the athlete's choice or the plan, not unevenness.
   defp consistency(matched) do
-    case matched |> work_pairs() |> Enum.map(fn {a, p} -> a / p end) do
-      [_, _ | _] = ratios ->
-        mean = Enum.sum(ratios) / length(ratios)
-        sd = :math.sqrt(Enum.sum(Enum.map(ratios, &((&1 - mean) ** 2))) / length(ratios))
-        round3(min(max(1 - sd / mean, 0.0), 1.0))
+    per_set =
+      matched
+      |> Enum.chunk_every(2, 1, :discard)
+      |> Enum.flat_map(fn
+        [%{t: a, set: s}, %{t: b, set: s, interval: i}] when is_number(a) and is_number(b) ->
+          [{s, (b - a) / i}]
 
-      _too_few ->
+        _other ->
+          []
+      end)
+      |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+      |> Map.values()
+      |> Enum.filter(&match?([_, _ | _], &1))
+
+    case per_set do
+      [] ->
         nil
+
+      sets ->
+        weighted = Enum.map(sets, &{evenness(&1), length(&1)})
+        total = weighted |> Enum.map(&elem(&1, 1)) |> Enum.sum()
+        round3(Enum.sum(Enum.map(weighted, fn {e, n} -> e * n end)) / total)
     end
   end
 
+  defp evenness(ratios) do
+    mean = Enum.sum(ratios) / length(ratios)
+    sd = :math.sqrt(Enum.sum(Enum.map(ratios, &((&1 - mean) ** 2))) / length(ratios))
+    min(max(1 - sd / mean, 0.0), 1.0)
+  end
+
   # Lag is net of the opening segment, since everyone lands some fixed time after the beep.
+  # A rep ahead of its beat lags by nothing: running ahead early and settling onto the beat
+  # later is keeping up, not slipping.
   # The slip starts at the first segment from which every later segment slipped too.
   defp slip_at(matched) do
     [opening | _] = segments = segments(matched)
@@ -261,7 +297,9 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
       (is_number(lag) and lag - baseline > @slip_lag_sec)
   end
 
-  defp lags(segment), do: for(%{t: t, at: at} <- segment, is_number(t), do: t - at)
+  defp lags(segment), do: for(%{t: t, at: at} <- segment, is_number(t), do: lag(t, at))
+
+  defp lag(t, at), do: max(t - at, 0.0)
 
   # How late the first rep after a rest lands on its beat, net of how late the workout's
   # first rep landed after the same count-in; not the gap from the set before, which
@@ -269,30 +307,17 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
   defp recovery_delta(matched) do
     reaction =
       case Enum.find(matched, &is_number(&1.t)) do
-        %{t: t, at: at, set: 0} -> t - at
+        %{t: t, at: at, set: 0} -> lag(t, at)
         _other -> 0.0
       end
 
     for %{t: t, at: at, first?: true, rest_before: r} <- matched, is_number(t) and r > 0 do
-      t - at - reaction
+      lag(t, at) - reaction
     end
     |> median()
   end
 
-  defp median([]), do: nil
-
-  defp median(values) do
-    sorted = Enum.sort(values)
-    n = length(sorted)
-    mid = div(n, 2)
-
-    value =
-      if rem(n, 2) == 1,
-        do: Enum.at(sorted, mid),
-        else: (Enum.at(sorted, mid - 1) + Enum.at(sorted, mid)) / 2
-
-    round3(value)
-  end
+  defp median(values), do: values |> BurpeeTrainer.Stats.Median.of() |> round3()
 
   defp round3(nil), do: nil
   defp round3(value), do: Float.round(value / 1, 3)

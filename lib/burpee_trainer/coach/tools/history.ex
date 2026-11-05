@@ -3,7 +3,7 @@ defmodule BurpeeTrainer.Coach.Tools.History do
   alias BurpeeTrainer.Coach.{Tool, AuthoritativeSession}
   import Ecto.Query
   alias BurpeeTrainer.{Repo, Accounts.Scope}
-  alias BurpeeTrainer.Workouts.{Fatigue, WorkoutSession}
+  alias BurpeeTrainer.Workouts.{Fatigue, SetBreakdown, WorkoutSession}
   def name, do: "history"
   def description, do: "Completed session summaries for 1 to 26 weeks."
 
@@ -35,8 +35,10 @@ defmodule BurpeeTrainer.Coach.Tools.History do
 
   def call(_, _, _), do: {:error, "weeks must be an integer from 1 to 26"}
 
-  def summary(s),
-    do: %{
+  def summary(s) do
+    camera = camera(s)
+
+    %{
       "date" => DateTime.to_iso8601(s.completed_at),
       "type" => Atom.to_string(s.burpee_type),
       "reps" => s.burpee_count_actual,
@@ -49,6 +51,16 @@ defmodule BurpeeTrainer.Coach.Tools.History do
           else: nil
         ),
       "feedback" => Map.take(s, [:mood, :primary_limiter, :preference_feedback]),
-      "fatigue" => Fatigue.summary(s)
+      "fatigue" => Fatigue.summary(s),
+      "window_slack" => camera.window_slack,
+      "fade" => camera.fade,
+      "restart" => camera.restart
     }
+  end
+
+  # Only when the camera caught the opening, as `Fatigue.summary/1` is.
+  defp camera(%{kept_up: kept_up} = s) when is_boolean(kept_up),
+    do: SetBreakdown.for_session(s.cadence_ms, s.program_snapshot)
+
+  defp camera(_s), do: SetBreakdown.for_session(nil, nil)
 end

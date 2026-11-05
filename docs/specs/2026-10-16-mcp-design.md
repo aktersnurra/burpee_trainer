@@ -57,6 +57,7 @@ Deletes are their own tools and never side effects of something else.
 |---|---|
 | `get_week` | this week's minutes against 80, the window (done and left), streak, level |
 | `query_history` | sessions matching filters (below), newest first, paged |
+| `get_session` | one completed session by id, with its sets (below) |
 | `history_stats` | per-week or per-month totals for the same filters (below) |
 | `get_progress` | the gauges and per-type trend Progress shows |
 | `list_memory` / `update_memory` | the coach's memory, two bounded parts; batches of add/patch/remove through `Memory.write/3`, the in-app coach's own tool (`2026-10-30-coach-memory-design.md`) |
@@ -77,9 +78,22 @@ too.
 `query_history` filters on any of: date range (`from`, `to`, local dates), `burpee_type`,
 `workout` (plan id or name), `tags` (any of), `capture_mode` (tracked, timed, logged),
 `min_reps` / `max_reps`. Each session returns date, type, workout name, reps planned and
-done, minutes planned and done, pace, reps per 20 minutes, pace consistency, sets
-completed, mood, limiter, preference, context flags, tags and both notes. Pages of 50 with
-a cursor; no cap on how far back.
+done, minutes planned and done, elapsed pace (`elapsed_pace_sec`, rests included) and
+active pace (`active_pace_sec`, beep to last rep of each complete set), reps per 20
+minutes, pace consistency, sets completed, mood, limiter, preference, context flags, tags
+and both notes, and for camera sessions `fatigue` and `window_slack`. Pages of 50 with a
+cursor; no cap on how far back. Every response carries `fields`: each non-obvious field's
+unit and meaning, so a reply reads correctly without a glossary.
+
+`include_sets` (and `get_session` always) adds `sets`: per planned set, its window (beep
+to next beep), reps counted, finish against the plan, slack (window left after the last
+rep) and rep times, from `Workouts.SetBreakdown` over the stored `cadence_ms` and program
+snapshot. The resource `burpee://fatigue-guide` (`docs/guides/mcp-fatigue.md`) defines
+every fatigue, set and slack field: unit, sign, what it is compared against, when null.
+`get_session` adds `same_workout_last_time` (each set's finish against the last camera
+session of the same program), sessions carry `fade` (inside sets or from set to set), and
+`history_stats` carries `camera_by_feedback` (`Mcp.FeedbackFatigue`): camera sessions
+grouped by limiter, mood, energy and heat, with how often they kept up and their slack.
 
 `history_stats` groups the same filters by `week` or `month` and returns, per period and
 type: sessions, minutes, reps, best reps per 20 minutes, average pace, and whether the
