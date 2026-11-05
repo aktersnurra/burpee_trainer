@@ -519,7 +519,8 @@ defmodule BurpeeTrainer.Mcp.HistoryToolsTest do
           ["rest_sec", "fade", "within_set", "across_sets", "pattern"] ++
           ["same_workout_last_time", "sets_compared", "sets_faster", "finish_change_sec"] ++
           ["camera_by_feedback", "kept_up_share", "median_slack_trend_sec_per_set"] ++
-          ["median_slack_last_share_of_rest", "median_decline", "slack_sessions"]
+          ["median_slack_last_share_of_rest", "median_decline", "slack_sessions"] ++
+          ["restart", "runs_out_at_set", "sets_planned"]
 
       for key <- Enum.uniq(keys), do: assert(text =~ "`#{key}`", "#{key} is not defined")
     end

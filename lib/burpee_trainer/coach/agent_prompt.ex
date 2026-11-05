@@ -64,7 +64,10 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   even the reps inside each set were against its planned pace, 1 perfectly even. \
   window_slack: seconds of each set's window (its work and the rest after it) left after \
   its last rep, over the sets with a rest after them: first_sec, last_sec, min_sec, \
-  rest_sec, and trend_sec_per_set (negative is the window shrinking as they tire). fade: \
+  rest_sec, trend_sec_per_set (negative is the window shrinking as they tire), and \
+  runs_out_at_set, the set where that trend reaches zero, against sets_planned. restart: \
+  each set's first rep against its beat (negative is ahead); trend_sec_per_set positive is \
+  starting each set later. fade: \
   within_set is how much slower the end of a set was than its start, across_sets how much \
   slower the last sets were than the first (0.1 is 10%); pattern names which. \
   slot: their next session, with its burpee_type and duration_sec; strategy catch_up means \

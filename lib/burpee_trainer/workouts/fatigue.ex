@@ -222,18 +222,40 @@ defmodule BurpeeTrainer.Workouts.Fatigue do
 
   defp ratio(slots), do: slots |> work_pairs() |> Enum.map(fn {a, p} -> a / p end) |> median()
 
-  # 1 minus the coefficient of variation of each rep's interval against its set's planned
-  # one: rests and a ladder's changing pace are the plan, not unevenness.
+  # How even each set was on its own: 1 minus the coefficient of variation of its reps'
+  # intervals against its planned one, averaged over sets weighted by their intervals.
+  # Rests, a ladder's changing pace and a set run ahead of the beat at an even pace are
+  # the athlete's choice or the plan, not unevenness.
   defp consistency(matched) do
-    case matched |> work_pairs() |> Enum.map(fn {a, p} -> a / p end) do
-      [_, _ | _] = ratios ->
-        mean = Enum.sum(ratios) / length(ratios)
-        sd = :math.sqrt(Enum.sum(Enum.map(ratios, &((&1 - mean) ** 2))) / length(ratios))
-        round3(min(max(1 - sd / mean, 0.0), 1.0))
+    per_set =
+      matched
+      |> Enum.chunk_every(2, 1, :discard)
+      |> Enum.flat_map(fn
+        [%{t: a, set: s}, %{t: b, set: s, interval: i}] when is_number(a) and is_number(b) ->
+          [{s, (b - a) / i}]
 
-      _too_few ->
+        _other ->
+          []
+      end)
+      |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+      |> Map.values()
+      |> Enum.filter(&match?([_, _ | _], &1))
+
+    case per_set do
+      [] ->
         nil
+
+      sets ->
+        weighted = Enum.map(sets, &{evenness(&1), length(&1)})
+        total = weighted |> Enum.map(&elem(&1, 1)) |> Enum.sum()
+        round3(Enum.sum(Enum.map(weighted, fn {e, n} -> e * n end)) / total)
     end
+  end
+
+  defp evenness(ratios) do
+    mean = Enum.sum(ratios) / length(ratios)
+    sd = :math.sqrt(Enum.sum(Enum.map(ratios, &((&1 - mean) ** 2))) / length(ratios))
+    min(max(1 - sd / mean, 0.0), 1.0)
   end
 
   # Lag is net of the opening segment, since everyone lands some fixed time after the beep.

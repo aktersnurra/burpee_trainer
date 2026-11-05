@@ -199,6 +199,7 @@ defmodule BurpeeTrainer.Mcp.Sessions do
       "fatigue" => Fatigue.summary(session),
       "window_slack" => if(opening?, do: breakdown.window_slack),
       "fade" => if(opening?, do: breakdown.fade),
+      "restart" => if(opening?, do: breakdown.restart),
       "mood" => session.mood,
       "primary_limiter" => session.primary_limiter && to_string(session.primary_limiter),
       "preference" => session.preference_feedback && to_string(session.preference_feedback),
@@ -227,16 +228,19 @@ defmodule BurpeeTrainer.Mcp.Sessions do
         "excluded; null without the camera",
     "reps_per_20_min" => "reps; reps scaled to 20 minutes of elapsed time",
     "pace_consistency" =>
-      "0..1; 1 - coefficient of variation of in-set rep intervals against the plan; null " <>
-        "without the camera",
+      "0..1; each set's evenness (1 - coefficient of variation of its rep intervals against " <>
+        "its planned beat), averaged over sets; null without the camera",
     "sets_completed" => "count; planned sets fully covered by the reps done, in order",
     "fatigue" => "camera-only; see burpee://fatigue-guide for every field",
     "window_slack" =>
       "camera-only; seconds of each set's window (work + following rest) left after its " <>
-        "last rep; see burpee://fatigue-guide",
+        "last rep; runs_out_at_set projects the trend to zero; see burpee://fatigue-guide",
     "fade" =>
       "camera-only; within_set and across_sets are fractions slower (0.1 is 10%), pattern " <>
         "names where the pace faded; see burpee://fatigue-guide",
+    "restart" =>
+      "camera-only; each set's first rep against its beat (negative is ahead): first_sec, " <>
+        "last_sec and trend_sec_per_set, positive is starting each set later",
     "same_workout_last_time" =>
       "get_session only; this session's sets against the last camera session of the same " <>
         "workout: finish_change_sec negative is faster",

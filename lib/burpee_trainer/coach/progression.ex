@@ -7,7 +7,8 @@ defmodule BurpeeTrainer.Coach.Progression do
   # Slack, the window left after each set, warns before the athlete falls behind: a last
   # set with under a quarter of its rest left, on a shrinking curve, is close to the
   # ceiling. Half the rest left in every set, shrinking by under a quarter of a rest over
-  # the session, is headroom for a bigger step.
+  # the session, is headroom for a bigger step. A curve that, carried on, reaches zero
+  # within the workout's own sets is close to the ceiling too.
   @running_out_share 0.25
   @headroom_share 0.5
 
@@ -128,8 +129,10 @@ defmodule BurpeeTrainer.Coach.Progression do
 
   defp slack_running_out?(session) do
     case slack(session) do
-      %{"trend_sec_per_set" => trend, "last_sec" => last, "rest_sec" => rest} ->
-        trend < 0 and last < rest * @running_out_share
+      %{"trend_sec_per_set" => trend, "last_sec" => last, "rest_sec" => rest} = slack ->
+        (trend < 0 and last < rest * @running_out_share) or
+          (is_integer(slack["runs_out_at_set"]) and
+             slack["runs_out_at_set"] <= slack["sets_planned"])
 
       nil ->
         false

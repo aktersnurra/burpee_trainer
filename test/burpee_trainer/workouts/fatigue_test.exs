@@ -168,6 +168,17 @@ defmodule BurpeeTrainer.Workouts.FatigueTest do
     assert uneven.consistency < 0.9
   end
 
+  property "a set run evenly ahead of the beat is as even as one on it" do
+    check all({sets, reps, spr, rest} <- shape(), ahead <- float(min: 0.1, max: 0.4)) do
+      lag = fn set, rep -> if set == 0, do: -rep * ahead * spr, else: 0.0 end
+
+      fatigue =
+        Fatigue.compute(on_beat(sets, reps, spr, rest, lag), program(sets, reps, spr, rest))
+
+      assert fatigue.consistency == 1.0
+    end
+  end
+
   test "finishing the last set early is not falling behind" do
     # Ten sets of fifteen every 6 s with 30 s rests, the last done 12 s ahead of its end.
     ahead = fn set, rep -> if set == 9, do: -rep * 0.8, else: 0.0 end

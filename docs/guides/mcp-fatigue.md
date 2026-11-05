@@ -21,7 +21,7 @@ count-in, the same clock for every field.
 |---|---|---|---|
 | `elapsed_pace_sec` | s/rep | `duration_sec / reps`: wall-clock time per rep, **rests included**. A workout with long rests reads slow even when every set was fast. | no reps or no duration |
 | `active_pace_sec` | s/rep | Over the complete sets, seconds from each set's beep to its last rep, summed, divided by their reps. **Rests excluded.** Compare with the plan's seconds per rep. | no camera, or no set complete |
-| `pace_consistency` | 0..1 | 1 minus the coefficient of variation of each in-set rep interval divided by its planned interval. 1 is perfectly even; rests and planned pace changes are not unevenness. | no camera, or fewer than two in-set intervals |
+| `pace_consistency` | 0..1 | Each set's evenness, 1 minus the coefficient of variation of its rep intervals divided by its planned interval, averaged over sets weighted by their intervals. 1 is perfectly even; rests, planned pace changes and a set run evenly ahead of the beat are not unevenness. | no camera, or fewer than two in-set intervals |
 
 ## `fatigue`
 
@@ -73,6 +73,7 @@ plus any rest after it. A rep belongs to the window it was counted in.
 | `finish_vs_plan_sec` | s | last rep against `work_end_sec`; negative is finished early | set incomplete |
 | `slack_sec` | s | `window_end_sec` minus the last rep: what was left of the window to recover in | set incomplete |
 | `active_pace_sec` | s/rep | `finish_sec / reps` | set incomplete |
+| `first_rep_vs_beat_sec` | s | the first counted rep against its beat; negative is ahead | no rep counted |
 | `rep_times_sec` | s from the set's beep | when each counted rep finished | never (empty when none) |
 
 A set is complete when the camera counted at least `reps_planned` reps in its window.
@@ -91,12 +92,27 @@ rest is all work. Null with fewer than two such sets.
 | `min_sec` / `median_sec` | s | smallest and median slack |
 | `rest_sec` | s | median planned rest after the measured sets: read `last_sec` against it |
 | `trend_sec_per_set` | s per set | least-squares slope of slack on set number; negative is the window shrinking as they tire |
+| `sets_planned` | count | sets in the workout |
+| `runs_out_at_set` | set number | where the fitted slack line reaches zero, carried on past the workout if need be: an estimate of the ceiling without falling behind. At or below `sets_planned`, the curve runs out inside this workout. Null when slack is not shrinking or fewer than four sets were measured |
 
 The planner reads the same curve. A last set with under a quarter of its rest left,
 on a shrinking curve, holds the next session at the same reps (`slack_running_out`)
-even when they kept up. Half the rest or more left in every set, shrinking by under
+even when they kept up, and so does a curve whose `runs_out_at_set` is within the
+workout's own sets. Half the rest or more left in every set, shrinking by under
 a quarter of a rest over the session, after two successful sessions, allows a bigger
 step (`repeated_success_with_headroom`).
+
+## `restart`
+
+How each set's first rep lands against its beat, set by set: starting later as they
+tire is a different signal from slowing inside a set. Null with fewer than two sets
+with a first rep counted, or when the camera missed the start.
+
+| Field | Unit | Meaning |
+|---|---|---|
+| `sets_measured` | count | sets with a first rep counted |
+| `first_sec` / `last_sec` | s | `first_rep_vs_beat_sec` of the first and last of them; negative is ahead |
+| `trend_sec_per_set` | s per set | least-squares slope; positive is starting each set later |
 
 ## `fade`
 

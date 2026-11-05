@@ -23,10 +23,14 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
           sets: [map()],
           active_pace_sec: float() | nil,
           window_slack: map() | nil,
-          fade: map() | nil
+          fade: map() | nil,
+          restart: map() | nil
         }
 
-  @empty %{sets: [], active_pace_sec: nil, window_slack: nil, fade: nil}
+  @empty %{sets: [], active_pace_sec: nil, window_slack: nil, fade: nil, restart: nil}
+
+  # Fewer measured sets than this give a line too noisy to project from.
+  @min_projection_sets 4
 
   @doc "A stored session's breakdown, from its `cadence_ms` JSON and program snapshot."
   @spec for_session(String.t() | nil, map() | nil) :: t()
@@ -55,7 +59,8 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
           sets: sets,
           active_pace_sec: active_pace(sets),
           window_slack: window_slack(sets),
-          fade: fade(sets)
+          fade: fade(sets),
+          restart: restart(sets)
         }
     end
   end
@@ -121,6 +126,8 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
       "finish_vs_plan_sec" => if(complete?, do: round2(last - window.work_end)),
       "slack_sec" => if(complete?, do: round2(window.window_end - last)),
       "active_pace_sec" => if(complete?, do: round2((last - window.start) / counted)),
+      "first_rep_vs_beat_sec" =>
+        if(counted > 0, do: round2(hd(window.times) - window.start - window.spr)),
       "rep_times_sec" => Enum.map(window.times, &round2(&1 - window.start))
     }
   end
@@ -152,7 +159,9 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
           "min_sec" => Enum.min(slack),
           "median_sec" => median(slack),
           "rest_sec" => median(Enum.map(measured, & &1["rest_after_sec"])),
-          "trend_sec_per_set" => slope(Enum.map(measured, &{&1["set"], &1["slack_sec"]}))
+          "trend_sec_per_set" => slope(Enum.map(measured, &{&1["set"], &1["slack_sec"]})),
+          "sets_planned" => length(sets),
+          "runs_out_at_set" => runs_out(Enum.map(measured, &{&1["set"], &1["slack_sec"]}))
         }
 
       _too_few ->
@@ -258,14 +267,47 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
     end
   end
 
-  # Least-squares slope of slack on set number.
-  defp slope(points) do
+  # The set at which the slack line, carried on, reaches zero: nil when it is not shrinking
+  # or too few sets were measured to draw it.
+  defp runs_out(points) when length(points) >= @min_projection_sets do
+    case fit(points) do
+      {slope, intercept} when slope < 0 -> max(ceil(-intercept / slope), 1)
+      _flat_or_rising -> nil
+    end
+  end
+
+  defp runs_out(_points), do: nil
+
+  # How the first rep of each set lands against its beat (negative is ahead), and how that
+  # moves from set to set: positive is starting each set later as they tire.
+  defp restart(sets) do
+    case Enum.filter(sets, & &1["first_rep_vs_beat_sec"]) do
+      [_, _ | _] = measured ->
+        points = Enum.map(measured, &{&1["set"], &1["first_rep_vs_beat_sec"]})
+
+        %{
+          "sets_measured" => length(measured),
+          "first_sec" => hd(measured)["first_rep_vs_beat_sec"],
+          "last_sec" => List.last(measured)["first_rep_vs_beat_sec"],
+          "trend_sec_per_set" => slope(points)
+        }
+
+      _too_few ->
+        nil
+    end
+  end
+
+  # Least-squares slope of y on set number.
+  defp slope(points), do: points |> fit() |> elem(0) |> round2()
+
+  defp fit(points) do
     n = length(points)
     mean_x = (points |> Enum.map(&elem(&1, 0)) |> Enum.sum()) / n
     mean_y = (points |> Enum.map(&elem(&1, 1)) |> Enum.sum()) / n
     sxx = points |> Enum.map(fn {x, _} -> (x - mean_x) ** 2 end) |> Enum.sum()
     sxy = points |> Enum.map(fn {x, y} -> (x - mean_x) * (y - mean_y) end) |> Enum.sum()
-    round2(sxy / sxx)
+    slope = sxy / sxx
+    {slope, mean_y - slope * mean_x}
   end
 
   defp median(values) do

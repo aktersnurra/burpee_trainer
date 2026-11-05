@@ -312,6 +312,7 @@ defmodule BurpeeTrainer.Insights.Metrics do
         )
         |> Map.merge(slack_metrics(breakdown.window_slack))
         |> Map.merge(fade_metrics(breakdown.fade))
+        |> Map.merge(restart_metrics(breakdown.restart))
     end
   end
 
@@ -341,7 +342,26 @@ defmodule BurpeeTrainer.Insights.Metrics do
           "change in window left per set; negative is the window shrinking"
         ),
       "session.slack_sets" =>
-        metric(slack["sets_measured"], :sets, "sets behind the slack figures")
+        metric(slack["sets_measured"], :sets, "sets behind the slack figures"),
+      "session.sets_planned" => metric(slack["sets_planned"], :sets, "sets the workout had")
+    }
+    |> put_some(
+      "session.slack_runs_out_at_set",
+      slack["runs_out_at_set"],
+      &metric(&1, :sets, "set at which the shrinking window, carried on, leaves no rest")
+    )
+  end
+
+  defp restart_metrics(nil), do: %{}
+
+  defp restart_metrics(restart) do
+    %{
+      "session.restart_trend_sec" =>
+        metric(
+          Float.round(restart["trend_sec_per_set"] / 1, 1),
+          :seconds,
+          "change per set in how late each set's first rep landed; positive is starting later"
+        )
     }
   end
 

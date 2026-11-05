@@ -51,7 +51,8 @@ defmodule BurpeeTrainer.Coach.Tools.History do
       "feedback" => Map.take(s, [:mood, :primary_limiter, :preference_feedback]),
       "fatigue" => Fatigue.summary(s),
       "window_slack" => camera(s, :window_slack),
-      "fade" => camera(s, :fade)
+      "fade" => camera(s, :fade),
+      "restart" => camera(s, :restart)
     }
 
   # Only when the camera caught the opening, as `Fatigue.summary/1` is.

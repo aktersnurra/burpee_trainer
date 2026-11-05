@@ -51,6 +51,8 @@ defmodule BurpeeTrainer.Workouts.SetBreakdownTest do
       assert Enum.all?(measured, &(abs(&1["slack_sec"] - rest) < 0.01))
       assert abs(result.active_pace_sec - spr) < 0.01
       assert abs(result.window_slack["trend_sec_per_set"]) < 0.01
+      assert result.window_slack["runs_out_at_set"] == nil
+      assert abs(result.restart["trend_sec_per_set"]) < 0.01
     end
   end
 
@@ -98,7 +100,7 @@ defmodule BurpeeTrainer.Workouts.SetBreakdownTest do
   end
 
   test "without detected reps or a program there is nothing to break down" do
-    empty = %{sets: [], active_pace_sec: nil, window_slack: nil, fade: nil}
+    empty = %{sets: [], active_pace_sec: nil, window_slack: nil, fade: nil, restart: nil}
     assert SetBreakdown.for_session(nil, %{"events" => []}) == empty
     assert SetBreakdown.for_session("[1000]", nil) == empty
   end
@@ -153,5 +155,34 @@ defmodule BurpeeTrainer.Workouts.SetBreakdownTest do
 
     other = SetBreakdown.compute(reps(3, 4, 4.0, 30, fn _ -> 0 end), program(3, 4, 4.0, 30)).sets
     assert SetBreakdown.compare(now, other) == nil
+  end
+
+  property "a steadily shrinking window projects to the set where it would run out" do
+    check all({sets, reps, spr, rest} <- shape(), sets >= 5) do
+      # Each set finishes later by the same amount, so slack reaches zero half a set after
+      # the last one.
+      step = rest / (sets - 0.5)
+
+      result =
+        SetBreakdown.compute(
+          reps(sets, reps, spr, rest, &(-step * &1)),
+          program(sets, reps, spr, rest)
+        )
+
+      assert result.window_slack["runs_out_at_set"] == sets + 1
+      assert result.window_slack["sets_planned"] == sets
+    end
+  end
+
+  test "starting each set later shows in the restart trend" do
+    cadence = [4_000, 8_000, 12_000, 47_000, 50_000, 54_000, 90_000, 94_000, 96_000]
+    restart = SetBreakdown.compute(cadence, program(3, 3, 4.0, 30)).restart
+
+    assert restart == %{
+             "sets_measured" => 3,
+             "first_sec" => +0.0,
+             "last_sec" => 2.0,
+             "trend_sec_per_set" => 1.0
+           }
   end
 end
