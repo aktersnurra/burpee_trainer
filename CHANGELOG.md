@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-05 — Fewer dev dependencies
+
+- **Supply chain**: dev tools run on the machine that holds the commit-signing key, so `mix ci` keeps only long-established ones, `credo --strict` and Dialyzer. VibeKit, ExSlop, ExDNA and Reach (young, one maintainer), and `igniter` and `usage_rules` (installers nothing calls any more) are removed with their eight transitive dependencies. AGENTS.md keeps the Elixir, OTP and Phoenix rules as plain text.
+- **Credo**: the three functions from camera fatigue that broke `mix ci` are split up: session encoding, the within-set fade and the same-workout comparison.
+
 ## 2026-11-05 — The session runner at night
 
 - **Night**: camera setup and the runner are the app turned inside out, ink ground and paper numbers. Completion review stays light. Play grows its ink from the pill to the screen; Back from camera setup shrinks it back into Play.

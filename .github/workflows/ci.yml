@@ -31,8 +31,8 @@ jobs:
           restore-keys: |
             mix-${{ runner.os }}-otp28.5-elixir1.20.4-
       - run: mix deps.get
-      # Compile with warnings as errors, format, tests, Credo, Dialyzer, ExDNA
-      # and Reach: the checks a change must pass before it is done.
+      # Compile with warnings as errors, format, tests, Credo and Dialyzer: the
+      # checks a change must pass before it is done.
       - run: mix ci
       - uses: actions/setup-node@v4
         with:

@@ -193,23 +193,7 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
   defp fade(sets) do
     complete = Enum.filter(sets, & &1["finish_sec"])
 
-    within =
-      complete
-      |> Enum.flat_map(fn set ->
-        case intervals(set["rep_times_sec"]) do
-          [_, _, _ | _] = gaps ->
-            {early, late} = Enum.split(gaps, div(length(gaps), 2))
-
-            case mean(early) do
-              base when base > 0 -> [mean(Enum.take(late, -length(early))) / base - 1]
-              _two_reps_counted_at_once -> []
-            end
-
-          _too_few ->
-            []
-        end
-      end)
-      |> median3()
+    within = complete |> Enum.flat_map(&within_set_fade/1) |> median3()
 
     across =
       with third when third > 0 <- div(length(complete), 3),
@@ -222,6 +206,22 @@ defmodule BurpeeTrainer.Workouts.SetBreakdown do
 
     if within || across do
       %{"within_set" => within, "across_sets" => across, "pattern" => pattern(within, across)}
+    end
+  end
+
+  defp within_set_fade(set) do
+    case intervals(set["rep_times_sec"]) do
+      [_, _, _ | _] = gaps -> second_half_slowdown(gaps)
+      _too_few -> []
+    end
+  end
+
+  defp second_half_slowdown(gaps) do
+    {early, late} = Enum.split(gaps, div(length(gaps), 2))
+
+    case mean(early) do
+      base when base > 0 -> [mean(Enum.take(late, -length(early))) / base - 1]
+      _two_reps_counted_at_once -> []
     end
   end
 

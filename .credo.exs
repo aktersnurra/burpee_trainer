@@ -1,4 +1,4 @@
-# Credo, strict, with ExSlop's checks (from VibeKit).
+# Credo, strict.
 #
 # Baseline: when this gate was adopted (2026-10-17) these files already broke these checks.
 # Each check skips only the files listed for it; every other file, and every new file,
@@ -196,41 +196,6 @@ baseline = %{
   ],
   Credo.Check.Warning.UnusedEnumOperation => [
     "test/burpee_trainer/coach/rest_fitter_test.exs"
-  ],
-  ExSlop.Check.Refactor.IdentityPassthrough => [
-    "lib/burpee_trainer/workouts.ex"
-  ],
-  ExSlop.Check.Refactor.LengthComparison => [
-    "lib/burpee_trainer/coach/client.ex",
-    "lib/burpee_trainer/coach/policy.ex",
-    "lib/burpee_trainer/coach/workout_request.ex",
-    "lib/burpee_trainer/insights/validator.ex",
-    "test/burpee_trainer/accounts_test.exs",
-    "test/burpee_trainer/coach/memory/ops_test.exs",
-    "test/burpee_trainer/coach/plan_next_workout_job_test.exs",
-    "test/burpee_trainer/e2e_library_setup_test.exs",
-    "test/burpee_trainer/history_test.exs",
-    "test/burpee_trainer/insights/narrate_job_test.exs",
-    "test/burpee_trainer/mcp/workout_tools_test.exs",
-    "test/burpee_trainer/workouts/inspection_test.exs",
-    "test/burpee_trainer/workouts/recent_training_sessions_test.exs",
-    "test/burpee_trainer_web/flows/planned_next_workout_flow_test.exs",
-    "test/burpee_trainer_web/live/home_day_boundary_test.exs",
-    "test/burpee_trainer_web/live/home_live_test.exs",
-    "test/burpee_trainer_web/live/summary_refresh_test.exs",
-    "test/mix/tasks/eval_scenarios_test.exs"
-  ],
-  ExSlop.Check.Warning.DualKeyAccess => [
-    "lib/burpee_trainer/workouts.ex"
-  ],
-  ExSlop.Check.Warning.PathExpandPriv => [
-    "test/burpee_trainer/coach_memory_retirement_migration_test.exs",
-    "test/burpee_trainer/coach_settings_retirement_migration_test.exs",
-    "test/burpee_trainer/schema_migration_test.exs",
-    "test/burpee_trainer/starter_workouts_migration_test.exs"
-  ],
-  ExSlop.Check.Warning.RepoAllThenFilter => [
-    "lib/burpee_trainer/coach/policy.ex"
   ]
 }
 
@@ -238,12 +203,8 @@ baseline = %{
   configs: [
     %{
       name: "default",
-      plugins: [{ExSlop, []}],
       checks:
-        [
-          {Credo.Check.Design.AliasUsage, false},
-          {ExSlop.Check.Readability.NarratorDoc, false}
-        ] ++
+        [{Credo.Check.Design.AliasUsage, false}] ++
           Enum.map(baseline, fn {check, files} -> {check, files: %{excluded: files}} end)
     }
   ]

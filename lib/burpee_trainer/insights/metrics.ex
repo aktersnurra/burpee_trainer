@@ -400,22 +400,8 @@ defmodule BurpeeTrainer.Insights.Metrics do
   # The target against the latest earlier camera session of the same program. Each
   # candidate is broken down only until one has sets.
   defp same_workout_metrics(target, earlier) do
-    hash = Map.get(target, :content_hash)
-
-    previous =
-      if is_binary(hash) do
-        earlier
-        |> Enum.filter(&(Map.get(&1, :content_hash) == hash))
-        |> Enum.sort_by(&sort_key/1, :desc)
-        |> Enum.find_value(fn row ->
-          case camera_breakdown(row).sets do
-            [] -> nil
-            sets -> {row, sets}
-          end
-        end)
-      end
-
-    with {previous, previous_sets} <- previous,
+    with {previous, previous_sets} <-
+           previous_camera_run(Map.get(target, :content_hash), earlier),
          %{} = change <- SetBreakdown.compare(camera_breakdown(target).sets, previous_sets) do
       %{
         "same_workout.finish_change_sec" =>
@@ -437,6 +423,22 @@ defmodule BurpeeTrainer.Insights.Metrics do
       }
     else
       _ -> %{}
+    end
+  end
+
+  defp previous_camera_run(hash, earlier) when is_binary(hash) do
+    earlier
+    |> Enum.filter(&(Map.get(&1, :content_hash) == hash))
+    |> Enum.sort_by(&sort_key/1, :desc)
+    |> Enum.find_value(&with_sets/1)
+  end
+
+  defp previous_camera_run(_hash, _earlier), do: nil
+
+  defp with_sets(row) do
+    case camera_breakdown(row).sets do
+      [] -> nil
+      sets -> {row, sets}
     end
   end
 
