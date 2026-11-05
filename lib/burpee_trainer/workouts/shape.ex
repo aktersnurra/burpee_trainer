@@ -1,23 +1,22 @@
 defmodule BurpeeTrainer.Workouts.Shape do
   @moduledoc """
-  Pure: a workout's shape in one line, for an athlete who reads it at a glance: its sets,
-  how often a rep starts, and the rest between sets, such as `5 × 3 · every 8s · 4:30 rest`.
-  A value that varies reads as its range. Rest is the whole pause between two sets: the
-  tail of the last rep's beat and any rest after it, as the table shows it.
+  Pure: a workout's structure as a plain sentence, for an athlete who reads it at a glance:
+  its sets and the rest between them, such as `5 sets of 3 · 4:30 rest`. A workout with no
+  rest reads as its beat, `One rep every 27 s, all the way`. A value that varies reads as its
+  range. Rest is the whole pause between two sets: the tail of the last rep's beat and any
+  rest after it, as the table shows it.
   """
 
   @spec describe(map()) :: String.t() | nil
   def describe(%{"events" => events}) when is_list(events) do
-    sets = sets(events)
-
-    case sets do
+    case sets(events) do
       [] ->
         nil
 
       sets ->
-        [count(sets), every(sets), rest(sets)]
-        |> Enum.reject(&is_nil/1)
-        |> Enum.join(" · ")
+        if Enum.any?(events, &(&1["kind"] == "rest")),
+          do: [count(sets), rest(sets)] |> Enum.reject(&is_nil/1) |> Enum.join(" · "),
+          else: "One rep every #{every(sets)} s, all the way"
     end
   end
 
@@ -54,17 +53,17 @@ defmodule BurpeeTrainer.Workouts.Shape do
 
   defp count(sets) do
     case sets |> Enum.map(& &1.work["reps"]) |> Enum.uniq() do
-      [reps] -> "#{length(sets)} × #{reps}"
+      [reps] -> "#{length(sets)} sets of #{reps}"
       reps -> "#{length(sets)} sets of #{Enum.min(reps)}–#{Enum.max(reps)}"
     end
   end
 
-  defp every(sets) do
-    case sets |> Enum.map(&round(&1.work["sec_per_rep"] * 1_000)) |> Enum.uniq() do
-      [cadence] -> "every #{seconds(cadence)}s"
-      cadences -> "every #{seconds(Enum.min(cadences))}–#{seconds(Enum.max(cadences))}s"
-    end
-  end
+  # The beat as it is felt: to a tenth under ten seconds, else to the second.
+  defp every(sets),
+    do: sets |> Enum.map(&beat(&1.work["sec_per_rep"])) |> Enum.uniq() |> range(&seconds/1)
+
+  defp beat(seconds) when seconds < 10, do: round(seconds * 10) * 100
+  defp beat(seconds), do: round(seconds) * 1_000
 
   # The rests between sets; the last set's pause is the end, not a rest.
   defp rest(sets) do
@@ -76,7 +75,9 @@ defmodule BurpeeTrainer.Workouts.Shape do
   end
 
   defp range([value], format), do: format.(value)
-  defp range(values, format), do: format.(Enum.min(values)) <> "–" <> format.(Enum.max(values))
+
+  defp range(values, format),
+    do: format.(Enum.min(values)) <> "–" <> format.(Enum.max(values))
 
   defp seconds(ms) when rem(ms, 1_000) == 0, do: "#{div(ms, 1_000)}"
   defp seconds(ms), do: :erlang.float_to_binary(ms / 1_000, [:short])

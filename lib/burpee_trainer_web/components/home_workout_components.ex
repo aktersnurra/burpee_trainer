@@ -101,11 +101,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               id="home-shape"
               class="home-shape"
             >
-              {shape(@state.home_selection.plan)}<span
-                :if={best(@state)}
-                id="home-best"
-                class="home-best"
-              > · best {best(@state)} in 20 min</span>
+              {shape(@state.home_selection.plan)}
             </p>
             <p
               :if={@state.home_selection.rationale && @state.authoring_stage == :idle}
@@ -471,7 +467,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               phx-click={row.count > 1 && "toggle_group"}
               phx-value-id={row.count > 1 && row.id}
             >
-              <th scope="row" class={changed?(@changes, row.id, :label) && "home-changed"}>
+              <th scope="row">
                 <button
                   :if={row.count > 1}
                   id={"#{row.id}-toggle"}
@@ -548,7 +544,6 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     units = shared_units(row)
 
     %{
-      label: if(row.count > 1, do: "#{row.count}", else: "#{row.kind}"),
       reps: Enum.map(units, &work_value(&1, "reps")),
       every: Enum.map(units, &cadence/1),
       move: if(show_move?, do: Enum.map(units, &pace/1), else: []),
@@ -556,22 +551,15 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     }
   end
 
-  defp changed_cells(_now, nil), do: MapSet.new([:label, :reps, :every, :move, :rest])
+  defp changed_cells(_now, nil), do: MapSet.new([:reps, :every, :move, :rest])
 
   defp changed_cells(now, was),
     do: now |> Map.keys() |> Enum.reject(&(now[&1] == was[&1])) |> MapSet.new()
-
-  defp changed?(changes, row_id, cell),
-    do: changes |> Map.get(row_id, MapSet.new()) |> MapSet.member?(cell)
 
   attr(:value, :string, required: true)
   attr(:was, :string, required: true)
 
   defp shape(plan), do: BurpeeTrainer.Workouts.Shape.describe(plan.definition_json)
-
-  # The athlete's best for this burpee type, per 20 minutes, to read today's reps against.
-  defp best(state),
-    do: state |> Map.get(:home_bests, %{}) |> Map.get(state.home_selection.plan.burpee_type)
 
   defp shared_units(row), do: Enum.take(row.units, div(length(row.units), row.count))
 

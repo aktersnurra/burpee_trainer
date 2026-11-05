@@ -154,8 +154,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#home-edit-form #home-edit-send[aria-label=Send]")
     refute has_element?(view, "#home-chat-actions")
 
-    # Back leaves without a change.
-    assert has_element?(view, "#home-request-abort[aria-label='Cancel edit'] .hero-chevron-down")
+    # Close leaves without a change.
+    assert has_element?(view, "#home-request-abort[aria-label=Close]")
     view |> element("#home-request-abort") |> render_click()
     refute has_element?(view, "#home-studio")
     assert has_element?(view, ".home-workout-actions #home-action")
@@ -260,10 +260,10 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
       end)
 
     assert source["definition"]["target_reps"] == 140
-    # The proposal arrives as a card below the ask, with what changed marked in its table.
+    # The proposal takes the workout's place below the ask, with what changed marked in its table.
     assert has_element?(view, "#studio-thread #home-design-ask", instruction)
     assert has_element?(view, "#studio-proposal .studio-card-totals", "150 reps")
-    assert has_element?(view, "#studio-source:not(:has(table))")
+    refute has_element?(view, "#studio-source")
     assert has_element?(view, "#home-edit-review #home-inspection table")
     assert has_element?(view, "#home-edit-review td.home-changed.home-prescription-reps", "75")
 
@@ -271,11 +271,7 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     # nothing saves a proposal without running it.
     refute has_element?(view, "#home-request-edit")
 
-    assert has_element?(
-             view,
-             "#home-edit-review #home-request-run.studio-pill-primary",
-             "Run"
-           )
+    assert has_element?(view, "#home-edit-review #home-request-run[aria-label=Run]")
 
     refute has_element?(view, "#home-request-save")
     refute has_element?(view, "#home-chat-dock #home-request-run")

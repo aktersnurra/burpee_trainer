@@ -7,6 +7,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   use BurpeeTrainerWeb, :html
 
   alias BurpeeTrainer.Coach.NewDefaults
+  alias BurpeeTrainer.Workouts.Shape
 
   alias BurpeeTrainerWeb.{CreationParameters, HomeWorkoutComponents}
 
@@ -50,9 +51,9 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   attr(:state, :map, required: true)
 
   # Back: from a proposal on screen, home with it as today's workout; otherwise out of Edit and
-  # out of New's form, and from New's request in flight back to the form.
+  # out of New's form, and from New's request in flight back to the form. Edit's is a Close.
   defp header(assigns) do
-    assigns = assign(assigns, back: back(assigns.state))
+    assigns = assign(assigns, back: back(assigns.state), close?: edit?(assigns.state))
 
     ~H"""
     <header class="studio-header">
@@ -62,13 +63,20 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         class="studio-back"
         data-vt={@back.vt}
         data-vt-from={@back.id == "home-request-keep" && "#studio-proposal .studio-card-name"}
-        aria-label={@back.label}
-        title="Back"
+        aria-label={if(@close?, do: "Close", else: @back.label)}
+        title={if(@close?, do: "Close", else: "Back")}
         phx-click={@back.click}
       >
-        <%!-- Edit and New rise over Home, so leaving them points down; a step back in New points back. --%>
+        <%!-- Edit closes; New rises over Home, so leaving it points down, and a step back in New
+             points back. --%>
         <.icon
-          name={if(@back.vt == "drop", do: "hero-chevron-down", else: "hero-chevron-left")}
+          name={
+            cond do
+              @close? -> "hero-x-mark"
+              @back.vt == "drop" -> "hero-chevron-down"
+              true -> "hero-chevron-left"
+            end
+          }
           class="size-5"
         />
       </button>
@@ -115,15 +123,16 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     assigns = assign(assigns, proposed?: proposed?, asked?: asked?)
 
     ~H"""
-    <li class="studio-msg studio-coach">
+    <%!-- One workout on screen: today's until you ask, then only what the coach makes of it. --%>
+    <li :if={not @asked?} class="studio-msg studio-coach">
       <.card
         id="studio-source"
         name={@state.home_selection.plan.name}
         seconds={@state.home_selection.plan.target_duration_sec}
         reps={@state.home_selection.plan.target_reps}
+        shape={Shape.describe(@state.home_selection.plan.definition_json)}
         rows={@state.inspection_rows}
         expanded={@state.expanded_groups}
-        table?={not @asked?}
       />
     </li>
     <.proposal_thread :if={@asked?} state={@state} />
@@ -199,6 +208,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         seconds={@definition["target_duration_sec"]}
         reps={@definition["target_reps"]}
         note={@definition["rationale"]}
+        shape={Shape.describe(@definition)}
         rows={@state.review_inspection_rows}
         compare={compare(@state)}
         was={was(@state)}
@@ -220,8 +230,10 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           class="studio-pill studio-pill-primary"
           phx-click="run_workout_request"
           disabled={@state.busy?}
+          aria-label="Run"
+          title="Run"
         >
-          <.icon name="hero-play-solid" class="size-4" /> Run
+          <.icon name="hero-play-solid" class="size-6" />
         </button>
       </div>
     </div>
@@ -238,13 +250,18 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   defp was(state) do
     case Map.get(state, :previous) do
-      %{reps: reps, seconds: seconds} ->
-        %{reps: reps, seconds: seconds}
+      %{reps: reps, seconds: seconds, definition: definition} ->
+        %{reps: reps, seconds: seconds, shape: Shape.describe(definition)}
 
       nil ->
         if edit?(state) do
           plan = state.home_selection.plan
-          %{reps: plan.target_reps, seconds: plan.target_duration_sec}
+
+          %{
+            reps: plan.target_reps,
+            seconds: plan.target_duration_sec,
+            shape: Shape.describe(plan.definition_json)
+          }
         end
     end
   end
@@ -265,15 +282,22 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   attr(:seconds, :any, required: true)
   attr(:reps, :any, required: true)
   attr(:note, :string, default: nil)
+  attr(:shape, :string, default: nil)
   attr(:rows, :list, default: [])
   attr(:compare, :any, default: nil)
   attr(:was, :map, default: nil)
   attr(:expanded, :any, default: MapSet.new())
-  attr(:table?, :boolean, default: true)
 
-  # A workout, as the coach shows it: its name, its totals as two chips, a line on
-  # why, and the table when it is the one being discussed.
+  # A workout, as the coach shows it: its name, its totals, a line on why, its structure as a
+  # sentence (with the one it replaced struck through when that changed), and its table.
   defp card(assigns) do
+    assigns =
+      assign(assigns,
+        was_shape:
+          changed?(assigns.was, :shape, assigns.shape) &&
+            was_shape(assigns.was.shape, assigns.shape)
+      )
+
     ~H"""
     <article id={@id} class="studio-card">
       <h2 class="studio-card-name">{@name}</h2>
@@ -289,8 +313,12 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           <.diff changed?={changed?(@was, :reps, @reps)} was={@was && @was.reps} now={@reps} /> reps
         </span>
       </p>
-      <p :if={@note && @table?} class="studio-card-note">{@note}</p>
-      <div :if={@table?} class="studio-card-table">
+      <p :if={@note} class="studio-card-note">{@note}</p>
+      <p :if={@shape} class="home-shape">
+        {@shape}
+        <s :if={@was_shape} class="diff-was">was {@was_shape}</s>
+      </p>
+      <div class="studio-card-table">
         <HomeWorkoutComponents.inspection
           rows={@rows}
           compare={@compare}
@@ -303,6 +331,12 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   defp changed?(nil, _key, _value), do: false
   defp changed?(was, key, value), do: Map.get(was, key) != value
+
+  # The first part of the old sentence the new one no longer says: `5 sets of 3`.
+  defp was_shape(was, now) do
+    parts = String.split(now, " · ")
+    was |> String.split(" · ") |> Enum.find(&(&1 not in parts))
+  end
 
   attr(:changed?, :boolean, required: true)
   attr(:was, :any, required: true)

@@ -709,9 +709,8 @@ button.home-summary:hover .home-workout-name {
 #home-ready-recommendation .home-hero { padding: 0; border: 0; text-align: center; }
 #home-ready-recommendation .home-workout-name { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
 #home-ready-recommendation .home-workout-totals { font-size: var(--text-body); }
-/* The shape and the athlete's best: one quiet line, numbers aligned for a glance. */
-.home-shape { margin: 6px 0 0; color: var(--muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; text-align: center; }
-.home-best { white-space: nowrap; }
+/* The structure as a sentence, under the totals, numbers aligned for a glance. */
+.home-shape { margin: 10px 0 0; color: var(--ink); font-size: var(--text-small); font-variant-numeric: tabular-nums; text-align: center; }
 #home-ready-recommendation .home-hero-main { display: block; }
 #home-ready-recommendation .home-summary { width: 100%; margin: 0; padding: 0; text-align: center; }
 #home-ready-recommendation .home-eyebrow { display: none; }
@@ -786,9 +785,8 @@ button.home-summary:hover .home-workout-name {
 /* The diff: what a proposal changed. The old value struck through in grey, the new one on a soft
    cobalt highlight that hugs it; a changed cell's value keeps its place in the column. */
 :is(.adaptive-home, .studio) .diff-was { color: var(--muted); text-decoration: line-through; }
-:is(.adaptive-home, .studio) :is(.diff-now, td.home-changed > span, th.home-changed > span) { padding: 0 4px; border-radius: 3px; background: color-mix(in srgb, var(--cobalt) 16%, transparent); color: var(--ink); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+:is(.adaptive-home, .studio) :is(.diff-now, td.home-changed > span) { padding: 0 4px; border-radius: 3px; background: color-mix(in srgb, var(--cobalt) 16%, transparent); color: var(--ink); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 :is(.adaptive-home, .studio) td.home-changed > span { width: fit-content; margin: 0 -4px 0 auto; }
-:is(.adaptive-home, .studio) th.home-changed > span { margin-left: -4px; }
 /* The table scrolls sideways, so it gives the highlight room at its edges without moving a column. */
 :is(.adaptive-home, .studio) #home-inspection:has(.home-changed) { max-width: 648px; margin-inline: -4px; padding-inline: 4px; }
 /* New's title lands exactly where the open workout's title was. */

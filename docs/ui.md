@@ -16,8 +16,8 @@
 - **For someone who knows it.** The athlete knows the app: no hint lines, no canned replies (the
   coach's suggestions under a proposal are its guesses about this workout, not boilerplate),
   no subtitles that explain a choice, and no number said twice on one screen. Density beats
-  explanation: a workout's shape reads in one line (`5 × 3 · every 8s · 4:30 rest`), with their
-  best beside it.
+  explanation: a workout's structure reads as one plain sentence (`5 sets of 3 · 4:30 rest`;
+  `One rep every 27 s, all the way` when it has no rest).
 - **Hierarchy through scale and weight**, not color and decoration.
 - **Warm light, always.** Quiet stone carries the app; there is no dark mode.
 - **A colour means one thing.** Ink and greys carry the app; the few colours (2) each say one
@@ -174,8 +174,9 @@ Home's content does (`--gutter`), and a docked box is as wide as the column, not
   title all centre at the same height (`--top`, 32px on a phone and 48px wide, less half the
   44px button), so nothing jumps between views.
 - One workout block: a workout reads the same wherever it shows (Home, Edit, a proposal, Resume):
-  its name at the title size, `20 min · 15 reps` in one muted line, its sets in Home's table, and
-  under it the filled pill, centred, in Home's 354px column.
+  its name at the title size, `20 min · 15 reps` in one muted line, its structure as a sentence
+  in small ink type (`Workouts.Shape`), its sets in Home's table, and under it the filled pill,
+  centred, in Home's 354px column.
 - One row: a one-line row (a set, a session of the week) is 52px; a two-line row (a workout in
   the drawer, a session in Progress) has 14px above and below. Every row ends in a `--line`.
 - One tab: body size, muted, the chosen one in ink over a 1.5px ink line, 24px apart (Progress's
@@ -229,11 +230,11 @@ Edit and New are the studio, a full-screen chat on the same page and gutter as H
 the bottom like the sheet grown to the full screen, and drop away the same way. They are never a
 sheet: a conversation needs the screen above the keyboard, and a stray pull must not throw it away.
 
-- **Header**: a 44px Back in the corner, nothing else. Edit and New rise over Home, so Back
-  points down (⌄); the one step back inside New (from a request in flight to its form) points
-  left. The title is the workout itself: in Edit its name, large, under the bar (the heading is
+- **Header**: a 44px button in the corner, nothing else. Edit's is Close (x-mark). New rises
+  over Home, so its Back points down (⌄); the one step back inside New (from a request in flight
+  to its form) points left. The title is the workout itself: in Edit its name, large, under the bar (the heading is
   for screen readers); in New "New workout" in the same type and place. With a
-  proposal on screen Back keeps it: it is saved and made today's workout, the studio drops away and
+  proposal on screen Close (or New's Back) keeps it: it is saved and made today's workout, the studio drops away and
   the proposal's name settles into Home's title (Run still starts it at once). Otherwise Back is
   one step back, and out of the first. A drawer or sheet is closed with an x-mark, since it
   covers part of Home rather than replacing it. Where a screen's own head leads back (Progress's
@@ -241,9 +242,13 @@ sheet: a conversation needs the screen above the keyboard, and a stray pull must
 - **Messages**: the coach's plain on the left, yours in soft bubbles on the right (one bubble,
   `--bubble`, in the studio and the coach chat alike). A workout
   reads as on Home, with no card: its name centred at the title size, minutes and reps one muted
-  line, why, then the table in body size. A proposal is marked against the one it replaced
-  (Edit's first, against the workout): a changed total shows the diff (2), the old number
-  struck through and the new one highlighted, and a changed cell is highlighted. Sets read by number (`1–4`, `5`), rests as clocks (`4:30`).
+  line, why, its structure sentence, then the table in body size. One workout is on screen at a
+  time: Edit opens on today's, and once you ask, your words stand at the top and only the
+  proposal follows. A proposal is marked against the one it replaced (Edit's first, against the
+  workout): a changed total shows the diff (2), the old number struck through and the new one
+  highlighted; a changed structure is followed by `was 5 sets of 3` struck through in grey; a
+  changed Reps, Every, Move or Rest cell is highlighted (never the Set column). Sets read by
+  number (`1–4`, `5`), rests as clocks (`4:30`).
 - **New's form** is big numbers (`.studio-form-hero`): the burpee as two words centred, the
   chosen one in ink; duration and reps as 64px centred numbers with their unit under them and a
   plain 52px step either side that keeps stepping while held; a hint under each in small muted
@@ -256,8 +261,8 @@ sheet: a conversation needs the screen above the keyboard, and a stray pull must
   edge), and go while the coach works; a tap sends one as a follow-up.
 - **Words on pills**: the studio is a conversation, so its actions are words on pills (the one
   filled ink pill per view is the way on: Run, Create workout), where the rest of the app
-  uses icons (4a2). Run keeps its play mark and uses Home's camera and warmup choices; the studio
-  has no toggles of its own.
+  uses icons (4a2). Run is Home's play pill, the mark alone (labelled "Run"), and uses Home's
+  camera and warmup choices; the studio has no toggles of its own.
 
 A screen's seldom-used extra is an icon beside what it belongs to, opening a sheet (`.home-sheet`,
 `.home-sheet-backdrop`, a grip, closed by the backdrop or Escape): the coach's memory is a bookmark

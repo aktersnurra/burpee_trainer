@@ -79,7 +79,12 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     render_async(view, 2_000)
 
     assert has_element?(view, "#home-edit-review #studio-proposal", "Independent new workout")
-    assert has_element?(view, "#home-edit-review #home-chat-actions #home-request-run", "Run")
+
+    assert has_element?(
+             view,
+             "#home-edit-review #home-chat-actions #home-request-run[aria-label=Run]"
+           )
+
     # The camera and warmup choices are Home's; the chat has none of its own.
     refute has_element?(view, "#home-studio #home-start-camera, #home-studio #home-start-warmup")
     assert Repo.aggregate(WorkoutPlan, :count) == count

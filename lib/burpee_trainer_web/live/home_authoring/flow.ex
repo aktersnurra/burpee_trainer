@@ -202,7 +202,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     do: %{
       rows: rows,
       reps: definition["target_reps"],
-      seconds: round(definition["target_duration_sec"])
+      seconds: round(definition["target_duration_sec"]),
+      definition: definition
     }
 
   defp snapshot(_m), do: nil

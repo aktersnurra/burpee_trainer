@@ -76,24 +76,8 @@ defmodule BurpeeTrainerWeb.HomeFirstUseTest do
     assert has_element?(view, "#home-action")
   end
 
-  test "the workout reads as its shape, beside the best for its burpee type", %{
-    conn: conn,
-    user: user
-  } do
+  test "the workout reads as its structure in a sentence", %{conn: conn} do
     {:ok, view, _html} = live(conn, ~p"/")
-    assert has_element?(view, "#home-shape", "every")
-    refute has_element?(view, "#home-best")
-
-    for type <- ["six_count", "navy_seal"] do
-      free_form_session_fixture(user, %{
-        burpee_type: type,
-        burpee_count_actual: 40,
-        duration_sec_actual: 1_200,
-        completed_at: DateTime.add(DateTime.utc_now(:second), -3, :day)
-      })
-    end
-
-    {:ok, view, _html} = live(conn, ~p"/")
-    assert has_element?(view, "#home-best", "best 40 in 20 min")
+    assert has_element?(view, "#home-shape", "sets of")
   end
 end
