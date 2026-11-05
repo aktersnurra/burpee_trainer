@@ -27,6 +27,21 @@ function flowAnnouncement(state) {
 	return null;
 }
 
+const PAUSE_CHOICES = {
+	finish: {
+		id: "#finish-early-btn",
+		label: "Finish early",
+		armedLabel: "Tap again to finish",
+		question: "Finish early? What you've done is kept. Tap again to finish.",
+	},
+	abort: {
+		id: "#session-abort-btn",
+		label: "Abort workout",
+		armedLabel: "Tap again to abort",
+		question: "Abort workout? It won't be saved. Tap again to abort.",
+	},
+};
+
 export class SessionRenderer {
 	constructor(root) {
 		this.root = root;
@@ -313,22 +328,32 @@ export class SessionRenderer {
 		else if (wasVisible) this.root.querySelector("#session-discard-btn")?.focus();
 	}
 
-	// Abort follows the app's delete pattern: the first tap arms it, the second aborts.
-	armAbort(armed) {
-		const abort = this.root.querySelector("#session-abort-btn");
-		if (!abort) return;
-		const wasArmed = abort.getAttribute("aria-pressed") === "true";
-		abort.setAttribute("aria-pressed", armed ? "true" : "false");
-		abort.setAttribute("aria-label", armed ? "Tap again to abort" : "Abort workout");
-		abort.setAttribute("title", armed ? "Tap again to abort" : "Abort workout");
-		if (armed) {
+	// Paused, Finish early and Abort each ask before they act: the first tap arms one (`kind`
+	// "finish" or "abort"), whose question takes the title's and the pause mark's place while it
+	// stands alone in the middle; the second tap acts. `null` lets go.
+	armPauseChoice(kind) {
+		const was = this.armedPauseChoice();
+		for (const [choice, { id, label, armedLabel }] of Object.entries(PAUSE_CHOICES)) {
+			const button = this.root.querySelector(id);
+			if (!button) continue;
+			const armed = kind === choice;
+			button.setAttribute("aria-pressed", armed ? "true" : "false");
+			button.setAttribute("aria-label", armed ? armedLabel : label);
+			button.setAttribute("title", armed ? armedLabel : label);
+			button.toggleAttribute("inert", Boolean(kind) && !armed);
+		}
+		this.setSurfaceData("armed", kind);
+		if (kind) {
 			this.showAbortError(null);
-			if (!wasArmed) this.announce("Tap again to abort");
+			if (was !== kind) this.announce(PAUSE_CHOICES[kind].question);
 		}
 	}
 
-	abortArmed() {
-		return this.root.querySelector("#session-abort-btn")?.getAttribute("aria-pressed") === "true";
+	armedPauseChoice() {
+		for (const [choice, { id }] of Object.entries(PAUSE_CHOICES)) {
+			if (this.root.querySelector(id)?.getAttribute("aria-pressed") === "true") return choice;
+		}
+		return null;
 	}
 
 	showAbortError(text) {
@@ -338,9 +363,9 @@ export class SessionRenderer {
 		error.hidden = !text;
 	}
 
-	// Resuming lets go of an armed abort, without moving focus.
-	resetAbort() {
-		this.armAbort(false);
+	// Resuming lets go of an armed choice, without moving focus.
+	resetPauseChoice() {
+		this.armPauseChoice(null);
 		this.showAbortError(null);
 	}
 

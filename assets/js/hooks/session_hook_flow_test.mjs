@@ -375,6 +375,7 @@ function buildHarness({
 	const finishEarly = new FakeElement("button");
 	finishEarly.id = "finish-early-btn";
 	finishEarly.setAttribute("disabled", "disabled");
+	finishEarly.setAttribute("aria-pressed", "false");
 	pauseChoices.append(finishEarly);
 	for (const [id, tag] of [
 		["session-abort-btn", "button"],
@@ -401,9 +402,9 @@ function buildHarness({
 		enterWorkPhase() {},
 		updateCurrentSetRepCount() {},
 		pulseCounted() {},
-		armAbort() {},
-		abortArmed() {
-			return false;
+		armPauseChoice() {},
+		armedPauseChoice() {
+			return null;
 		},
 		updateWorkFill() {},
 		enterRestPhase() {},
@@ -412,7 +413,7 @@ function buildHarness({
 			renderedModels.push(model);
 		},
 		updatePauseButton() {},
-		resetAbort() {},
+		resetPauseChoice() {},
 		clearTimers() {},
 		clearCountdown() {},
 		clearSaveErrors() {},
@@ -1538,6 +1539,12 @@ function mountedFlowHarness(options = {}) {
 		reacquireWhenVisible() {},
 	};
 	return ctx;
+}
+
+// Finish early asks first, like Abort: the first tap arms it, the second finishes.
+function tapFinishEarly(ctx) {
+	click(ctx, "finish-early-btn");
+	click(ctx, "finish-early-btn");
 }
 
 function click(ctx, id) {
@@ -2752,7 +2759,7 @@ test("finishing early in the warmup opens the finish screen with nothing counted
 	ctx.startTime = 1;
 	ctx.paused = true;
 
-	click(ctx, "finish-early-btn");
+	tapFinishEarly(ctx);
 
 	assert.equal(ctx.flow.mode, "completion_review");
 	assert.equal(ctx.flow.completion.burpeeCountActual, 0);
@@ -2779,7 +2786,7 @@ test("finishing early in the workout countdown with the camera on can be saved",
 	assert.equal(ctx.flow.trackingTrust, "observing");
 	ctx.countdownPaused = true;
 
-	click(ctx, "finish-early-btn");
+	tapFinishEarly(ctx);
 
 	assert.equal(ctx.flow.mode, "completion_review");
 	assert.equal(ctx.completionPayload().tracking.trust, "degraded");
@@ -2792,7 +2799,7 @@ test("finishing early during the countdown opens the finish screen too", async (
 	assert.equal(ctx.countdownCount, 5);
 	ctx.countdownPaused = true;
 
-	click(ctx, "finish-early-btn");
+	tapFinishEarly(ctx);
 
 	assert.equal(ctx.flow.mode, "completion_review");
 	assert.equal(ctx.flow.completion.burpeeCountActual, 0);
@@ -3860,6 +3867,43 @@ test("paused, Abort arms on the first tap and deletes nothing; a tap elsewhere l
 	ctx.destroyed();
 });
 
+test("an armed abort asks alone: Finish early steps aside, and a tap on the screen lets go without resuming", async () => {
+	const ctx = await pausedWithAbortReply(null);
+	const ring = new FakeElement("div");
+	ring.id = "ring-container";
+	ctx.el.append(ring);
+	const finishEarly = ctx.el.querySelector("#finish-early-btn");
+	click(ctx, "session-abort-btn");
+	assert.equal(finishEarly.hasAttribute("inert"), true);
+	click(ctx, "ring-container");
+	assert.equal(abortPressed(ctx), "false");
+	assert.equal(ctx.isPaused(), true);
+	assert.equal(finishEarly.hasAttribute("inert"), false);
+	click(ctx, "ring-container");
+	assert.equal(ctx.isPaused(), false);
+	ctx.destroyed();
+});
+
+test("Finish early asks first: the first tap arms it alone, the second finishes, a tap elsewhere lets go", async () => {
+	const ctx = await pausedWithAbortReply(null);
+	const ring = new FakeElement("div");
+	ring.id = "ring-container";
+	ctx.el.append(ring);
+	const finish = ctx.el.querySelector("#finish-early-btn");
+	const abort = ctx.el.querySelector("#session-abort-btn");
+	click(ctx, "finish-early-btn");
+	assert.equal(finish.getAttribute("aria-pressed"), "true");
+	assert.equal(abort.hasAttribute("inert"), true);
+	assert.notEqual(ctx.flow.mode, "completion_review");
+	click(ctx, "ring-container");
+	assert.equal(finish.getAttribute("aria-pressed"), "false");
+	assert.equal(abort.hasAttribute("inert"), false);
+	assert.equal(ctx.isPaused(), true);
+	tapFinishEarly(ctx);
+	assert.equal(ctx.flow.mode, "completion_review");
+	ctx.destroyed();
+});
+
 test("Escape lets go of an armed abort", async () => {
 	const ctx = await pausedWithAbortReply(null);
 	click(ctx, "session-abort-btn");
@@ -4143,7 +4187,7 @@ test("finishing early mid-workout says so on the finish screen", async () => {
 	ctx.countdownCount = null;
 	ctx.paused = true;
 
-	click(ctx, "finish-early-btn");
+	tapFinishEarly(ctx);
 
 	assert.equal(ctx.flow.mode, "completion_review");
 	assert.equal(ctx.flow.completion.endedEarly, true);

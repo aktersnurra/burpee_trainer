@@ -7,7 +7,7 @@
 - **Sets follow the camera**: a set still short at its end runs into its rest until three seconds before the next set, which still starts on time; finishing early gives the time back to the rest. The last set waits for its last rep, or Finish early. Losing the camera buzzes once.
 - **Rests breathe**: a disc holds the time, and air whirls into it on a two-second in-breath and out on a three-second out-breath. In the last three seconds the air stops and the disc shrinks away into the count-in. A chime marks each rest. Reduced motion holds a still disc.
 - **One line on top**: a single bar for the whole workout's time replaces the set and rep readouts.
-- **Pause and abort**: paused shows the name, "Set 2 of 5 · 4:12 left", and two icon chips, Finish early and Abort. Abort arms on the first tap and aborts on the second; Escape or a tap elsewhere lets go. It replaces the Keep/Abort question.
+- **Pause, finish early and abort**: paused shows the name, "Set 2 of 5 · 4:12 left", and two icon chips, Finish early and Abort. Each asks first: the first tap turns the title and pause mark into its question ("Finish early? What you've done is kept." or "Abort workout? It won't be saved.") and slides its chip to the centre alone; the second tap acts. Escape or a tap elsewhere runs it back and stays paused. It replaces the Keep/Abort pills, and Finish early no longer ends the workout on one tap.
 - **Camera setup**: the camera fills the screen with the skeleton as a thin line that turns green once the camera has you, "Hand up" over "or hold still", and icon chips to try again or continue without the camera.
 
 ## 2026-11-03 — One look on every view

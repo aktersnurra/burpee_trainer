@@ -78,9 +78,13 @@ Pace and breath are data, never decoration. Completion review keeps the light to
 Screens are four parts: the workout line on top, the title block (name and a muted line),
 the number or the sink in the middle, and the foot (rest's `7/20` or the camera-lost chip).
 Actions are 44px round chips with an icon, an `aria-label` and a `title`: continue without
-camera, try the camera again, finish early, abort. Abort arms on the first tap (filled,
-`aria-pressed`, "Tap again to abort") and aborts on the second; Escape or a tap elsewhere lets
-go. Design: `docs/specs/2026-11-05-night-session-runner-design.md`.
+camera, try the camera again, finish early, abort. Finish early and Abort ask before they act:
+the first tap arms one (`aria-pressed`, "Tap again to …"), its question takes the title's and
+the pause mark's place ("Finish early? What you've done is kept." or "Abort workout? It won't be
+saved."), the other chip steps aside and the armed one slides to the centre, filled: paper for
+Finish early, `--pace-behind` for Abort. The second tap acts. Escape or a tap elsewhere runs it
+back, still paused.
+Design: `docs/specs/2026-11-05-night-session-runner-design.md`.
 
 ### One set of tokens (`assets/css/adaptive_home.css`, on `:root`)
 
