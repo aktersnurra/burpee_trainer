@@ -916,10 +916,9 @@ a.history-look-back:focus-visible { outline: 2px solid var(--focus); outline-off
 @media (min-width: 601px) { :root { --chat-w: 640px; } }
 /* The box floats a little above the bottom edge; the thread fades out under it rather than
    meeting a hard line. */
-.chat-dock { position: fixed; inset-inline: 0; bottom: 0; z-index: 30; padding: 20px var(--gutter) calc(12px + env(safe-area-inset-bottom)); background: linear-gradient(to bottom, transparent, var(--color-base-100) 20px); pointer-events: none; transform: translateY(calc(-1 * var(--keyboard-inset, 0px))); }
-@media (min-width: 601px) { .chat-dock { padding-bottom: calc(24px + env(safe-area-inset-bottom)); } }
-/* The home indicator is behind the keyboard, so its padding would only float the box. */
-.chat-dock[data-keyboard="open"] { padding-bottom: 6px; }
+.chat-dock { position: fixed; inset-inline: 0; bottom: 0; z-index: 30; padding: 20px var(--gutter) calc(6px + (1 - var(--keyboard-open, 0)) * (6px + env(safe-area-inset-bottom))); background: linear-gradient(to bottom, transparent, var(--color-base-100) 20px); pointer-events: none; transform: translateY(calc(-1 * var(--keyboard-inset, 0px))); }
+@media (min-width: 601px) { .chat-dock { padding-bottom: calc(6px + (1 - var(--keyboard-open, 0)) * (18px + env(safe-area-inset-bottom))); } }
+/* The home indicator is behind the keyboard (--keyboard-open), so its padding would only float the box. */
 .chat-dock-inner { display: grid; gap: 8px; max-width: var(--chat-w); margin-inline: auto; pointer-events: auto; }
 .chat-dock .composer textarea { max-height: 9rem; }
 .chat-dock-spacer { height: calc(var(--chat-dock-height, 0px) + 16px); }

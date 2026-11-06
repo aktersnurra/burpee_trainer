@@ -115,7 +115,9 @@ above the box ("Even out the rests", "Add a 1-minute rest at 10:00"): `suggestio
 
 - On iPhone the keyboard shrinks the visual viewport and leaves the layout viewport alone, so a
   bottom-fixed box ends up behind it. The hook sets `--keyboard-inset` from `visualViewport` and
-  lifts the dock by it; below 80px the change is the browser's own bars, not a keyboard.
+  lifts the dock by it, measured from the dock's own resting edge (not `innerHeight`, which
+  drifts with Safari's bars) and dropping the home-indicator padding while the keyboard is up
+  (`--keyboard-open`); below 80px the change is the browser's own bars, not a keyboard.
 - `--chat-dock-height` sizes a spacer under the conversation so its last line clears the dock.
 - When the conversation moves on (`data-version`), the newest message scrolls to the top of the
   screen with its answer below it; reduced motion scrolls without animation.

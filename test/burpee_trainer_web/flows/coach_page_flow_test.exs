@@ -5,9 +5,9 @@ defmodule BurpeeTrainerWeb.Flows.CoachPageFlowTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
-  alias BurpeeTrainer.Repo
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.{Memory, SummaryJob}
+  alias BurpeeTrainer.Repo
 
   setup %{conn: conn} do
     user = user_fixture()

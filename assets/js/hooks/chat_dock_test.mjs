@@ -121,3 +121,21 @@ test("a focus change measures again once the keyboard has settled", () => {
 	f.dock.destroy();
 	assert.equal(f.listeners.doc.size, 0);
 });
+
+test("lands on the keyboard from the dock's own edge, not from innerHeight", () => {
+	// Safari's bars make innerHeight taller than where a fixed box rests (780); the lift is
+	// measured from the box, and taking back its own lift keeps a second measure from drifting.
+	const f = fixture({ viewport: { height: 800, offsetTop: 0 } });
+	let lift = 0;
+	f.el.getBoundingClientRect = () => ({ bottom: 780 - lift });
+	f.dock.mount();
+	assert.equal(f.props.get("--keyboard-inset"), "0px");
+
+	f.vp.height = 480;
+	f.listeners.viewport.get("resize")();
+	lift = 300;
+	assert.equal(f.props.get("--keyboard-inset"), "300px");
+	assert.equal(f.props.get("--keyboard-open"), "1");
+	f.listeners.viewport.get("resize")();
+	assert.equal(f.props.get("--keyboard-inset"), "300px");
+});

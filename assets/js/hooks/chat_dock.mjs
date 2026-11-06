@@ -9,9 +9,11 @@
 export const KEYBOARD_MIN_PX = 80;
 
 // How far up the keyboard (or anything else at the bottom) pushes the visual viewport.
-export function keyboardInset({ innerHeight, viewport }) {
+// `edge` is where the dock's bottom sits with no lift: the layout viewport's bottom, which
+// `innerHeight` only approximates on iPhone while Safari's own bars come and go.
+export function keyboardInset({ innerHeight, edge = innerHeight, viewport }) {
 	if (!viewport) return 0;
-	return Math.max(0, Math.round(innerHeight - viewport.height - viewport.offsetTop));
+	return Math.max(0, Math.round(edge - viewport.height - viewport.offsetTop));
 }
 
 export function createChatDock({ el, win, doc }) {
@@ -19,13 +21,21 @@ export function createChatDock({ el, win, doc }) {
 	const viewport = win.visualViewport;
 	let version = el.dataset.version;
 	let observer = null;
+	let applied = 0;
 
 	const reducedMotion = () =>
 		Boolean(win.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
 
 	const sync = () => {
-		const inset = keyboardInset({ innerHeight: win.innerHeight, viewport });
+		// Measure the dock's own resting edge, so the box lands on the keyboard whatever the
+		// browser's bars are doing; take back the lift it already carries.
+		const rect = el.getBoundingClientRect?.();
+		const edge = rect && rect.bottom > 0 ? rect.bottom + applied : win.innerHeight;
+		const inset = keyboardInset({ innerHeight: win.innerHeight, edge, viewport });
+		applied = inset;
 		root.style.setProperty("--keyboard-inset", `${inset}px`);
+		// The home indicator hides behind the keyboard; CSS reads this to drop its padding.
+		root.style.setProperty("--keyboard-open", inset > KEYBOARD_MIN_PX ? "1" : "0");
 		root.style.setProperty("--chat-dock-height", `${el.offsetHeight}px`);
 		el.dataset.keyboard = inset > KEYBOARD_MIN_PX ? "open" : "closed";
 	};
@@ -75,6 +85,7 @@ export function createChatDock({ el, win, doc }) {
 			doc.removeEventListener?.("focusout", settleLater);
 			observer?.disconnect();
 			root.style.removeProperty("--keyboard-inset");
+			root.style.removeProperty("--keyboard-open");
 			root.style.removeProperty("--chat-dock-height");
 		},
 	};
