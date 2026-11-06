@@ -61,7 +61,7 @@
 ### The session at night (`.session-night`, camera setup and the runner)
 
 The runner is the app turned inside out: `--ink` is the ground and the paper the numbers.
-Pace and breath are data, never decoration. Completion review keeps the light tokens.
+Pace and breath are data, never decoration. Finish (4a2) keeps the light tokens.
 
 ```
 --session-ground:   #262722   the ground of every runner screen (--ink)
@@ -297,6 +297,16 @@ every animation here.
   chart.
 - Deleting a session: tap its row and its trash shows; the first tap on the trash arms it
   (error colour), the second deletes. Tapping the row again or Escape lets go.
+- Finish (the light screen after a session): `Ended early` or the plan's name, the count between
+  quiet − and +, `of 15 reps · 10:20 of 20:00`, `3 of 5 sets` (the plan's whole sets the
+  schedule reached), who counted, the mood pills (Rough `--clay`, OK `--cobalt`, Good `--good`,
+  each a soft tint when chosen), the tags (amber when chosen), the note (4a1), and the foot:
+  trash a quiet round on the left, ✓ the ink pill (Save) on the right. Trash asks in place as
+  Abort does in the runner: the first tap arms it (`aria-pressed`, "Tap again to delete", the
+  question said aloud), the page steps back out of reach, ✓ shrinks away and trash slides to
+  the middle in `--clay` under "Delete this session?"; the second tap deletes. A tap anywhere
+  else or Escape lets go. A video's finish shares the mood and tag pills
+  (`SessionComponents.mood_pills/1`, `tag_pills/1`).
 - A chevron only means "opens here" or, pointing down at the end of a list, "more".
 - Every pick (burpee type, set style) is the same: its options as quiet pills side by side, the
   chosen one a soft tint of its colour (2), never solid ink; a set style takes the picked type's

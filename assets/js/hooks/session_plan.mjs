@@ -16,6 +16,20 @@ export function programBurpeeCount(programOrEvents) {
 	}, 0);
 }
 
+// How many of the plan's sets (its work events) are whole within `repsDone` scheduled reps.
+export function setsReached(timeline, repsDone) {
+	let reps = 0;
+	let done = 0;
+	let total = 0;
+	for (const event of timeline) {
+		if (eventKind(event) !== "work") continue;
+		total += 1;
+		reps += event.reps || 0;
+		if (reps <= repsDone) done += 1;
+	}
+	return { done, total };
+}
+
 export function warmupTimelineFromProgram(program) {
 	const firstWork = workoutTimelineFromProgram(program).find(
 		(event) => eventKind(event) === "work",

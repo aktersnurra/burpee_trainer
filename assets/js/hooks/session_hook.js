@@ -285,9 +285,7 @@ const SessionHook = {
       const retryCamera = e.target.closest("#camera-setup-retry");
       const repStep = repStepFor(e.target);
       const repsUndo = e.target.closest("#completion-reps-undo");
-      const discardAsk = e.target.closest("#session-discard-btn");
-      const discardKeep = e.target.closest("#session-discard-keep");
-      const discardYes = e.target.closest("#session-discard-yes");
+      const discard = e.target.closest("#session-discard-btn");
       const abort = e.target.closest("#session-abort-btn");
       const continueWithoutCamera = e.target.closest("#camera-setup-continue");
       const ringContainer = e.target.closest("#ring-container");
@@ -305,7 +303,7 @@ const SessionHook = {
         });
       }
       if (ringContainer && !armed && this.canTogglePause()) this.togglePause();
-      if (tag !== undefined && this.flow.completion) {
+      if (tag !== undefined && !armed && this.flow.completion) {
         const tags = this.flow.completion.tags || [];
         this.editCompletion({
           tags: tags.includes(tag)
@@ -314,13 +312,13 @@ const SessionHook = {
         });
       }
       // Mood is optional: tapping the chosen one again clears it.
-      if (mood !== undefined) {
+      if (mood !== undefined && !armed) {
         const chosen = Number(mood);
         this.editCompletion({
           mood: this.flow.completion?.mood === chosen ? null : chosen,
         });
       }
-      if (repStep) {
+      if (repStep && !armed) {
         // The click that ends a hold is not one more rep.
         const held = this.repHoldEnded;
         this.repHoldEnded = false;
@@ -330,19 +328,19 @@ const SessionHook = {
           this.announceReps();
         }
       }
-      if (repsUndo) {
+      if (repsUndo && !armed) {
         const origin = countOrigin(this.flow.completion);
         if (origin.reps !== null) {
           this.editCompletion({ burpeeCountActual: origin.reps });
           this.announceReps();
         }
       }
-      if (discardAsk && this.canDiscard()) this.renderer.showDiscardConfirm(true);
-      if (discardKeep) this.renderer.showDiscardConfirm(false);
-      if (discardYes) this.discardSession();
-      // Finish early and Abort: the first tap arms one, the second acts; a tap anywhere else
-      // lets go.
-      if (finishEarly) {
+      // Finish early, Abort and the finish screen's trash: the first tap arms one, the second
+      // acts; a tap anywhere else lets go.
+      if (discard) {
+        if (armed === "delete") this.discardSession();
+        else if (this.canDiscard()) this.renderer.armPauseChoice("delete");
+      } else if (finishEarly) {
         if (armed === "finish") this.onFinishEarly();
         else this.renderer.armPauseChoice("finish");
       } else if (abort && this.canDiscard()) {
@@ -858,12 +856,11 @@ const SessionHook = {
       if (!this.lifecycleActive(generation)) return;
       this.discarding = null;
       this.renderer.setDiscardBusy(false);
+      this.renderer.armPauseChoice(null);
       if (aborting) {
-        this.renderer.armPauseChoice(null);
         this.renderer.showAbortError("Could not abort the workout. Try again.");
         return;
       }
-      this.renderer.showDiscardConfirm(false);
       this.renderer.renderSaveErrors({
         field_errors: {},
         global_errors: ["Could not discard the session. Try again."],

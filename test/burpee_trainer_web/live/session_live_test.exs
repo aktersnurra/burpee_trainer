@@ -139,8 +139,7 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     {:ok, session} = Workouts.start_plan(scope, plan.id, Ecto.UUID.generate())
 
     {:ok, view, _} = live(conn, ~p"/session/#{session.id}")
-    assert has_element?(view, "#session-discard-btn[type=button][aria-label='Discard session']")
-    assert has_element?(view, "#session-discard-confirm[hidden]", "Nothing will be saved")
+    assert has_element?(view, "#session-discard-btn[type=button][aria-label='Delete session']")
 
     render_hook(view, "discard_session", %{})
     assert_reply(view, %{status: "discarded"})
@@ -379,15 +378,15 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
           "#completion-reps-less + #session-actual-reps + #completion-reps-more",
           "#session-count-source[hidden] #completion-reps-undo[hidden]",
           "span#session-actual-duration",
+          "span#session-planned-duration",
+          "#session-sets-done[hidden]",
           "#session-save-icon-ready",
           "#session-save-icon-pending[hidden]",
           "p#session-save-status[hidden]",
           "#session-save-errors.hidden",
           "#pose-upload-retry[hidden]",
           "#pose-upload-dismiss[hidden][type=button]",
-          "#session-completion-actions + #session-discard-confirm[hidden]",
-          "#session-discard-confirm #session-discard-keep[type=button]",
-          "#session-discard-confirm #session-discard-yes[type=button]"
+          "#session-delete-question[aria-hidden=true]"
         ] do
       assert has_element?(view, selector)
     end
@@ -397,7 +396,11 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
     assert has_element?(view, "#session-runner-client[hidden][inert]")
 
     for mood <- ~w[-1 0 1] do
-      assert has_element?(view, "#session-completion-mood [data-mood='#{mood}']")
+      assert has_element?(
+               view,
+               "#session-completion-mood[role=group][aria-label='How it felt'] " <>
+                 "button[type=button][data-mood='#{mood}'][aria-pressed=false]"
+             )
     end
 
     assert has_element?(view, "#completion-reps-less[type=button][aria-label='One rep fewer']")
@@ -413,12 +416,12 @@ defmodule BurpeeTrainerWeb.SessionLiveTest do
 
     assert has_element?(view, "label.sr-only[for=completion-note-input]", "Note")
     assert has_element?(view, "textarea#completion-note-input")
-    assert has_element?(view, "#session-save-btn[aria-label='Save session']")
+    assert has_element?(view, "#session-save-btn[type=submit][aria-label=Save]")
     assert has_element?(view, "#pose-upload-status[hidden][phx-update=ignore][role=status]")
 
     assert has_element?(
              view,
-             "#session-completion-actions #session-discard-btn[aria-label='Discard session']"
+             "#session-completion-actions #session-discard-btn[aria-pressed=false][aria-label='Delete session']"
            )
 
     refute has_element?(view, "#session-completion-review #session-abort-btn")

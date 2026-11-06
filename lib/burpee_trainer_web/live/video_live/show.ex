@@ -208,8 +208,6 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
 
   @impl true
   def render(assigns) do
-    assigns = assign(assigns, mood_options: @mood_options, tag_options: @tag_options)
-
     ~H"""
     <Layouts.app
       flash={@flash}
@@ -328,30 +326,8 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
               </p>
             </div>
 
-            <div id="video-completion-mood" class="mt-12 flex border-y border-[var(--session-border)]">
-              <button
-                :for={{label, value} <- @mood_options}
-                type="button"
-                phx-click="set_mood"
-                phx-value-mood={value}
-                aria-pressed={to_string(@mood == value)}
-                class="session-choice-toggle min-h-16 flex-1 text-sm font-medium text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
-              >
-                {label}
-              </button>
-            </div>
-            <div id="video-completion-tags" role="group" aria-label="Tags" class="session-tags">
-              <button
-                :for={{label, value} <- @tag_options}
-                type="button"
-                phx-click="toggle_tag"
-                phx-value-tag={value}
-                aria-pressed={to_string(value in @tags)}
-                class="session-tag-pill"
-              >
-                {label}
-              </button>
-            </div>
+            <SessionComponents.mood_pills id="video-completion-mood" mood={@mood} click="set_mood" />
+            <SessionComponents.tag_pills id="video-completion-tags" tags={@tags} click="toggle_tag" />
             <div class="session-note-field composer">
               <label for="video-note-input" class="sr-only">Note</label>
               <textarea

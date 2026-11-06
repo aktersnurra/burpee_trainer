@@ -255,9 +255,6 @@ function appendStablePanels(root) {
 		["camera-setup-retry", "button", ""],
 		["camera-setup-continue", "button", "Continue without camera"],
 		["session-discard-btn", "button", ""],
-		["session-discard-confirm", "div", ""],
-		["session-discard-keep", "button", "Keep it"],
-		["session-discard-yes", "button", "Discard"],
 		["session-completion-actions", "div", ""],
 		["completion-reps-less", "button", ""],
 		["completion-reps-more", "button", ""],
@@ -275,7 +272,7 @@ function appendStablePanels(root) {
 		["completion-preference-feedback", "select", ""],
 		["workout_session_burpee_type", "input", ""],
 		["session-completion-form", "form", ""],
-		["session-save-btn", "button", "Save session"],
+		["session-save-btn", "button", ""],
 		["session-save-status", "p", ""],
 		["session-save-errors", "div", ""],
 		["session-live-status", "div", ""],
@@ -291,7 +288,7 @@ function appendStablePanels(root) {
 		const element = new FakeElement(tag);
 		element.id = id;
 		element.textContent = text;
-		if (id.endsWith("-field") || id === "session-discard-confirm") {
+		if (id.endsWith("-field")) {
 			element.hidden = true;
 		}
 		if (id === "camera-setup-retry") {
@@ -4010,19 +4007,36 @@ async function finishedWithDiscardReply(reply, discarded = []) {
 	return ctx;
 }
 
-test("discard asks on the page before it deletes anything", async () => {
+const deletePressed = (ctx) => ctx.el.querySelector("#session-discard-btn").getAttribute("aria-pressed");
+const finishArmed = (ctx) => ctx.el.querySelector("#session-completion-review").getAttribute("data-armed");
+
+test("trash asks in place: the first tap arms it and deletes nothing, a tap elsewhere lets go", async () => {
 	const ctx = await finishedWithDiscardReply(null);
-	const confirm = ctx.el.querySelector("#session-discard-confirm");
-	const actions = ctx.el.querySelector("#session-completion-actions");
 	click(ctx, "session-discard-btn");
-	// The question takes the place of the trash and save buttons.
-	assert.equal(confirm.hidden, false);
-	assert.equal(actions.hidden, true);
-	assert.equal(ctx.el.querySelector("#session-discard-keep").focused, true);
-	click(ctx, "session-discard-keep");
-	assert.equal(confirm.hidden, true);
-	assert.equal(actions.hidden, false);
-	assert.equal(ctx.el.querySelector("#session-discard-btn").focused, true);
+	assert.equal(deletePressed(ctx), "true");
+	assert.equal(finishArmed(ctx), "delete");
+	assert.deepEqual(ctx.events, []);
+
+	// A tap on a mood while armed only lets go; it chooses nothing.
+	const good = ctx.el.querySelectorAll("[data-mood]").find((b) => b.dataset.mood === "1");
+	ctx.el.dispatchEvent({ type: "click", target: good, preventDefault() {} });
+	assert.equal(deletePressed(ctx), "false");
+	assert.equal(finishArmed(ctx), null);
+	assert.equal(ctx.flow.completion.mood, null);
+	assert.deepEqual(ctx.events, []);
+	ctx.destroyed();
+});
+
+test("Escape lets go of an armed trash", async () => {
+	const ctx = await finishedWithDiscardReply(null);
+	click(ctx, "session-discard-btn");
+	ctx.el.dispatchEvent({
+		type: "keydown",
+		key: "Escape",
+		target: ctx.el.querySelector("#session-discard-btn"),
+		preventDefault() {},
+	});
+	assert.equal(deletePressed(ctx), "false");
 	assert.deepEqual(ctx.events, []);
 	ctx.destroyed();
 });
@@ -4035,7 +4049,7 @@ test("a confirmed discard deletes the session, clears the device copy, and goes 
 	const ctx = await finishedWithDiscardReply({ status: "discarded" }, discarded);
 	try {
 		click(ctx, "session-discard-btn");
-		click(ctx, "session-discard-yes");
+		click(ctx, "session-discard-btn");
 		await ctx.discarding;
 
 		assert.deepEqual(ctx.events, [{ name: "discard_session", payload: {} }]);
@@ -4055,13 +4069,12 @@ test("a refused discard keeps everything and says so", async () => {
 	const ctx = await finishedWithDiscardReply({ status: "error" }, discarded);
 	try {
 		click(ctx, "session-discard-btn");
-		click(ctx, "session-discard-yes");
+		click(ctx, "session-discard-btn");
 		await ctx.discarding;
 
 		assert.deepEqual(discarded, []);
 		assert.deepEqual(navigations, []);
-		assert.equal(ctx.el.querySelector("#session-discard-confirm").hidden, true);
-		assert.equal(ctx.el.querySelector("#session-completion-actions").hidden, false);
+		assert.equal(deletePressed(ctx), "false");
 		assert.equal(ctx.el.querySelector("#session-save-errors").hidden, false);
 		assert.equal(ctx.flow.mode, "completion_review");
 	} finally {
@@ -4073,7 +4086,7 @@ test("a refused discard keeps everything and says so", async () => {
 test("while a discard is in flight nothing else can change or save", async () => {
 	const ctx = await finishedWithDiscardReply(null);
 	click(ctx, "session-discard-btn");
-	click(ctx, "session-discard-yes");
+	click(ctx, "session-discard-btn");
 	assert.ok(ctx.discarding);
 	const before = structuredClone(ctx.flow.completion);
 
@@ -4085,8 +4098,7 @@ test("while a discard is in flight nothing else can change or save", async () =>
 
 	assert.deepEqual(ctx.flow.completion, before);
 	assert.equal(ctx.flow.saveStatus, "idle");
-	assert.equal(ctx.el.querySelector("#session-discard-keep").hasAttribute("disabled"), true);
-	assert.equal(ctx.el.querySelector("#session-discard-yes").hasAttribute("disabled"), true);
+	assert.equal(ctx.el.querySelector("#session-discard-btn").hasAttribute("disabled"), true);
 	ctx.destroyed();
 });
 
@@ -4094,13 +4106,13 @@ test("a discard with no answer gives up and says so", async (t) => {
 	t.mock.timers.enable({ apis: ["setTimeout"] });
 	const ctx = await finishedWithDiscardReply(null);
 	click(ctx, "session-discard-btn");
-	click(ctx, "session-discard-yes");
+	click(ctx, "session-discard-btn");
 	t.mock.timers.tick(15_000);
 	await ctx.discarding;
 
 	assert.equal(ctx.discarding, null);
 	assert.equal(ctx.el.querySelector("#session-save-errors").hidden, false);
-	assert.equal(ctx.el.querySelector("#session-discard-keep").hasAttribute("disabled"), false);
+	assert.equal(ctx.el.querySelector("#session-discard-btn").hasAttribute("disabled"), false);
 	click(ctx, "completion-reps-more");
 	assert.equal(ctx.flow.completion.burpeeCountProvenance, "manual");
 	ctx.destroyed();
@@ -4110,7 +4122,7 @@ test("discard waits while a save is in flight", async () => {
 	const ctx = await finishedWithDiscardReply({ status: "discarded" });
 	ctx.dispatchFlow({ type: "SAVE_STARTED" });
 	click(ctx, "session-discard-btn");
-	click(ctx, "session-discard-yes");
+	click(ctx, "session-discard-btn");
 	assert.deepEqual(ctx.events, []);
 	ctx.destroyed();
 });

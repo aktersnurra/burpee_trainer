@@ -1,5 +1,6 @@
 import { formatClock } from "./session_display_model.mjs";
 import { countOrigin } from "./session_flow_fsm.mjs";
+import { setsReached } from "./session_plan.mjs";
 import { createSink } from "./session_sink.mjs";
 const VISUAL_STATE_CLASSES = [
 	"is-working",
@@ -27,20 +28,46 @@ function flowAnnouncement(state) {
 	return null;
 }
 
+// The choices that ask in place before they act, and the screen each one is on.
 const PAUSE_CHOICES = {
 	finish: {
 		id: "#finish-early-btn",
+		screen: "#session-runner-client",
 		label: "Finish early",
 		armedLabel: "Tap again to finish",
 		question: "Finish early? What you've done is kept. Tap again to finish.",
 	},
 	abort: {
 		id: "#session-abort-btn",
+		screen: "#session-runner-client",
 		label: "Abort workout",
 		armedLabel: "Tap again to abort",
 		question: "Abort workout? It won't be saved. Tap again to abort.",
 	},
+	delete: {
+		id: "#session-discard-btn",
+		screen: "#session-completion-review",
+		label: "Delete session",
+		armedLabel: "Tap again to delete",
+		question: "Delete this session? It won't be saved. Tap again to delete.",
+	},
 };
+
+// What steps back on the finish screen while its trash is armed.
+const FINISH_STEPS_BACK = [
+	"#session-completion-summary",
+	"#session-completion-fields",
+	"#session-save-btn",
+];
+
+// The finish screen's sets line: how many of the plan's sets the schedule reached.
+function setsLine(state) {
+	const repsDone = state.completion?.scheduledRepsDone;
+	if (!Number.isInteger(repsDone)) return null;
+	const { done, total } = setsReached(state.workoutTimeline || [], repsDone);
+	if (total === 0) return null;
+	return `${done} of ${total} ${total === 1 ? "set" : "sets"}`;
+}
 
 export class SessionRenderer {
 	constructor(root) {
@@ -183,6 +210,12 @@ export class SessionRenderer {
 
 		this.renderCameraSetup(state);
 		this.renderCompletionControls(state);
+		if (state.mode === "completion_review") {
+			const sets = setsLine(state);
+			const line = this.root.querySelector("#session-sets-done");
+			this.setText(line, sets ?? "", "setsDone");
+			this.setHidden(line, sets === null, "setsDoneHidden");
+		}
 		this.setHidden(
 			this.node("#session-camera-lost"),
 			!(state.captureMode === "camera" && state.trackingTrust === "degraded"),
@@ -262,7 +295,6 @@ export class SessionRenderer {
 			"completion-preference-feedback",
 			"workout_session_burpee_type",
 			"session-discard-btn",
-			"session-discard-yes",
 		];
 
 		for (const id of factIds) {
@@ -285,7 +317,7 @@ export class SessionRenderer {
 
 		const save = this.root.querySelector("#session-save-btn");
 		if (save) {
-			let label = "Save session";
+			let label = "Save";
 			if (locked && saving) label = "Finalizing local evidence…";
 			else if (locked) label = "Retry finalization";
 			else if (saving) label = "Saving session…";
@@ -316,33 +348,29 @@ export class SessionRenderer {
 			?.focus({ preventScroll: true });
 	}
 
-	// The discard question takes the place of the trash and save buttons while it is asked.
-	showDiscardConfirm(visible) {
-		const confirm = this.root.querySelector("#session-discard-confirm");
-		if (!confirm) return;
-		const actions = this.root.querySelector("#session-completion-actions");
-		const wasVisible = !confirm.hidden;
-		confirm.hidden = !visible;
-		if (actions) actions.hidden = visible;
-		if (visible) this.root.querySelector("#session-discard-keep")?.focus();
-		else if (wasVisible) this.root.querySelector("#session-discard-btn")?.focus();
-	}
-
-	// Paused, Finish early and Abort each ask before they act: the first tap arms one (`kind`
-	// "finish" or "abort"), whose question takes the title's and the pause mark's place while it
-	// stands alone in the middle; the second tap acts. `null` lets go.
+	// Paused, Finish early and Abort each ask before they act, and so does the finish screen's
+	// trash: the first tap arms one (`kind` "finish", "abort" or "delete"), whose question takes
+	// the screen's place while it stands alone in the middle; the second tap acts. `null` lets go.
 	armPauseChoice(kind) {
 		const was = this.armedPauseChoice();
-		for (const [choice, { id, label, armedLabel }] of Object.entries(PAUSE_CHOICES)) {
+		const screen = kind ? PAUSE_CHOICES[kind].screen : null;
+		for (const [choice, { id, label, armedLabel, screen: on }] of Object.entries(PAUSE_CHOICES)) {
 			const button = this.root.querySelector(id);
 			if (!button) continue;
 			const armed = kind === choice;
 			button.setAttribute("aria-pressed", armed ? "true" : "false");
 			button.setAttribute("aria-label", armed ? armedLabel : label);
 			button.setAttribute("title", armed ? armedLabel : label);
-			button.toggleAttribute("inert", Boolean(kind) && !armed);
+			button.toggleAttribute("inert", on === screen && !armed);
 		}
-		this.setSurfaceData("armed", kind);
+		this.setSurfaceData("armed", screen === "#session-runner-client" ? kind : null);
+		const deleting = kind === "delete";
+		const finish = this.root.querySelector("#session-completion-review");
+		if (deleting) finish?.setAttribute("data-armed", "delete");
+		else finish?.removeAttribute("data-armed");
+		for (const selector of FINISH_STEPS_BACK) {
+			this.root.querySelector(selector)?.toggleAttribute("inert", deleting);
+		}
 		if (kind) {
 			this.showAbortError(null);
 			if (was !== kind) this.announce(PAUSE_CHOICES[kind].question);
@@ -369,13 +397,9 @@ export class SessionRenderer {
 		this.showAbortError(null);
 	}
 
-	// While a discard waits on the server, its answers wait too.
+	// While a discard waits on the server, its second tap waits too.
 	setDiscardBusy(busy) {
-		for (const id of [
-			"#session-discard-keep",
-			"#session-discard-yes",
-			"#session-abort-btn",
-		]) {
+		for (const id of ["#session-discard-btn", "#session-abort-btn"]) {
 			this.root.querySelector(id)?.toggleAttribute("disabled", busy);
 		}
 	}
@@ -422,14 +446,16 @@ export class SessionRenderer {
 
 	renderCompletion(completion) {
 		if (!completion) return;
+		const heading = this.root.querySelector("#session-completion-heading");
 		this.setText(
-			this.root.querySelector("#session-completion-heading"),
-			completion.endedEarly ? "Ended early" : "Workout complete",
+			heading,
+			completion.endedEarly ? "Ended early" : heading?.dataset.name,
 			"completionHeading",
 		);
 		const actualReps = this.root.querySelector("#session-actual-reps");
 		const plannedReps = this.root.querySelector("#session-planned-reps");
 		const duration = this.root.querySelector("#session-actual-duration");
+		const plannedDuration = this.root.querySelector("#session-planned-duration");
 		const noteInput = this.root.querySelector("#completion-note-input");
 		const lowEnergyInput = this.root.querySelector(
 			"#completion-context-low-energy",
@@ -457,6 +483,8 @@ export class SessionRenderer {
 			plannedReps.textContent = String(completion.burpeeCountPlanned);
 		if (duration)
 			duration.textContent = this.formatTime(completion.durationSecActual);
+		if (plannedDuration)
+			plannedDuration.textContent = this.formatTime(completion.durationSecPlanned);
 		this.renderCountSource(completion, countProvenance);
 		this.renderRepsLess(completion);
 		if (noteInput) noteInput.value = completion.notePost || "";

@@ -178,7 +178,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
       >
         <SessionComponents.camera_setup session={@workout_session} target_pace_sec={@target_pace_sec} />
         <SessionComponents.runner summary={@summary} />
-        <SessionComponents.completion_review form={@completion_form} />
+        <SessionComponents.completion_review form={@completion_form} name={@summary.name} />
 
         <p
           id="session-live-status"

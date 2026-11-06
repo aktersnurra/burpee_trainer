@@ -203,7 +203,7 @@ test("completion save controls keep icons while announcing save, pending and ret
 	save.appendChild(pendingIcon);
 
 	renderer.renderCompletionControls({ mode: "completion_review", saveStatus: "idle", completionLocked: false });
-	assert.equal(save.getAttribute("aria-label"), "Save session");
+	assert.equal(save.getAttribute("aria-label"), "Save");
 	assert.equal(readyIcon.hasAttribute("hidden"), false);
 	assert.equal(pendingIcon.hasAttribute("hidden"), true);
 	assert.equal(save.children.length, 2);
@@ -769,14 +769,14 @@ function finishFields(elements) {
 		"#session-count-source-text",
 		"#completion-reps-undo",
 		"#completion-reps-less",
-		"#session-discard-confirm",
-		"#session-completion-actions",
-		"#session-discard-keep",
+		"#session-completion-review",
+		"#session-completion-summary",
+		"#session-completion-fields",
+		"#session-save-btn",
 		"#session-discard-btn",
 	]) {
 		elements[id] = element();
 	}
-	elements["#session-discard-confirm"].hidden = true;
 	return elements;
 }
 
@@ -864,15 +864,13 @@ test("focus on − at zero, or on Undo once used, moves to +", () => {
 	assert.equal(more.focusCalls, 2);
 });
 
-test("discard's answers are off while it waits on the server", () => {
+test("trash's second tap is off while it waits on the server", () => {
 	const { renderer, elements } = harness();
 	finishFields(elements);
-	elements["#session-discard-yes"] = element();
 	renderer.setDiscardBusy(true);
-	assert.equal(elements["#session-discard-keep"].hasAttribute("disabled"), true);
-	assert.equal(elements["#session-discard-yes"].hasAttribute("disabled"), true);
+	assert.equal(elements["#session-discard-btn"].hasAttribute("disabled"), true);
 	renderer.setDiscardBusy(false);
-	assert.equal(elements["#session-discard-keep"].hasAttribute("disabled"), false);
+	assert.equal(elements["#session-discard-btn"].hasAttribute("disabled"), false);
 });
 
 test("an edit on the finish screen does not repeat its announcement", () => {
@@ -888,25 +886,64 @@ test("an edit on the finish screen does not repeat its announcement", () => {
 	assert.equal(status.textContent, "Saving session");
 });
 
-test("the discard question replaces the trash and save buttons, and goes back", () => {
+test("trash arms in place and says so: the page steps back out of reach until it lets go", () => {
 	const { renderer, elements } = harness();
 	finishFields(elements);
-	renderer.showDiscardConfirm(true);
-	assert.equal(elements["#session-discard-confirm"].hidden, false);
-	assert.equal(elements["#session-completion-actions"].hidden, true);
-	assert.equal(elements["#session-discard-keep"].focusCalls, 1);
+	const trash = elements["#session-discard-btn"];
+	const status = elements["#session-live-status"];
+	renderer.armPauseChoice("delete");
+	assert.equal(renderer.armedPauseChoice(), "delete");
+	assert.equal(trash.getAttribute("aria-pressed"), "true");
+	assert.equal(trash.getAttribute("aria-label"), "Tap again to delete");
+	assert.equal(trash.hasAttribute("inert"), false);
+	assert.equal(status.textContent, "Delete this session? It won't be saved. Tap again to delete.");
+	assert.equal(elements["#session-completion-review"].getAttribute("data-armed"), "delete");
+	for (const id of ["#session-completion-summary", "#session-completion-fields", "#session-save-btn"]) {
+		assert.equal(elements[id].hasAttribute("inert"), true, id);
+	}
 
-	renderer.showDiscardConfirm(false);
-	assert.equal(elements["#session-discard-confirm"].hidden, true);
-	assert.equal(elements["#session-completion-actions"].hidden, false);
-	assert.equal(elements["#session-discard-btn"].focusCalls, 1);
+	renderer.armPauseChoice(null);
+	assert.equal(trash.getAttribute("aria-pressed"), "false");
+	assert.equal(trash.getAttribute("aria-label"), "Delete session");
+	assert.equal(elements["#session-completion-review"].hasAttribute("data-armed"), false);
+	for (const id of ["#session-completion-summary", "#session-completion-fields", "#session-save-btn"]) {
+		assert.equal(elements[id].hasAttribute("inert"), false, id);
+	}
 });
 
-test("the heading says whether the workout was completed or ended early", () => {
+test("the sets line counts the plan's whole sets the schedule reached", () => {
+	const { renderer, elements } = harness();
+	const line = (elements["#session-sets-done"] = element());
+	const workoutTimeline = [
+		{ kind: "work", reps: 3 },
+		{ kind: "rest", duration_sec: 60 },
+		{ kind: "work", reps: 3 },
+		{ kind: "rest", duration_sec: 60 },
+		{ kind: "work", reps: 3 },
+	];
+	const review = (scheduledRepsDone) => ({
+		...initialFlowState(),
+		mode: "completion_review",
+		saveStatus: "idle",
+		workoutTimeline,
+		completion: { ...finished, scheduledRepsDone },
+	});
+	renderer.renderFlowState(review(5));
+	assert.equal(line.textContent, "1 of 3 sets");
+	assert.equal(line.hidden, false);
+	renderer.renderFlowState(review(9));
+	assert.equal(line.textContent, "3 of 3 sets");
+	// A restored draft from before the schedule was kept has no sets to say.
+	renderer.renderFlowState(review(undefined));
+	assert.equal(line.hidden, true);
+});
+
+test("the heading is the plan's name, or says the workout ended early", () => {
 	const { renderer, elements } = harness();
 	const heading = (elements["#session-completion-heading"] = element());
+	heading.dataset.name = "Steady 40";
 	renderer.renderCompletion({ ...finished, endedEarly: false });
-	assert.equal(heading.textContent, "Workout complete");
+	assert.equal(heading.textContent, "Steady 40");
 	renderer.renderCompletion({ ...finished, endedEarly: true });
 	assert.equal(heading.textContent, "Ended early");
 });

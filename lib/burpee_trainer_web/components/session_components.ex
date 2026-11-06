@@ -221,25 +221,26 @@ defmodule BurpeeTrainerWeb.SessionComponents do
 
   attr(:hidden, :boolean, default: true)
   attr(:form, :any, required: true)
+  attr(:name, :string, required: true)
 
+  # Finish: the count and how it went, then trash on the left and ✓ on the right. Trash asks in
+  # place, as Abort does in the runner: armed, the page steps back and its question shows.
   def completion_review(assigns) do
-    assigns = assign(assigns, mood_options: @mood_options, tag_options: @tag_options)
-
     ~H"""
     <.panel id="session-completion-review" heading_id="session-completion-heading" hidden={@hidden}>
-      <%!-- Centred like the camera screen; the auto margins still let a tall form scroll. --%>
-      <div class="mx-auto flex h-dvh w-full max-w-[480px] flex-col overflow-y-auto px-6 pb-10 pt-[max(3rem,env(safe-area-inset-top))]">
-        <section id="session-completion-summary" class="mt-auto text-center">
+      <div class="session-finish">
+        <section id="session-completion-summary" class="session-finish-summary">
           <h1
             id="session-completion-heading"
             data-session-heading
+            data-name={@name}
             tabindex="-1"
-            class="qs-heading-tight text-3xl font-medium"
+            class="session-finish-title"
           >
-            Workout complete
+            {@name}
           </h1>
           <%!-- The count is the result; − and + correct it. Holding one keeps counting. --%>
-          <div class="session-reps-stepper mt-10">
+          <div class="session-reps-stepper">
             <button
               id="completion-reps-less"
               type="button"
@@ -253,7 +254,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             <span
               id="session-actual-reps"
               aria-describedby="completion-reps-error"
-              class="qs-tabular text-[clamp(5rem,18vw,6.5rem)] font-medium leading-none tracking-[-0.07em]"
+              class="session-finish-count qs-tabular"
             >
               0
             </span>
@@ -268,13 +269,15 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               <.icon name="hero-plus" class="size-6" />
             </button>
           </div>
-          <%!-- What was planned and how long it took, in one line under the count. --%>
-          <p class="qs-tabular mt-5 text-lg text-[var(--session-muted)]">
+          <%!-- What was planned and how long it took, then how far through the plan's sets. --%>
+          <p class="session-finish-meta qs-tabular">
             of <span id="session-planned-reps">0</span>
-            · <span id="session-actual-duration">0:00</span>
+            reps · <span id="session-actual-duration">0:00</span>
+            of <span id="session-planned-duration">0:00</span>
           </p>
-          <%!-- Where the count came from; after a correction, the original and a way back. --%>
-          <p id="session-count-source" class="mt-2 text-sm text-[var(--session-muted)]" hidden>
+          <p id="session-sets-done" class="session-finish-sets qs-tabular" hidden></p>
+          <%!-- Who counted; after a correction, the original and a way back. --%>
+          <p id="session-count-source" class="session-finish-source" hidden>
             <span id="session-count-source-text"></span>
             <button
               id="completion-reps-undo"
@@ -297,66 +300,49 @@ defmodule BurpeeTrainerWeb.SessionComponents do
         >
         </div>
 
-        <.form for={@form} id="session-completion-form" class="mt-12 mb-auto">
-          <div id="session-completion-mood" class="flex border-y border-[var(--session-border)]">
-            <%= for {label, value} <- @mood_options do %>
-              <button
-                type="button"
-                data-mood={value}
-                aria-pressed="false"
-                class="session-choice-toggle min-h-16 flex-1 text-sm font-medium text-[var(--session-muted)] transition-colors duration-150 active:scale-[0.98]"
-              >
-                {label}
-              </button>
-            <% end %>
-          </div>
-          <%!-- Optional, like mood: tap to toggle. Pills as on Home. --%>
-          <div id="session-completion-tags" role="group" aria-label="Tags" class="session-tags">
-            <%= for {label, value} <- @tag_options do %>
-              <button type="button" data-tag={value} aria-pressed="false" class="session-tag-pill">
-                {label}
-              </button>
-            <% end %>
-          </div>
-          <%!-- A composer like Home's; it grows with its text. --%>
-          <div class="session-note-field composer">
-            <label for="completion-note-input" class="sr-only">Note</label>
-            <textarea
-              id="completion-note-input"
-              name={@form[:note_post].name}
-              rows="2"
-              placeholder="How did it go?"
-              aria-describedby="completion-note-error"
-              class="session-note-input"
-            >{@form[:note_post].value}</textarea>
-            <p id="completion-note-error" hidden></p>
+        <.form for={@form} id="session-completion-form" class="session-finish-form">
+          <div id="session-completion-fields">
+            <.mood_pills id="session-completion-mood" />
+            <.tag_pills id="session-completion-tags" />
+            <div class="session-note-field composer">
+              <label for="completion-note-input" class="sr-only">Note</label>
+              <textarea
+                id="completion-note-input"
+                name={@form[:note_post].name}
+                rows="2"
+                placeholder="How did it go?"
+                aria-describedby="completion-note-error"
+                class="session-note-input"
+              >{@form[:note_post].value}</textarea>
+              <p id="completion-note-error" hidden></p>
+            </div>
+
+            <div class="hidden">
+              <.input field={@form[:burpee_type]} type="hidden" />
+              <.input field={@form[:burpee_count_planned]} type="hidden" />
+              <.input field={@form[:duration_sec_planned]} type="hidden" />
+              <.input field={@form[:client_session_id]} type="hidden" />
+            </div>
           </div>
 
-          <div class="hidden">
-            <.input field={@form[:burpee_type]} type="hidden" />
-            <.input field={@form[:burpee_count_planned]} type="hidden" />
-            <.input field={@form[:duration_sec_planned]} type="hidden" />
-            <.input field={@form[:client_session_id]} type="hidden" />
-          </div>
-
-          <%!-- A finished workout is saved or discarded; nothing else. --%>
-          <div id="session-completion-actions" class="mt-12 flex items-center justify-between gap-3">
+          <%!-- A finished workout is saved or deleted; nothing else. --%>
+          <div id="session-completion-actions" class="session-finish-actions">
             <button
               id="session-discard-btn"
               type="button"
-              aria-label="Discard session"
-              title="Discard session"
-              aria-controls="session-discard-confirm"
-              class="inline-flex size-14 items-center justify-center rounded-full border border-[var(--session-border)] text-[var(--session-ink)] transition-colors hover:bg-[var(--session-border)]/35"
+              aria-pressed="false"
+              aria-label="Delete session"
+              title="Delete session"
+              class="session-finish-trash"
             >
               <.icon name="hero-trash" class="size-6" />
             </button>
             <button
               id="session-save-btn"
               type="submit"
-              aria-label="Save session"
-              title="Save session"
-              class="inline-flex size-14 items-center justify-center rounded-full bg-[var(--session-ink)] text-[var(--session-bg)] transition-opacity hover:opacity-90"
+              aria-label="Save"
+              title="Save"
+              class="session-finish-save"
             >
               <span id="session-save-icon-ready" aria-hidden="true">
                 <.icon name="hero-check" class="size-6" />
@@ -366,40 +352,64 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               </span>
             </button>
           </div>
-
-          <%!-- Discarding deletes the started session. The question takes the buttons' place. --%>
-          <div
-            id="session-discard-confirm"
-            hidden
-            role="group"
-            aria-labelledby="session-discard-question"
-            aria-describedby="session-discard-consequence"
-            class="mt-12 text-center"
-          >
-            <p id="session-discard-question" class="text-lg font-medium">Discard this workout?</p>
-            <p id="session-discard-consequence" class="mt-1 text-sm text-[var(--session-muted)]">
-              Nothing will be saved.
-            </p>
-            <div class="mt-5 grid grid-cols-2 gap-3">
-              <button
-                id="session-discard-keep"
-                type="button"
-                class="min-h-14 rounded-full border border-[var(--session-border)] text-base font-medium text-[var(--session-ink)] transition-colors hover:bg-[var(--session-border)]/35"
-              >
-                Keep
-              </button>
-              <button
-                id="session-discard-yes"
-                type="button"
-                class="min-h-14 rounded-full bg-[var(--session-error-ink)] text-base font-medium text-white transition-opacity hover:opacity-90"
-              >
-                Discard
-              </button>
-            </div>
-          </div>
         </.form>
       </div>
+      <%!-- Armed, trash's question takes the page's place; the live status says it aloud. --%>
+      <div id="session-delete-question" class="session-pause-question" aria-hidden="true">
+        <p class="session-finish-question">Delete this session?</p>
+        <p class="session-finish-consequence">It won't be saved. Tap again to delete.</p>
+      </div>
     </.panel>
+    """
+  end
+
+  attr(:id, :string, required: true)
+  attr(:mood, :integer, default: nil)
+  attr(:click, :string, default: nil, doc: "the LiveView event a tap sends, if any")
+
+  @doc "How it felt, as three pills; the chosen one takes its colour (Rough, OK, Good)."
+  def mood_pills(assigns) do
+    assigns = assign(assigns, :mood_options, @mood_options)
+
+    ~H"""
+    <div id={@id} role="group" aria-label="How it felt" class="session-moods">
+      <button
+        :for={{label, value} <- @mood_options}
+        type="button"
+        data-mood={value}
+        phx-click={@click}
+        phx-value-mood={@click && value}
+        aria-pressed={to_string(@mood == value)}
+        class="session-mood"
+      >
+        {label}
+      </button>
+    </div>
+    """
+  end
+
+  attr(:id, :string, required: true)
+  attr(:tags, :list, default: [])
+  attr(:click, :string, default: nil, doc: "the LiveView event a tap sends, if any")
+
+  @doc "Optional tags that toggle; chosen ones are amber."
+  def tag_pills(assigns) do
+    assigns = assign(assigns, :tag_options, @tag_options)
+
+    ~H"""
+    <div id={@id} role="group" aria-label="Tags" class="session-tags">
+      <button
+        :for={{label, value} <- @tag_options}
+        type="button"
+        data-tag={value}
+        phx-click={@click}
+        phx-value-tag={@click && value}
+        aria-pressed={to_string(value in @tags)}
+        class="session-tag-pill"
+      >
+        {label}
+      </button>
+    </div>
     """
   end
 
