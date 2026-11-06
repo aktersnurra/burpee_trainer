@@ -23,7 +23,6 @@ defmodule BurpeeTrainerWeb.Flows.CoachPageFlowTest do
     {:ok, view, _} = live(conn, ~p"/coach")
 
     assert has_element?(view, "#coach-page h1", "Coach")
-    assert has_element?(view, "#coach-page #home-week-progress")
     assert has_element?(view, "#coach-page #home-coach-week [data-status=done]", "Six-count")
     assert has_element?(view, "#coach-page #home-coach-note", "Two sessions left")
     assert has_element?(view, "#coach-page #home-coach-message-form")

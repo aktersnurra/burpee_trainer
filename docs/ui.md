@@ -388,8 +388,8 @@ screen leads to the next in context:
   and months below. Design: `docs/specs/2026-11-06-light-screens-design.md`.
 - **Coach** (`/coach`, with the app's coach; without it, Home) is the coach's own page. Its top
   row: Back (a chevron, to where you came from: `/coach?from=progress` back to Progress, else
-  Home), "Coach", and the memory bookmark (4a1a). Then the week bar and this week's sessions as
-  on Home done, then the same chat, the box docked at the foot. Its first message is the coach's
+  Home), "Coach", and the memory bookmark (4a1a). Then this week's sessions as on Home done (no
+  week bar: the header is enough), then the same chat, the box docked at the foot. Its first message is the coach's
   word on the week, or, arriving from Progress, the look back. The coach has no suggestions of its
   own, so there is no suggestions row. Leaving after the memory changed here (a line forgotten,
   or the coach writing as it talked) writes the summary again. Design:

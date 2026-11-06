@@ -76,7 +76,7 @@ A choice is a soft tint of its colour with a thin ring of it and text in the ful
   one chart, close to square, six-count on the left axis as a solid navy line, Navy SEAL on the
   right axis as a dashed sky line, each axis labelled in its colour.
 - **Coach.** A page of its own, reached from Home's coach bookmark and from Progress's look-back.
-  Back chevron, "Coach", the memory bookmark on the right. The week bar and the week's sessions,
+  Back chevron, "Coach", the memory bookmark on the right. The week's sessions (no week bar under the header),
   then the chat (the same as Home done's), suggestions, the box. From Progress the look-back is
   the first message. The bookmark opens the memory sheet: "About you" and "Coaching notes", each
   with how full it is, each line with × to forget, "To change a line, tell the coach." at the

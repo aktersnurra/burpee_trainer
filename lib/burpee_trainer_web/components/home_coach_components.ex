@@ -6,8 +6,6 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
 
   use BurpeeTrainerWeb, :html
 
-  alias BurpeeTrainerWeb.HomeWorkoutComponents
-
   attr(:summary, :any, required: true)
   attr(:loading?, :boolean, required: true)
   attr(:field, :atom, default: :text, values: [:text, :review])
@@ -63,8 +61,8 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   attr(:state, :map, required: true)
 
   @doc """
-  The Coach page: Back, "Coach" and the memory bookmark on top, then the week, the chat and
-  the box. Arriving from Progress, the look back is the chat's first message.
+  The Coach page: Back, "Coach" and the memory bookmark on top, then the week's sessions, the
+  chat and the box (no week bar under the header). Arriving from Progress, the look back is the chat's first message.
   """
   def page(assigns) do
     ~H"""
@@ -105,7 +103,6 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           </button>
         </header>
         <section id="coach-page-body" aria-labelledby="coach-page-heading">
-          <HomeWorkoutComponents.week_progress :if={@state.slot} slot={@state.slot} />
           <.week_rows state={@state} />
           <.conversation
             state={@state}
