@@ -14,8 +14,6 @@ import { buildFinishPayload } from "./pose_trace.mjs";
 import {
 	drawPoseOverlay,
 	resizePoseCanvas,
-	SKELETON_INK,
-	SKELETON_READY,
 } from "./pose_overlay.mjs";
 import { shouldSamplePose } from "./pose_sampler.mjs";
 import { waitForVideoFrame, webglAvailable } from "./pose_video.mjs";
@@ -29,6 +27,9 @@ import {
 export { drawPoseOverlay, resizePoseCanvas };
 
 const CAMERA_SETUP_AUTO_CONFIRM_MS = 1500;
+
+const reducedMotion = () =>
+	Boolean(globalThis.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches);
 
 export function trackingFinishPayload({ durationMs, cadenceMs }) {
 	return buildFinishPayload({ durationMs, cadenceMs });
@@ -397,7 +398,10 @@ export function createPoseTracker(hook, runtime = {}) {
 		}
 		if (previewVisible) {
 			const ready = ["ready", "optimal"].includes(readiness.status);
-			drawPoseOverlay(canvas, poses[0], video, ready ? SKELETON_READY : SKELETON_INK);
+			drawPoseOverlay(canvas, poses[0], video, {
+				ready,
+				scan: reducedMotion() ? null : (performance.now() % 1400) / 1400,
+			});
 		}
 		lastFeature = sample.features;
 

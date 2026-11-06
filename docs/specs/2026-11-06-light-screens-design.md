@@ -84,11 +84,10 @@ A choice is a soft tint of its colour with a thin ring of it and text in the ful
 
 ## Runner
 
-The camera-setup screen draws you as a person, not a stick figure: a filled, slim silhouette
-(head, neck, shoulders wider than hips, tapered limbs, feet) in warm grey lit from above, with the
-pose line thin over it, ringed joints and a soft floor shadow. While the camera looks for you a lit
-scan line passes down; when it has you the line turns green and glows and the joints fill.
-Reduced motion stops the sway and the scan.
+The mockup draws a slim filled figure because it has no camera; in the app the feed shows you, so
+only the pose over it changes: a fine line with a soft glow, ringed joints and a ring round the
+head. While the camera looks for you a lit scan line passes down your body; when it has you the
+line turns green and glows and the joints fill. Reduced motion stops the scan.
 
 ## Out of scope
 

@@ -2546,7 +2546,7 @@ test("tracked pose overlay resizes and draws visible keypoints", () => {
 	};
 
 	PoseTrackerDiagnostics.resizePoseCanvas(canvas, 2);
-	PoseTrackerDiagnostics.drawPoseOverlay(canvas, pose, video, "#fff");
+	PoseTrackerDiagnostics.drawPoseOverlay(canvas, pose, video);
 
 	assert.equal(canvas.width, 400);
 	assert.equal(canvas.height, 600);

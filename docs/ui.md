@@ -85,6 +85,10 @@ the pause mark's place ("Finish early? What you've done is kept." or "Abort work
 saved."), the other chip steps aside and the armed one slides to the centre, filled: paper for
 Finish early, `--pace-behind` for Abort. The second tap acts. Escape or a tap elsewhere runs it
 back, still paused.
+On camera setup your pose is drawn over the feed (`pose_overlay.mjs`): a fine line with a soft
+glow, ringed joints and a ring round the head, in `--session-ink` while the camera looks for you,
+with a scan line passing down your body (none under reduced motion); once it has you, in
+`--pace-ahead`, glowing brighter, the joints filled.
 Design: `docs/specs/2026-11-05-night-session-runner-design.md`.
 
 ### One set of tokens (`assets/css/adaptive_home.css`, on `:root`)

@@ -334,6 +334,7 @@ function trackerElement(root) {
 		arc() {},
 		fill() {},
 		restore() {},
+		createLinearGradient: () => ({ addColorStop() {} }),
 	});
 	tracker.append(video, canvas);
 	root.append(tracker);
