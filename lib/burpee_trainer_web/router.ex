@@ -80,8 +80,10 @@ defmodule BurpeeTrainerWeb.Router do
 
     get("/videos/stream/:filename", VideoController, :stream)
 
+    # The device's start choices ride in the session so Home renders its toggles as they are.
     live_session :authed,
-      on_mount: [{BurpeeTrainerWeb.Auth, :require_authenticated_user}] do
+      on_mount: [{BurpeeTrainerWeb.Auth, :require_authenticated_user}],
+      session: {BurpeeTrainerWeb.StartChoices, :session, []} do
       live("/", HomeLive, :home)
       live("/progress", HomeLive, :history)
       live("/coach", HomeLive, :coach)

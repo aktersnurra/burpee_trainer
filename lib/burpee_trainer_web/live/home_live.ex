@@ -17,14 +17,22 @@ defmodule BurpeeTrainerWeb.HomeLive do
     HomeCoach,
     HomeCoachComponents,
     HistoryScreen,
-    HomeDayBoundary
+    HomeDayBoundary,
+    StartChoices
   }
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
+    # The device's start choices: from the page load's cookies, then from every join's own read.
+    start_choices =
+      if connected?(socket),
+        do: StartChoices.from_connect_params(get_connect_params(socket)),
+        else: session["start_choices"]
+
     socket =
       socket
       |> assign(:start_client_session_id, Ecto.UUID.generate())
+      |> assign(:start_choices, start_choices)
       |> assign_new(:home_now, fn -> fn -> DateTime.utc_now(:second) end end)
       |> assign(
         home_day_timer: nil,
@@ -295,7 +303,15 @@ defmodule BurpeeTrainerWeb.HomeLive do
     end
   end
 
+  # A start toggle changed on the device (it remembers it); Home renders it so from now on.
   @impl true
+  def handle_event("start_choice", %{"choice" => choice, "pressed" => pressed}, socket),
+    do:
+      {:noreply,
+       assign(socket,
+         start_choices: StartChoices.put(socket.assigns.start_choices, choice, pressed)
+       )}
+
   def handle_event(event, params, socket)
       when event in [
              "close_history",

@@ -318,11 +318,9 @@ function appendStablePanels(root) {
 }
 
 function startChoiceStorage({ camera, warmup }) {
-	const values = {
-		"burpee.start.camera": camera ? "1" : "0",
-		"burpee.start.warmup": warmup ? "1" : "0",
+	return {
+		cookie: `burpee_start_camera=${camera ? "1" : "0"}; burpee_start_warmup=${warmup ? "1" : "0"}`,
 	};
-	return { getItem: (key) => values[key] ?? null, setItem() {} };
 }
 
 const withCamera = {

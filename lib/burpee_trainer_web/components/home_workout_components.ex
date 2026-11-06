@@ -25,9 +25,10 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
   }
 
   attr(:choice, :string, required: true, values: Map.keys(@start_choices))
+  attr(:pressed, :boolean, required: true)
 
-  # A start toggle beside play or Resume. The device remembers it; the server renders it
-  # once and leaves it.
+  # A start toggle beside play or Resume, as the device remembers it (`StartChoices`). The
+  # server renders it and leaves it to its hook.
   def start_choice(assigns) do
     {label, icon} = Map.fetch!(@start_choices, assigns.choice)
     assigns = assign(assigns, label: label, icon: icon)
@@ -39,7 +40,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       phx-hook="HomeStartChoice"
       phx-update="ignore"
       data-start-choice={@choice}
-      aria-pressed="false"
+      aria-pressed={to_string(@pressed)}
       aria-label={@label}
       title={@label}
       class="home-text-action home-start-choice"
@@ -115,8 +116,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               class="home-workout-actions"
               data-expanded="true"
             >
-              <.start_choice choice="camera" />
-              <.start_choice choice="warmup" />
+              <.start_choice choice="camera" pressed={@state.start_choices["camera"]} />
+              <.start_choice choice="warmup" pressed={@state.start_choices["warmup"]} />
               <button
                 id="home-action"
                 data-primary-action="start"

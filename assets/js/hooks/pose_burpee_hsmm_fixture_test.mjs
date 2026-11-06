@@ -400,10 +400,7 @@ async function runControlledSessionFixture(frames) {
 		el: root,
 		openSessionStore: async () => null,
 		mediaDevices: { enumerateDevices: async () => [{ kind: "videoinput" }] },
-		startChoiceStorage: {
-			getItem: (key) => ({ "burpee.start.camera": "1", "burpee.start.warmup": "0" })[key] ?? null,
-			setItem() {},
-		},
+		startChoiceStorage: { cookie: "burpee_start_camera=1; burpee_start_warmup=0" },
 		requestBeginSession() {
 			this.dispatchFlow({ type: "SESSION_BEGIN_ACKNOWLEDGED" });
 		},

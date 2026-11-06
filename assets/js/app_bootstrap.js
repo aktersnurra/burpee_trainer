@@ -8,6 +8,7 @@ import HoldRepeat from "./hooks/hold_repeat.mjs";
 import { registerHomeChooserFeedback } from "./hooks/home_chooser_feedback.mjs";
 import HomePendingSession from "./hooks/home_pending_session.mjs";
 import HomeStartChoice from "./hooks/home_start_choice.mjs";
+import { readStartChoices } from "./hooks/start_choices.mjs";
 import SheetDrag from "./hooks/sheet_drag.mjs";
 import SessionHook from "./hooks/session_hook";
 import SessionCompleted from "./hooks/session_completed.mjs";
@@ -26,7 +27,9 @@ export function startApp(PoseTracker) {
 	const liveSocket = new LiveSocket("/live", Socket, {
 		longPollFallbackMs: 2500,
 		dom: viewTransitions(),
-		params: { _csrf_token: csrfToken },
+		// Read at every join, so a Home reached by live navigation renders the start choices as
+		// the device remembers them now, not as they were when the page loaded.
+		params: () => ({ _csrf_token: csrfToken, start_choices: readStartChoices() }),
 		hooks: {
 			ChatDock,
 			HomeGestures,

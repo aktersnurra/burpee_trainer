@@ -440,7 +440,7 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     socket = %Phoenix.LiveView.Socket{
       endpoint: BurpeeTrainerWeb.Endpoint,
       transport_pid: if(connected?, do: self()),
-      private: %{lifecycle: %Phoenix.LiveView.Lifecycle{}, live_temp: %{}},
+      private: %{lifecycle: %Phoenix.LiveView.Lifecycle{}, live_temp: %{}, connect_params: %{}},
       assigns: %{
         __changed__: %{},
         current_scope: BurpeeTrainer.Accounts.Scope.for_user(user),

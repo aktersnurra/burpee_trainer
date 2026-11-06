@@ -25,6 +25,17 @@
     <.live_title default="BurpeeTrainer">
       {assigns[:page_title]}
     </.live_title>
+    <%!-- The Geist weights Home paints with, fetched before the stylesheet asks for them so the
+         first paint is in Geist, not the fallback. The same URLs app.css asks for (digested
+         alike by phx.digest), so each is fetched once. --%>
+    <link
+      :for={weight <- ~w(400 500 600)}
+      rel="preload"
+      as="font"
+      type="font/woff2"
+      crossorigin
+      href={~p"/assets/css/files/#{"geist-latin-#{weight}-normal.woff2"}"}
+    />
     <link phx-track-static rel="stylesheet" href={~p"/assets/css/app.css"} />
     <script defer phx-track-static type="text/javascript" src={~p"/assets/js/app.js"}>
     </script>

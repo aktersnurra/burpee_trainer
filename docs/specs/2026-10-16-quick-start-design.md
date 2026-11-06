@@ -21,10 +21,13 @@ The action row of the workout hero becomes:
   not behind expand. Off shows the icon dimmed and struck through; `aria-pressed` carries
   the state, and `aria-label` names it ("Camera tracking", "Warmup").
 - Edit, switch and new stay as they are, shown when expanded.
-- Choices are remembered per device in `localStorage` (`burpee.start.camera`,
-  `burpee.start.warmup`): the camera depends on where the phone is, not on who you are.
-  First use, or storage unavailable: camera off, warmup on.
-- The toggles are client-only. Home's server state does not change; ▶ is unchanged.
+- Choices are remembered per device in cookies (`burpee_start_camera`,
+  `burpee_start_warmup`, `"1"`/`"0"`): the camera depends on where the phone is, not on who
+  you are. First use, or cookies unavailable: camera off, warmup on.
+- The server renders the toggles as remembered, so nothing changes once scripts run: a page
+  load reads the cookies into the LiveView session, every join sends them as connect params
+  (`BurpeeTrainerWeb.StartChoices`), and a tap tells Home so a toggle that comes back (after
+  New or Edit) renders as it was left. Home's workout state does not change; ▶ is unchanged.
 - The same toggles flank Resume: resuming starts the workout again, so its camera and warmup
   can be changed before it.
 - A device with no camera (no video input listed, or no media devices at all) shows the

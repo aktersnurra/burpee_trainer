@@ -126,7 +126,10 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                 <p class="home-result-meta home-resume-meta">{resume_meta(@started_session)}</p>
                 <p id="home-session-state" class="home-result-status">In progress</p>
                 <div class="home-resume-actions">
-                  <HomeWorkoutComponents.start_choice choice="camera" />
+                  <HomeWorkoutComponents.start_choice
+                    choice="camera"
+                    pressed={@start_choices["camera"]}
+                  />
                   <button
                     id="resume-recommended-workout"
                     data-primary-action="resume"
@@ -139,7 +142,10 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                     <%!-- Named for screen readers; the hook says "Review & save" for a draft. --%>
                     <span id="home-resume-action-label" class="sr-only">Resume</span>
                   </button>
-                  <HomeWorkoutComponents.start_choice choice="warmup" />
+                  <HomeWorkoutComponents.start_choice
+                    choice="warmup"
+                    pressed={@start_choices["warmup"]}
+                  />
                 </div>
               </section>
             <% nil -> %>

@@ -2,51 +2,64 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readStartChoices, writeStartChoice } from "./start_choices.mjs";
 
-function memoryStorage(entries = {}) {
+// A document's cookie jar: assigning sets one cookie, reading gives "name=value; ...".
+function cookieJar(entries = {}) {
   const values = new Map(Object.entries(entries));
+  const written = [];
   return {
-    getItem: (key) => (values.has(key) ? values.get(key) : null),
-    setItem: (key, value) => values.set(key, String(value)),
+    get cookie() {
+      return [...values].map(([name, value]) => `${name}=${value}`).join("; ");
+    },
+    set cookie(line) {
+      written.push(line);
+      const [name, value] = line.split(";")[0].split("=");
+      values.set(name, value);
+    },
     values,
+    written,
   };
 }
 
-const throwing = {
-  getItem() {
+const refusing = {
+  get cookie() {
     throw new Error("blocked");
   },
-  setItem() {
+  set cookie(_line) {
     throw new Error("blocked");
   },
 };
 
 test("a device that never chose starts without the camera and with the warmup", () => {
-  assert.deepEqual(readStartChoices(memoryStorage()), { camera: false, warmup: true });
+  assert.deepEqual(readStartChoices(cookieJar()), { camera: false, warmup: true });
 });
 
-test("a choice is remembered", () => {
-  const storage = memoryStorage();
-  writeStartChoice("camera", true, storage);
-  writeStartChoice("warmup", false, storage);
-  assert.deepEqual(readStartChoices(storage), { camera: true, warmup: false });
-  assert.equal(storage.values.get("burpee.start.camera"), "1");
-  assert.equal(storage.values.get("burpee.start.warmup"), "0");
+test("a choice is remembered where the server reads it on every page", () => {
+  const jar = cookieJar({ other: "x" });
+  writeStartChoice("camera", true, jar);
+  writeStartChoice("warmup", false, jar);
+  assert.deepEqual(readStartChoices(jar), { camera: true, warmup: false });
+  assert.equal(jar.values.get("burpee_start_camera"), "1");
+  assert.equal(jar.values.get("burpee_start_warmup"), "0");
+  for (const line of jar.written) {
+    assert.match(line, /; path=\/;/);
+    assert.match(line, /; max-age=\d+;/);
+  }
 });
 
 test("a value the app did not write falls back to the default", () => {
-  const storage = memoryStorage({ "burpee.start.camera": "yes", "burpee.start.warmup": "" });
-  assert.deepEqual(readStartChoices(storage), { camera: false, warmup: true });
+  const jar = cookieJar({ burpee_start_camera: "yes", burpee_start_warmup: "" });
+  assert.deepEqual(readStartChoices(jar), { camera: false, warmup: true });
 });
 
-test("storage that refuses or is missing never stops a workout", () => {
-  assert.deepEqual(readStartChoices(throwing), { camera: false, warmup: true });
+test("cookies that are refused or missing never stop a workout", () => {
+  assert.deepEqual(readStartChoices(refusing), { camera: false, warmup: true });
   assert.deepEqual(readStartChoices(undefined), { camera: false, warmup: true });
-  assert.doesNotThrow(() => writeStartChoice("camera", true, throwing));
+  assert.doesNotThrow(() => writeStartChoice("camera", true, refusing));
   assert.doesNotThrow(() => writeStartChoice("camera", true, undefined));
 });
 
 test("only the two choices are stored", () => {
-  const storage = memoryStorage();
-  writeStartChoice("audio", true, storage);
-  assert.equal(storage.values.size, 0);
+  const jar = cookieJar();
+  writeStartChoice("audio", true, jar);
+  assert.equal(jar.values.size, 0);
 });

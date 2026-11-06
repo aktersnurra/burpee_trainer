@@ -1,37 +1,48 @@
 // How a workout starts on this device: with the camera, with the warmup. Kept per device
-// because the camera depends on where the phone is. Storage that is missing or refuses
-// falls back to the defaults; it never stops a workout.
+// because the camera depends on where the phone is, in cookies so the server renders Home's
+// toggles as they are (`BurpeeTrainerWeb.StartChoices`). Cookies that are missing or refused
+// fall back to the defaults; they never stop a workout.
 
 const DEFAULTS = { camera: false, warmup: true };
-const KEYS = { camera: "burpee.start.camera", warmup: "burpee.start.warmup" };
+const COOKIES = { camera: "burpee_start_camera", warmup: "burpee_start_warmup" };
+const ONE_YEAR = 60 * 60 * 24 * 365;
 
-function defaultStorage() {
+function defaultJar() {
   try {
-    return globalThis.localStorage;
+    return globalThis.document;
   } catch {
     return undefined;
   }
 }
 
-function read(storage, choice) {
+function cookies(jar) {
   try {
-    const value = storage?.getItem(KEYS[choice]);
-    if (value === "1") return true;
-    if (value === "0") return false;
+    return Object.fromEntries(
+      String(jar?.cookie ?? "")
+        .split(";")
+        .map((pair) => pair.trim().split("=")),
+    );
   } catch {
-    // Fall through to the default.
+    return {};
   }
+}
+
+function read(values, choice) {
+  const value = values[COOKIES[choice]];
+  if (value === "1") return true;
+  if (value === "0") return false;
   return DEFAULTS[choice];
 }
 
-export function readStartChoices(storage = defaultStorage()) {
-  return { camera: read(storage, "camera"), warmup: read(storage, "warmup") };
+export function readStartChoices(jar = defaultJar()) {
+  const values = cookies(jar);
+  return { camera: read(values, "camera"), warmup: read(values, "warmup") };
 }
 
-export function writeStartChoice(choice, value, storage = defaultStorage()) {
-  if (!(choice in KEYS)) return;
+export function writeStartChoice(choice, value, jar = defaultJar()) {
+  if (!(choice in COOKIES)) return;
   try {
-    storage?.setItem(KEYS[choice], value ? "1" : "0");
+    jar.cookie = `${COOKIES[choice]}=${value ? "1" : "0"}; path=/; max-age=${ONE_YEAR}; samesite=lax`;
   } catch {
     // The choice lasts for this page only.
   }

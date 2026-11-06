@@ -115,6 +115,40 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     refute has_element?(view, "#home-start-warmup")
   end
 
+  test "the start toggles render as this device remembers them, from the first paint", %{
+    conn: conn,
+    user: user
+  } do
+    recommendation_fixture(user)
+
+    conn =
+      conn
+      |> put_req_cookie("burpee_start_camera", "1")
+      |> put_req_cookie("burpee_start_warmup", "0")
+
+    # The page load, before any script runs.
+    page = conn |> get(~p"/") |> html_response(200) |> LazyHTML.from_document()
+    assert LazyHTML.attribute(page["#home-start-camera"], "aria-pressed") == ["true"]
+    assert LazyHTML.attribute(page["#home-start-warmup"], "aria-pressed") == ["false"]
+
+    # The join, with the choices the browser reads from the same cookies.
+    {:ok, view, _} =
+      conn
+      |> put_connect_params(%{"start_choices" => %{"camera" => true, "warmup" => false}})
+      |> live(~p"/")
+
+    assert has_element?(view, "#home-start-camera[aria-pressed=true]")
+    assert has_element?(view, "#home-start-warmup[aria-pressed=false]")
+
+    # A tap on the device, then New and back: the toggles come back as they were left.
+    render_hook(view, "start_choice", %{"choice" => "warmup", "pressed" => true})
+    open_new(view)
+    refute has_element?(view, "#home-start-warmup")
+    view |> element(".studio-foot-close") |> render_click()
+    assert has_element?(view, "#home-start-camera[aria-pressed=true]")
+    assert has_element?(view, "#home-start-warmup[aria-pressed=true]")
+  end
+
   test "the drawer's tabs sit above its list, which says when a tab is empty", %{
     conn: conn,
     user: user
