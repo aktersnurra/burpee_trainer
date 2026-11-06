@@ -302,17 +302,42 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           next={BurpeeTrainer.Levels.next(@state.current_level)}
         />
       </div>
-      <div :if={summary_line?(@state)} class="history-look-back">
-        <p class="history-look-back-label">Coach</p>
-        <p id="history-coach-summary" class="history-coach-summary">
-          <BurpeeTrainerWeb.HomeCoachComponents.summary_body
-            summary={@state.progress_summary}
-            loading?={@state.progress_summary_loading?}
-            field={:review}
-          />
-        </p>
+      <%!-- The look back is the way into the coach, which opens on it; without the app's
+           coach it is Claude's and only reads here. --%>
+      <.link
+        :if={summary_line?(@state) and BurpeeTrainer.Coach.enabled?(@state.current_scope)}
+        id="history-look-back"
+        patch={~p"/coach?from=progress"}
+        data-vt="forward"
+        class="history-look-back"
+      >
+        <.look_back state={@state} chevron?={true} />
+      </.link>
+      <div
+        :if={summary_line?(@state) and not BurpeeTrainer.Coach.enabled?(@state.current_scope)}
+        class="history-look-back"
+      >
+        <.look_back state={@state} chevron?={false} />
       </div>
     </header>
+    """
+  end
+
+  attr(:state, :map, required: true)
+  attr(:chevron?, :boolean, required: true)
+
+  defp look_back(assigns) do
+    ~H"""
+    <p class="history-look-back-label">
+      Coach<.icon :if={@chevron?} name="hero-chevron-right-mini" class="size-4" />
+    </p>
+    <p id="history-coach-summary" class="history-coach-summary">
+      <BurpeeTrainerWeb.HomeCoachComponents.summary_body
+        summary={@state.progress_summary}
+        loading?={@state.progress_summary_loading?}
+        field={:review}
+      />
+    </p>
     """
   end
 

@@ -211,6 +211,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
       hidden={!@state.chooser_open?}
       phx-hook="SheetDrag"
       data-close="#home-chooser-close"
+      data-backdrop="#home-chooser-backdrop"
       role="dialog"
       aria-modal="true"
       aria-label="Choose a workout"

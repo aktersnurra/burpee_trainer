@@ -3,7 +3,9 @@ defmodule BurpeeTrainerWeb.HomeLive do
 
   use BurpeeTrainerWeb, :live_view
 
-  alias BurpeeTrainer.{Home, Repo, Workouts}
+  require Logger
+
+  alias BurpeeTrainer.{Coach, Home, Repo, Workouts}
   alias BurpeeTrainer.Coach.{PlanNextWorkoutJob, Policy, Summary, SummaryJob}
   alias BurpeeTrainer.Workouts.{Inspection, WorkoutSession}
 
@@ -13,6 +15,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
     HomeChooser,
     HomeWorkspace,
     HomeCoach,
+    HomeCoachComponents,
     HistoryScreen,
     HomeDayBoundary
   }
@@ -29,7 +32,8 @@ defmodule BurpeeTrainerWeb.HomeLive do
         home_planning_error: nil,
         editing_source: nil,
         workspace_screen: :home,
-        home_focus_return?: false,
+        home_focus_from: nil,
+        coach_from: :home,
         authoring_returned?: false,
         review_inspection_rows: []
       )
@@ -47,19 +51,38 @@ defmodule BurpeeTrainerWeb.HomeLive do
   end
 
   @impl true
-  def handle_params(_params, _uri, socket) do
+  def handle_params(params, _uri, socket) do
     screen = socket.assigns[:live_action] || :home
     previous = socket.assigns.workspace_screen
 
+    if screen == :coach and not Coach.enabled?(socket.assigns.current_scope) do
+      # Without the app's coach there is no one to talk to; Home shows what Claude left.
+      {:noreply, push_navigate(socket, to: ~p"/")}
+    else
+      {:noreply, open_screen(socket, screen, previous, params)}
+    end
+  end
+
+  defp open_screen(socket, screen, previous, params) do
     socket =
-      assign(socket,
+      socket
+      |> assign(
         workspace_screen: screen,
         history_open?: screen == :history,
-        home_focus_return?: screen == :home and previous != :home
+        home_focus_from: if(screen == :home and previous != :home, do: previous)
       )
+      |> leave_coach(previous, screen)
 
     socket =
       case screen do
+        :coach ->
+          socket
+          |> assign(
+            coach_from: if(params["from"] == "progress", do: :progress, else: :home),
+            coach_memory_open?: false
+          )
+          |> HomeCoach.refresh()
+
         :history ->
           HistoryScreen.open(socket)
 
@@ -72,18 +95,36 @@ defmodule BurpeeTrainerWeb.HomeLive do
           socket
       end
 
-    socket =
-      if screen == :home,
-        do:
-          assign(
-            socket,
-            :home_insight,
-            day_insight(socket.assigns.current_scope, socket.assigns.home_now.())
-          ),
-        else: socket
-
-    {:noreply, socket}
+    if screen == :home,
+      do:
+        assign(
+          socket,
+          :home_insight,
+          day_insight(socket.assigns.current_scope, socket.assigns.home_now.())
+        ),
+      else: socket
   end
+
+  # The summary on Home and Progress reads the coach's memory; when the Coach page changed it,
+  # leaving the page writes the summary again (the job's broadcast ends the loader).
+  defp leave_coach(%{assigns: %{coach_memory_changed?: true}} = socket, :coach, screen)
+       when screen != :coach do
+    socket = assign(socket, coach_memory_changed?: false)
+
+    case SummaryJob.enqueue(socket.assigns.current_scope) do
+      {:ok, _job} ->
+        assign(socket, progress_summary_loading?: true)
+
+      {:error, reason} ->
+        Logger.warning(
+          "coach_summary_not_admitted trigger=memory user_id=#{socket.assigns.current_scope.user.id} reason=#{inspect(reason)}"
+        )
+
+        socket
+    end
+  end
+
+  defp leave_coach(socket, _previous, _screen), do: socket
 
   @impl true
   def handle_info({:coach_summary, summary}, socket),
@@ -295,7 +336,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "coach_memory_close",
              "coach_memory_forget"
            ] do
-    if socket.assigns.workspace_screen == :home,
+    if socket.assigns.workspace_screen in [:home, :coach],
       do: HomeCoach.handle_event(event, params, socket),
       else: {:noreply, socket}
   end
@@ -530,6 +571,8 @@ defmodule BurpeeTrainerWeb.HomeLive do
           <HistoryScreen.screen {assigns} />
         <% :home -> %>
           <HomeScreen.screen {assigns} />
+        <% :coach -> %>
+          <HomeCoachComponents.page state={assigns} />
       <% end %>
     </Layouts.app>
     """

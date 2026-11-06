@@ -37,7 +37,7 @@
 | `BurpeeTrainer.Videos` / `BurpeeTrainer.Workouts.WorkoutVideo` | Video workout lookup and session sources |
 | `BurpeeTrainer.Goals`, `BurpeeTrainer.Levels`, `BurpeeTrainer.Milestones`, `BurpeeTrainer.Scoring`, `BurpeeTrainer.Stats.Series` | Progress and scoring domain queries |
 | `BurpeeTrainer.UserTime` | User-local date and time calculations |
-| `BurpeeTrainerWeb.HomeLive` | One LiveView for `/` and `/progress` (live actions `:home`, `:history`); the coach speaks on Home once the day is done (`HomeCoach`) |
+| `BurpeeTrainerWeb.HomeLive` | One LiveView for `/`, `/progress` and `/coach` (live actions `:home`, `:history`, `:coach`); the coach speaks on Home once the day is done and on its own page, with its memory in a sheet (`HomeCoach`) |
 | `BurpeeTrainerWeb.{HomeScreen, HistoryScreen}` | Screen modules rendered by `HomeLive` |
 | `BurpeeTrainerWeb.HomeAuthoring.Flow` | Pure authoring transitions: `update(model, event) -> {model, commands}`; work in flight is applied only while its `update_id` is current; each follow-up refines the latest proposal and the ones it replaced stay as `design_turns` (`docs/specs/2026-10-29-design-chat-design.md`) |
 | `BurpeeTrainerWeb.{HomeAuthoring, HomeChooser, HomeWorkspace, HomeAdjustment, HomeWorkoutRequest, CreationParameters}` | Home authoring, chooser, and workspace behaviour |

@@ -1,7 +1,8 @@
 // A bottom sheet that follows the finger down, as iOS sheets do. On a phone the drawer is a sheet
 // (`max-width: 600px`); a downward drag that starts with its list at the top moves the sheet with
 // the finger, and on release it either closes (far enough, or flicked) or settles back. Closing
-// clicks the sheet's own close button (`data-close`), so it closes exactly as a tap would.
+// clicks the sheet's own close button (`data-close`), so it closes exactly as a tap would; its
+// scrim (`data-backdrop`) fades as it goes. The drawer and the coach's memory are such sheets.
 
 export const PHONE = "(max-width: 600px)";
 // Movement before a stroke counts as a drag rather than a tap or a scroll.
@@ -21,7 +22,7 @@ export function createSheetDrag({ el, win, doc, now = Date.now }) {
 	let dragging = false;
 
 	const phone = () => Boolean(win.matchMedia?.(PHONE)?.matches);
-	const backdrop = () => doc.querySelector("#home-chooser-backdrop");
+	const backdrop = () => doc.querySelector(el.dataset.backdrop);
 
 	const follow = (dy) => {
 		el.style.transition = "none";

@@ -38,10 +38,10 @@
 }
 @media (min-width: 601px) { :root { --top: 48px; } }
 /* Home, History and Coach share one page: no nested gutters, the theme background. */
-.session-surface:has(> :is(#home-page, #history-page, #login-page) :is(.adaptive-home, .studio)) {
+.session-surface:has(> :is(#home-page, #history-page, #coach-page, #login-page) :is(.adaptive-home, .studio)) {
   padding: 0;
 }
-:is(#home-page, #history-page, #login-page):has(:is(.adaptive-home, .studio)) {
+:is(#home-page, #history-page, #coach-page, #login-page):has(:is(.adaptive-home, .studio)) {
   max-width: none;
   padding: 0;
 }
@@ -668,7 +668,10 @@ button.home-summary:hover .home-workout-name {
 .home-history-session-summary small { display: block; margin-top: 3px; color: var(--muted); font-size: var(--text-small); }
 .home-history-session-reps, .home-history-session-time { font-size: var(--text-body); font-variant-numeric: tabular-nums; }
 #home-done-today { border-bottom: 0; }
-.home-coach-panel { width: 100%; max-width: 640px; margin: 32px auto 0; padding-top: 24px; border-top: 1px solid var(--line); text-align: left; }
+/* Under the result, the week's rows, then the chat headed by "Coach" and its bookmark. */
+.home-coach-panel { width: 100%; max-width: 640px; margin: 24px auto 0; text-align: left; }
+.coach-chat-head { display: flex; align-items: center; justify-content: space-between; margin: 24px 0 -2px; color: var(--muted); font-size: var(--text-small); }
+.coach-chat-head .coach-page-action { margin-right: -12px; }
 /* History and Coach start where Home's top row does, so Back never moves between screens. */
 .screen-heading { margin: 16px 0 0; font: 600 var(--text-display)/1.2 var(--font-sans); letter-spacing: -0.02em; }
 /* Focus lands on the heading when a screen opens, for screen readers; it is not a control. */
@@ -797,8 +800,9 @@ button.home-summary:hover .home-workout-name {
    page's only rule. */
 .history-best-label { margin: 18px 0 0; color: var(--muted); font-size: var(--text-small); }
 .progress-gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
-.history-look-back { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); }
-.history-look-back-label { margin: 0; color: var(--muted); font-size: var(--text-small); }
+.history-look-back { display: block; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); color: inherit; text-decoration: none; }
+.history-look-back-label { display: flex; align-items: center; gap: 2px; margin: 0; color: var(--muted); font-size: var(--text-small); }
+a.history-look-back:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: 4px; }
 .history-header .history-coach-summary { display: block; margin-top: 6px; padding: 0; color: var(--ink); font-size: var(--text-body); line-height: 1.5; }
 .progress-gauge { display: flex; flex-direction: column; min-width: 0; }
 .progress-gauge p { margin: 0; }
@@ -833,9 +837,6 @@ button.home-summary:hover .home-workout-name {
 /* Other goals: one quiet row each under a hairline. */
 /* The coach, open: the last exchange behind a thin rule, one-tap replies, then the field. */
 /* The course: weekly bests climbing to the target, the rest of the way dashed. */
-/* Coach is its own screen: the note leads, then the last exchange, the replies, the field. */
-.coach-note { margin: 0 0 24px; color: var(--ink); font-size: var(--text-body); line-height: 1.6; }
-.coach-note .coach-summary-text { font-size: inherit; }
 
 /* One colour per burpee type, for its line, its points, its axis and its key. */
 .progress-key-six-count { color: var(--six); }
@@ -898,6 +899,10 @@ button.home-summary:hover .home-workout-name {
 .coach-week-done-mark { color: var(--ink); }
 .adaptive-home .coach-week-left .coach-week-type { color: var(--muted); }
 .coach-week-left .coach-week-type::before { opacity: .5; }
+/* The coach's opener is the chat's first message, plain from the left like its replies. */
+.coach-chat { display: grid; gap: 16px; }
+.coach-opener { font-size: var(--text-body); line-height: 1.5; }
+.coach-opener .coach-summary-text { font-size: inherit; }
 .coach-thread { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
 .coach-exchange { display: grid; gap: 8px; font-size: var(--text-body); line-height: 1.5; }
 .coach-exchange-you { justify-self: end; max-width: 88%; margin: 0; padding: 9px 15px; border-radius: 20px 20px 6px 20px; background: var(--bubble); color: var(--ink); }
@@ -970,13 +975,14 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .home-corner { display: flex; justify-content: center; gap: 8px; padding-top: 20px; }
 
 /* One icon button everywhere: 44px, plain and muted, filled on hover, pressed in on a tap. */
-.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--muted); cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
-:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch):hover { background: var(--color-base-300); color: var(--ink); }
-:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch):active { transform: scale(.94); }
-:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch):focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch, .coach-page-action { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--muted); cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
+:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch, .coach-page-action):hover { background: var(--color-base-300); color: var(--ink); }
+:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch, .coach-page-action):active { transform: scale(.94); }
+:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch, .coach-page-action):focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
 /* A sheet rises from the bottom edge over a fading backdrop; its grip sits at its top edge. */
-@keyframes sheet-up { from { transform: translate(-50%, 100%); } to { transform: translate(-50%, 0); } }
+@keyframes sheet-up { from { transform: translateY(100%); } }
+@keyframes sheet-down { to { transform: translateY(100%); } }
 @keyframes sheet-fade { from { opacity: 0; } to { opacity: 1; } }
 .home-sheet-grip { justify-self: center; width: 36px; height: 4px; margin-bottom: 8px; border-radius: 2px; background: var(--line); }
 
@@ -1077,24 +1083,43 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 
 .coach-summary-loader { margin-top: -8px; }
 
-/* What the coach remembers: an icon beside the coach's note that opens a sheet with its two parts. */
-.coach-head { display: flex; align-items: flex-start; gap: 8px; }
-.coach-head .coach-note { flex: 1; min-width: 0; }
-.coach-memory-toggle { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin: -10px -12px 0 0; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
-.coach-memory-toggle:hover, .coach-memory-toggle[aria-expanded="true"] { color: var(--ink); }
-.home-sheet-backdrop { position: fixed; inset: 0; z-index: 40; background: rgb(32 32 29 / .28); animation: sheet-fade var(--motion-quick) ease backwards; }
-.home-sheet { position: fixed; z-index: 41; left: 50%; bottom: 0; display: grid; gap: 18px; width: min(430px, 100%); max-height: 80svh; overflow-y: auto; padding: 10px 20px calc(24px + env(safe-area-inset-bottom)); border-radius: var(--radius-surface) var(--radius-surface) 0 0; background: var(--color-base-200); text-align: left; transform: translateX(-50%); animation: sheet-up var(--motion-settle) var(--ease-out) backwards; }
+/* The Coach page: Back, its title and the memory bookmark on the top row, then the week. */
+.coach-page-top { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; margin: -12px -12px 0; }
+.coach-page-title { margin: 0; text-align: center; font: 600 var(--text-heading)/1.2 var(--font-sans); }
+.coach-page-title:focus { outline: none; }
+.coach-page #home-week-progress { margin-top: 14px; }
+.coach-page .coach-week { margin-top: 16px; }
+.coach-page-action { color: var(--muted); text-decoration: none; }
+@media (min-width: 601px) {
+  .coach-page #coach-page-body { max-width: 640px; margin-inline: auto; }
+  .coach-page .coach-page-top { max-width: 664px; margin: -12px auto 0; }
+}
+
+/* What the coach remembers: the workout picker's bottom sheet (88% of the screen, a grip, an
+   x-mark, the scrim), centred in the column on a wide screen. */
+.home-sheet-backdrop { position: fixed; inset: 0; z-index: 40; background: rgb(32 32 29 / .18); animation: sheet-fade var(--motion-quick) ease backwards; }
+.home-sheet { position: fixed; z-index: 41; inset: auto 0 0 0; width: min(640px, 100%); height: 88svh; margin-inline: auto; overflow-y: auto; overscroll-behavior: contain; padding: 8px var(--gutter) calc(24px + env(safe-area-inset-bottom)); border-radius: var(--radius-surface) var(--radius-surface) 0 0; background: var(--color-base-200); box-shadow: 0 -8px 40px rgb(32 32 29 / .12); text-align: left; animation: sheet-up var(--motion-settle) var(--ease-out) backwards; }
 .home-sheet:focus { outline: none; }
-.coach-memory-sheet .home-sheet-grip { margin-bottom: 0; }
-@media (prefers-reduced-motion: reduce) { .home-sheet, .home-sheet-backdrop { animation: none; } }
-.coach-memory-heading { display: flex; justify-content: space-between; margin: 0 0 6px; color: var(--muted); font: 500 var(--text-small)/1.2 var(--font-sans); }
-.coach-memory-usage { font-variant-numeric: tabular-nums; }
-.coach-memory-empty { margin: 0; color: var(--muted); font-size: var(--text-small); }
+.home-sheet .home-sheet-grip { display: block; margin: 0 auto 4px; }
+.coach-sheet-leave { animation: sheet-down var(--motion-settle) var(--ease-out) forwards; }
+.coach-sheet-fade-out { animation: sheet-fade var(--motion-settle) ease reverse forwards; }
+@media (prefers-reduced-motion: reduce) { .home-sheet, .home-sheet-backdrop, .coach-sheet-leave, .coach-sheet-fade-out { animation: none; } }
+.coach-memory-top { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; margin: 0 -12px 8px; }
+.coach-memory-top h2 { margin: 0; text-align: center; font: 600 var(--text-heading)/1.2 var(--font-sans); }
+.coach-memory-heading { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 4px; color: var(--muted); font: 400 var(--text-small)/1.2 var(--font-sans); }
+/* How full a part is: a short track filled in cobalt. */
+.coach-memory-usage { width: 48px; height: 3px; overflow: hidden; border-radius: 999px; background: var(--line); }
+.coach-memory-usage > span { display: block; height: 100%; background: var(--cobalt); }
+.coach-memory-empty { margin: 0; padding: 12px 0; border-bottom: 1px solid var(--line); color: var(--muted); font-size: var(--text-small); }
 .coach-memory-entries { margin: 0; padding: 0; list-style: none; }
-.coach-memory-entries li { display: flex; align-items: center; gap: 8px; min-height: 44px; border-bottom: 1px solid var(--line); color: var(--ink); font-size: var(--text-small); line-height: 1.4; }
+.coach-memory-entries li { display: flex; align-items: center; gap: 8px; min-height: 44px; border-bottom: 1px solid var(--line); color: var(--ink); font-size: 15px; line-height: 1.4; }
 .coach-memory-entries li > span { flex: 1; padding: 8px 0; }
-.coach-memory-forget { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin-right: -12px; border: 0; background: transparent; color: var(--muted); }
-.coach-memory-forget:hover { color: var(--ink); }
+/* A line the coach changed this week wears the diff's cobalt highlight. */
+.coach-memory-entries li[data-changed="true"] > span { flex: 0 1 auto; margin-right: auto; padding: 0 4px; margin-left: -4px; border-radius: 3px; background: color-mix(in srgb, var(--cobalt) 16%, transparent); }
+.coach-memory-forget { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin-right: -12px; border: 0; border-radius: 12px; background: transparent; color: var(--muted); cursor: pointer; }
+.coach-memory-forget:hover { background: var(--color-base-300); color: var(--ink); }
+.coach-memory-forget:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.coach-memory-foot { margin: 16px 0 0; color: var(--muted); font-size: var(--text-small); }
 
 /* ---- Moving between views (Home, Progress, New, Edit): the week bar holds still while the page
    slides 12px and fades, forward from the right, back from the left. A tap on a control marked

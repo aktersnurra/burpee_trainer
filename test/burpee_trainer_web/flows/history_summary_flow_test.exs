@@ -36,7 +36,13 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     # Progress reads the coach's look back; the note about what's next is for Home.
     assert has_element?(view, "#history-header p#history-coach-summary", "Six-count held")
     refute has_element?(view, "#history-coach-summary", "Best so far")
-    refute has_element?(view, "#home-coach-panel, a[href^='/coach']")
+    refute has_element?(view, "#home-coach-panel")
+    # The look back is the way into the coach, which opens on it.
+    assert has_element?(
+             view,
+             "a#history-look-back[href='/coach?from=progress']",
+             "Six-count held"
+           )
   end
 
   test "each burpee type has its own gauge, and both share one chart", %{
@@ -192,7 +198,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     refute has_element?(view, "#history-coach-summary [role=status]")
   end
 
-  test "the coach section: its word first, this week, the conversation, message, goals", %{
+  test "the coach section: this week, then the chat opened by its word, message, goals", %{
     conn: conn,
     user: user
   } do
@@ -203,7 +209,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
 
     positions =
       for id <-
-            ~w[home-coach-note home-coach-week home-coach-message-form home-coach-reply home-coach-goals] do
+            ~w[home-coach-week home-coach-note home-coach-message-form home-coach-reply home-coach-goals] do
         {index, _} = :binary.match(html, ~s(id="#{id}"))
         index
       end
@@ -270,38 +276,6 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     # A patch reads once, as updated, not as a forget and a note.
     refute html =~ "Forgot: Trains at 7:00"
     assert has_element?(view, "#home-coach-thread .coach-memory[data-kind=noted] .hero-bookmark")
-  end
-
-  test "what the coach remembers is an icon that opens a sheet by part, and an entry can be removed",
-       %{conn: conn, user: user} do
-    scope = Scope.for_user(user)
-
-    {:ok, _} =
-      BurpeeTrainer.Coach.Memory.write(scope, "user", [
-        %{"action" => "add", "content" => "Trains at 7:00"}
-      ])
-
-    free_form_session_fixture(user, %{duration_sec_actual: 1_200})
-    {:ok, view, _} = live(conn, ~p"/")
-    refute has_element?(view, "#home-coach-memory")
-
-    view
-    |> element("#home-coach-memory-toggle[aria-label='What the coach remembers']")
-    |> render_click()
-
-    assert has_element?(view, "#home-coach-memory-toggle[aria-expanded=true]")
-    assert has_element?(view, "#home-coach-memory[role=dialog]")
-    assert has_element?(view, "#home-coach-memory-user", "Trains at 7:00")
-    assert has_element?(view, "#home-coach-memory-memory", "Nothing yet.")
-
-    [entry] = BurpeeTrainer.Coach.Memory.list(scope)
-    view |> element("#home-coach-memory-forget-#{entry.id}") |> render_click()
-    assert BurpeeTrainer.Coach.Memory.list(scope) == []
-    refute has_element?(view, "#home-coach-memory-entry-#{entry.id}")
-
-    # Nothing left to remember: the sheet and the icon go with it.
-    refute has_element?(view, "#home-coach-memory-toggle")
-    refute has_element?(view, "#home-coach-memory")
   end
 
   defp text(view, selector),

@@ -15,14 +15,14 @@ function fixture({ phone = true, scrollTop = 0 } = {}) {
 	const el = {
 		scrollTop,
 		offsetHeight: 700,
-		dataset: { close: "#close" },
+		dataset: { close: "#close", backdrop: "#scrim" },
 		style: {},
 		addEventListener: (name, fn, opts) => handlers.set(name, { fn, opts }),
 		removeEventListener: (name) => handlers.delete(name),
 	};
 	const scrim = { style: {} };
 	const doc = {
-		querySelector: (s) => (s === "#close" ? { click: () => clicks.push(s) } : s === "#home-chooser-backdrop" ? scrim : null),
+		querySelector: (s) => (s === "#close" ? { click: () => clicks.push(s) } : s === "#scrim" ? scrim : null),
 	};
 	const win = { matchMedia: () => ({ matches: phone }) };
 	let t = 0;

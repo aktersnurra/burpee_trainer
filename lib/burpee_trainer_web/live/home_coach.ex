@@ -1,8 +1,9 @@
 defmodule BurpeeTrainerWeb.HomeCoach do
   @moduledoc """
-  The coach on Home: once today's training is done, the coach card sits open under the result:
-  this week's window, the coach's note, and the conversation, with what the coach noted
-  or forgot about you between the exchanges.
+  The coach on Home and on the Coach page: once today's training is done, the coach sits open
+  under Home's result: this week's window, then the conversation opened by the coach's note,
+  with what the coach noted or forgot about you between the exchanges. The Coach page adds
+  what it remembers, in a sheet.
   """
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
@@ -16,7 +17,11 @@ defmodule BurpeeTrainerWeb.HomeCoach do
       coach_busy?: false,
       coach_reply: nil,
       coach_pending_message: nil,
-      coach_status: nil
+      coach_status: nil,
+      coach_memory_open?: false,
+      # Whether this page changed the memory (a forget, or the coach writing as it talked),
+      # so leaving the Coach page rewrites the summary that reads from it.
+      coach_memory_changed?: false
     )
     |> stream_configure(:coach_goals, dom_id: &"home-coach-goal-#{&1.id}")
     |> refresh()
@@ -40,9 +45,7 @@ defmodule BurpeeTrainerWeb.HomeCoach do
 
   # What the coach remembers, opened on asking; an entry the owner removes is forgotten.
   def handle_event("coach_memory_toggle", _, socket),
-    do:
-      {:noreply,
-       assign(socket, coach_memory_open?: not Map.get(socket.assigns, :coach_memory_open?, false))}
+    do: {:noreply, assign(socket, coach_memory_open?: not socket.assigns.coach_memory_open?)}
 
   def handle_event("coach_memory_close", _, socket),
     do: {:noreply, assign(socket, coach_memory_open?: false)}
@@ -50,10 +53,7 @@ defmodule BurpeeTrainerWeb.HomeCoach do
   def handle_event("coach_memory_forget", %{"id" => raw}, socket) do
     with {id, ""} <- Integer.parse(to_string(raw)),
          :ok <- Memory.forget(socket.assigns.current_scope, id) do
-      socket = refresh(socket)
-      # The last entry gone, there is nothing to show: the sheet closes with its icon.
-      empty? = Enum.all?(socket.assigns.coach_memory, &(&1.entries == []))
-      {:noreply, if(empty?, do: assign(socket, coach_memory_open?: false), else: socket)}
+      {:noreply, socket |> refresh() |> assign(coach_memory_changed?: true)}
     else
       _ -> {:noreply, socket}
     end
@@ -143,7 +143,9 @@ defmodule BurpeeTrainerWeb.HomeCoach do
        coach_pending_message: nil,
        # The reply reads in the conversation; this line is for failures only.
        coach_reply: nil,
-       coach_message_form: to_form(%{"text" => ""}, as: :coach_message)
+       coach_message_form: to_form(%{"text" => ""}, as: :coach_message),
+       coach_memory_changed?:
+         socket.assigns.coach_memory_changed? or Map.get(result, :memory_written?, false)
      )
      |> refresh()}
   end
