@@ -25,10 +25,16 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     open_new(view)
 
     assert has_element?(view, "#home-studio h1#home-authoring-heading", "New workout")
-    assert has_element?(view, "#studio-new-form #studio-create", "Create workout")
     refute has_element?(view, "#home-workout-hero, #home-chat-dock, #studio-thread")
-    assert has_element?(view, "#home-request-abort[aria-label='Cancel new workout']")
-    refute has_element?(view, "#studio-back")
+    # One way out and one way on, both at the foot; nothing in the bar above.
+    assert has_element?(view, "#studio-new-form .studio-foot #studio-create[aria-label=Create]")
+
+    assert has_element?(
+             view,
+             "#studio-new-form .studio-foot #home-request-abort[aria-label=Close]"
+           )
+
+    refute has_element?(view, ".studio-header button")
 
     view |> element("#home-request-abort") |> render_click()
     refute has_element?(view, "#home-studio")
@@ -44,8 +50,8 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     # With no history, the next level's landmark scaled to the duration, at a mid pace.
     assert shown(view, "reps") == "50"
     assert shown(view, "pace") == "4.5"
-    # What it comes to: 50 reps at 4.5 s is 3:45 moving, the rest of the 20 minutes recovery.
-    assert has_element?(view, "#studio-reps-hint", "3:45 moving · 16:15 recovering")
+    # What it makes: 50 reps across 20 minutes on an even beat.
+    assert has_element?(view, "#studio-shape", "One rep every 24 s, all the way")
 
     view |> element("#studio-duration-up") |> render_click()
     assert shown(view, "duration") == "25"
@@ -55,10 +61,9 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     # From fifty, reps step by ten.
     view |> element("#studio-reps-up") |> render_click()
     assert shown(view, "reps") == "60"
-    assert has_element?(view, "#studio-reps-hint", "4:30 moving · 15:30 recovering")
+    assert has_element?(view, "#studio-shape", "One rep every 20 s, all the way")
     view |> element("#studio-pace-up") |> render_click()
     assert shown(view, "pace") == "5.0"
-    assert has_element?(view, "#studio-reps-hint", "5:00 moving · 15:00 recovering")
 
     fill(view, "reps", "150")
     assert shown(view, "reps") == "150"
@@ -227,28 +232,15 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
     assert shown(view, "sets") == "25"
   end
 
-  test "style, set size and pace are folded under one row that says what they are", %{view: view} do
-    open_new(view)
-
-    assert has_element?(
-             view,
-             "#studio-more[aria-expanded='false'][aria-controls='studio-more-fields']"
-           )
-
-    assert has_element?(view, "#studio-more-summary", "Even · 4.5 s/rep")
-    # Folded, the fields are still in the form, so what they hold is sent.
-    assert has_element?(view, "#studio-new-form #studio-more-fields #studio-pace")
-    fill(view, "pacing_style", "unbroken")
-    fill(view, "sets", "10")
-    assert has_element?(view, "#studio-more-summary", "Unbroken · sets of 10 · 4.5 s/rep")
-  end
-
-  test "an even beat has no set size to ask", %{view: view} do
+  test "an even beat has no set size to ask; unbroken sets say how they fall", %{view: view} do
     open_new(view)
     fill(view, "pacing_style", "even")
     refute has_element?(view, "#studio-sets")
     fill(view, "pacing_style", "unbroken")
     assert has_element?(view, "#studio-sets[placeholder='No limit']")
+    fill(view, "sets", "10")
+    # 50 reps at 4.5 s in sets of 10: what movement leaves of 20 minutes, shared between them.
+    assert has_element?(view, "#studio-shape", "5 sets of 10 · 4:04 rest")
   end
 
   defp layout(phases, name) do

@@ -110,7 +110,7 @@ One palette across every view. A colour means one thing.
 | Token | Hex | Means |
 |---|---|---|
 | `--six` | `#1f3f73` navy | six-count: its days, its solid line, its picked type |
-| `--seal` | `#86aee0` sky | Navy SEAL: its days, its picked type |
+| `--seal` | `#86aee0` sky | Navy SEAL: its days, its picked type (its text there is `--six` 75% into `--seal-line`, since sky is too light to read) |
 | `--seal-line` | `#5f8fcf` | Navy SEAL's dashed line and its marks |
 | `--cobalt` | `#2f63ad` | as a tint: what the coach changed; an OK session |
 | `--good` | `#3f9161` | a Good session |
@@ -230,11 +230,11 @@ Edit and New are the studio, a full-screen chat on the same page and gutter as H
 the bottom like the sheet grown to the full screen, and drop away the same way. They are never a
 sheet: a conversation needs the screen above the keyboard, and a stray pull must not throw it away.
 
-- **Header**: a 44px button in the corner, nothing else. Edit's is Close (x-mark). New rises
-  over Home, so its Back points down (⌄); the one step back inside New (from a request in flight
-  to its form) points left. The title is the workout itself: in Edit its name, large, under the bar (the heading is
+- **Header**: a 44px button in the corner, nothing else. Edit's is Close (x-mark). New's form has
+  none: it closes from its foot (below). With New's proposal on screen it is Close too; the one
+  step back inside New (from a request in flight to its form) points left. The title is the workout itself: in Edit its name, large, under the bar (the heading is
   for screen readers); in New "New workout" in the same type and place. With a
-  proposal on screen Close (or New's Back) keeps it: it is saved and made today's workout, the studio drops away and
+  proposal on screen Close keeps it: it is saved and made today's workout, the studio drops away and
   the proposal's name settles into Home's title (Run still starts it at once). Otherwise Back is
   one step back, and out of the first. A drawer or sheet is closed with an x-mark, since it
   covers part of Home rather than replacing it. Where a screen's own head leads back (Progress's
@@ -249,18 +249,23 @@ sheet: a conversation needs the screen above the keyboard, and a stray pull must
   highlighted; a changed structure is followed by `was 5 sets of 3` struck through in grey; a
   changed Reps, Every, Move or Rest cell is highlighted (never the Set column). Sets read by
   number (`1–4`, `5`), rests as clocks (`4:30`).
-- **New's form** is big numbers (`.studio-form-hero`): the burpee as two words centred, the
-  chosen one in ink; duration and reps as 64px centred numbers with their unit under them and a
-  plain 52px step either side that keeps stepping while held; a hint under each in small muted
-  type. Style, set size, pace and the note fold under one centred **More** line that reads them
-  ("Even · 4.5 s/rep") and unfolds as quiet rows between hairlines. Create workout, the one
-  filled pill, sits at the foot of the screen within the thumb's reach.
+- **New's form** is big numbers (`.studio-form-hero`): the burpee as two pills centred, the
+  picked one in its type's tint (2); duration and reps as 64px centred numbers with their unit
+  under them and a plain 52px step either side that keeps stepping while held, the week's time
+  left under the duration. Under them, the structure sentence of what the form would make
+  (`One rep every 27 s, all the way`; `4 sets of 10 · 4:53 rest`), changing as the values do
+  (`NewWorkoutForm.shape/1`). Then quiet rows labelled like settings, between hairlines: **Sets**
+  (Even / Unbroken pills, the picked one in the picked type's tint), **Set size** (Unbroken only)
+  and **Pace** (`− 8.0 s +`), each a 36px step in a 44px target. Then the request box (4a1), no
+  send key. The foot holds X (Close, a quiet 44px round) on the left and the ✓ pill (Create) on
+  the right; it stays at the bottom of the screen within the thumb's reach, the form fading out
+  under it.
 - **Suggested asks**: up to three of the coach's guesses at the next change sit as quiet
   pills (`.studio-suggestion`, muted small type) just above the chat box, in one row that
   scrolls sideways and fades at its right edge (on a phone the row runs on to the screen's
   edge), and go while the coach works; a tap sends one as a follow-up.
 - **Words on pills**: the studio is a conversation, so its actions are words on pills (the one
-  filled ink pill per view is the way on: Run, Create workout), where the rest of the app
+  filled ink pill per view is the way on: Run, New's ✓), where the rest of the app
   uses icons (4a2). Run is Home's play pill, the mark alone (labelled "Run"), and uses Home's
   camera and warmup choices; the studio has no toggles of its own.
 
@@ -293,12 +298,12 @@ every animation here.
 - Deleting a session: tap its row and its trash shows; the first tap on the trash arms it
   (error colour), the second deletes. Tapping the row again or Escape lets go.
 - A chevron only means "opens here" or, pointing down at the end of a list, "more".
-- Every pick (burpee type, set style) is the same: its options as words side by side, a
-  middle dot between, the chosen one in ink at 600. A destructive decision is the filled pill in
-  the error colour.
+- Every pick (burpee type, set style) is the same: its options as quiet pills side by side, the
+  chosen one a soft tint of its colour (2), never solid ink; a set style takes the picked type's
+  tint. A destructive decision is the filled pill in the error colour.
 - Three kinds of button and no more. The **filled pill** (ink, 48px, `--pill-h`) is the one way
-  on per view: Play, Resume, Approve, Sign in, Run, Create workout. The **quiet pill** (`--fill`,
-  no border) is everything secondary that is words or a step: steppers, suggestions, More, a
+  on per view: Play, Resume, Approve, Sign in, Run, New's ✓. The **quiet pill** (`--fill`,
+  no border) is everything secondary that is words or a step: steppers, suggestions, picks at rest, a
   start choice that is on. The **icon button** (4a1a) is the rest. Nothing has a border but
   the composer.
 - The burpee types are always "Six-count" and "Navy SEAL" (lowercase "six-count" mid-sentence).

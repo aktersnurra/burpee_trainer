@@ -238,7 +238,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
       |> LazyHTML.from_fragment()
       |> LazyHTML.text()
 
-    view |> element("#home-request-keep[aria-label='Keep this workout']") |> render_click()
+    view |> element("#home-request-keep[aria-label='Close']") |> render_click()
     refute has_element?(view, "#home-studio")
     assert has_element?(view, "#home-summary", String.trim(name))
 

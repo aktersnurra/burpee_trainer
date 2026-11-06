@@ -175,4 +175,16 @@ defmodule BurpeeTrainerWeb.NewWorkoutFormTest do
     assert submitted.params.reps == 80
     assert submitted.touched == ["reps"]
   end
+
+  test "the structure sentence says what the form would make" do
+    even = params(%{burpee_type: "navy_seal", reps: 44, pace: 8.0})
+    assert NewWorkoutForm.shape(even) == "One rep every 27 s, all the way"
+
+    # Sets as even as the reps allow, none past the size; what movement leaves, rest between.
+    unbroken = %{even | pacing_style: "unbroken", max_set_reps: 10}
+    assert NewWorkoutForm.shape(unbroken) == "5 sets of 8–9 · 3:32 rest"
+    assert NewWorkoutForm.shape(%{unbroken | reps: 40}) == "4 sets of 10 · 4:53 rest"
+    # With no set size the coach chooses the sets.
+    assert NewWorkoutForm.shape(%{unbroken | max_set_reps: nil}) == nil
+  end
 end

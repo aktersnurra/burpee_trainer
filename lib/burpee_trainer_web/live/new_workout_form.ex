@@ -9,6 +9,7 @@ defmodule BurpeeTrainerWeb.NewWorkoutForm do
 
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.NewDefaults
+  alias BurpeeTrainer.Workouts.Shape
   alias BurpeeTrainerWeb.{CreationParameters, HomeWorkoutRequest}
 
   @enforce_keys [:params, :touched]
@@ -79,6 +80,41 @@ defmodule BurpeeTrainerWeb.NewWorkoutForm do
       _ -> form
     end
   end
+
+  @doc """
+  What the form would make, as its structure sentence (`Workouts.Shape`): an even beat across
+  the duration, or sets no bigger than the set size, as even as the reps allow, sharing what
+  movement leaves of the duration as equal rests. `nil` for unbroken with no set size, since
+  the coach then chooses the sets.
+  """
+  @spec shape(HomeWorkoutRequest.t()) :: String.t() | nil
+  def shape(%{pacing_style: "even"} = p),
+    do: Shape.describe(%{"events" => [work(p.reps, seconds(p) / p.reps, p.pace)]})
+
+  def shape(%{max_set_reps: nil}), do: nil
+
+  def shape(%{max_set_reps: size} = p) do
+    count = ceil(p.reps / size)
+    rest = %{"kind" => "rest", "duration_sec" => (seconds(p) - p.reps * p.pace) / (count - 1)}
+
+    events =
+      for(
+        i <- 0..(count - 1),
+        do: div(p.reps, count) + if(i < rem(p.reps, count), do: 1, else: 0)
+      )
+      |> Enum.map(&work(&1, p.pace, p.pace))
+      |> Enum.intersperse(rest)
+
+    Shape.describe(%{"events" => events})
+  end
+
+  defp work(reps, sec_per_rep, sec_per_burpee),
+    do: %{
+      "kind" => "work",
+      "reps" => reps,
+      "sec_per_rep" => sec_per_rep,
+      "sec_per_burpee" => sec_per_burpee
+    }
 
   # The value for `field`, parsed and kept within its own range.
 

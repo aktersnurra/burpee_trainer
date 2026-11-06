@@ -1039,14 +1039,16 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .studio-row + .studio-row { border-top: 1px solid var(--line); }
 .studio-row-label { float: left; padding: 0; color: var(--ink); font: 500 var(--text-body)/1.3 var(--font-sans); }
 .studio-row-hint { grid-column: 1 / -1; margin: 6px 0 2px; color: var(--muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; text-align: right; }
-/* A pick is words: the options side by side, the chosen one in ink at 600, a dot between. */
-.studio-segment { display: inline-grid; grid-auto-flow: column; grid-auto-columns: auto; }
-.studio-segment-option { position: relative; display: grid; place-items: center; min-height: 44px; padding: 0 14px; border-radius: 999px; color: var(--muted); font: 400 var(--text-body)/1 var(--font-sans); white-space: nowrap; cursor: pointer; transition: color var(--motion-quick) ease; }
+/* A pick is pills side by side, quiet at rest; the chosen one wears the picked type's tint
+   (--pick, set on New's form), never a solid fill. Each is a 44px target. */
+.studio-segment { display: inline-flex; gap: 8px; }
+.studio-segment-option { position: relative; display: grid; place-items: center; min-height: 44px; cursor: pointer; }
+.studio-segment-option > span { display: grid; place-items: center; height: 44px; padding: 0 18px; border-radius: 999px; background: var(--fill); color: var(--ink); font: 400 var(--text-body)/1 var(--font-sans); white-space: nowrap; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, box-shadow var(--motion-quick) ease; }
+.studio-segment-option:hover > span { background: var(--fill-hover); }
 .studio-segment-option input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
-.studio-segment-option:has(input:checked) { color: var(--ink); font-weight: 600; }
-.studio-segment-option + .studio-segment-option::before { content: "·"; position: absolute; left: -3px; color: var(--muted); font-weight: 400; }
-.studio-row .studio-segment { margin-right: -14px; }
-.studio-segment-option:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: 1px; }
+.studio-segment-option:has(input:checked) > span { background: var(--pick); box-shadow: inset 0 0 0 1px var(--pick-ring); color: var(--pick-fg); }
+.studio-segment-option:has(input:focus-visible) > span { outline: 2px solid var(--focus); outline-offset: 2px; }
+.studio-row .studio-segment-option > span { height: 36px; padding: 0 14px; }
 .studio-number { display: grid; grid-template-columns: 44px 104px 44px; align-items: center; gap: 4px; }
 .studio-number-button { display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--fill); color: var(--ink); cursor: pointer; transition: background var(--motion-quick) ease; }
 .studio-number-button:hover:not(:disabled) { background: var(--fill-hover); }
@@ -1061,18 +1063,11 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .studio-number-unit { flex: 1 1 0; color: var(--muted); font-size: var(--text-small); white-space: nowrap; }
 .studio-number-input:placeholder-shown { text-align: center; }
 .studio-number-input:placeholder-shown + .studio-number-unit { display: none; }
-/* The folded fields' row: a full-width button that reads as a row, its summary where values sit. */
-.studio-more { width: 100%; min-height: 56px; background: transparent; color: inherit; text-align: left; cursor: pointer; }
-.studio-more:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; border-radius: var(--radius-surface); }
-.studio-more-summary { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
-.studio-more-chevron { transition: transform var(--motion-quick) ease; }
-.studio-more[aria-expanded="true"] .studio-more-chevron { transform: rotate(180deg); }
-.studio-more-fields > .studio-row { border-top: 1px solid var(--line); }
 @media (prefers-reduced-motion: reduce) {
   .studio, .studio-msg, .studio-form { animation: none; }
   #home-page, .home-corner-action { transition: none; }
   #home-chooser-backdrop { animation: none; }
-  .studio-segment-option, .studio-more-chevron { transition: none; }
+  .studio-segment-option > span { transition: none; }
 }
 /* In the studio the working indicator is a line in the conversation, not a screen of its own. */
 .studio #home-update-loading { display: flex; align-items: center; min-height: 36px; }
@@ -1139,12 +1134,17 @@ html[data-vt] :is(.studio, .studio-form, .studio-msg, .home-enter) { animation: 
 :is(.home-primary-action, .studio-number-button, .home-start-choice):active:not(:disabled) { transform: scale(.96); }
 @media (prefers-reduced-motion: reduce) { :is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch, .home-primary-action, .studio-number-button, .home-start-choice):active { transform: none; } }
 
-/* ---- New as big numbers: the burpee as two words, duration and reps large and centred with a
-   plain step either side, the rest folded under More, Create at the foot. ---- */
-.studio-form-hero { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0; padding-top: 28px; }
+/* ---- New as big numbers: the burpee as two pills, duration and reps large and centred with a
+   plain step either side, the structure they make as a sentence, then quiet rows labelled like
+   settings, the request, and the foot: X left, ✓ right. ---- */
+/* The picked type's tint, for its pill and the picked Sets option: navy for six-count, sky for
+   Navy SEAL (whose text is its line colour taken toward navy, since sky is too light to read). */
+.studio-form-hero { --pick: color-mix(in srgb, var(--six) 16%, transparent); --pick-ring: color-mix(in srgb, var(--six) 45%, transparent); --pick-fg: var(--six); }
+.studio-form-hero:has(#studio-burpee_type-navy_seal:checked) { --pick: color-mix(in srgb, var(--seal) 32%, transparent); --pick-ring: color-mix(in srgb, var(--seal-line) 60%, transparent); --pick-fg: color-mix(in srgb, var(--six) 75%, var(--seal-line)); }
+.studio-form-hero { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0; padding: 18px 0 0; }
 .studio-hero-segment { margin: 0; padding: 0; border: 0; }
-.studio-hero-numbers { display: grid; gap: 32px; margin-top: 36px; justify-items: center; }
-.studio-hero-number { display: grid; justify-items: center; gap: 8px; }
+.studio-hero-numbers { display: grid; gap: 20px; margin-top: 22px; justify-items: center; }
+.studio-hero-number { display: grid; justify-items: center; gap: 4px; }
 .studio-hero-number .studio-number { grid-template-columns: 52px 176px 52px; gap: 8px; }
 .studio-hero-number .studio-number-button { width: 52px; height: 52px; }
 .studio-hero-number .studio-number-field { flex-direction: column; align-items: center; gap: 2px; height: auto; padding: 4px 0; border-radius: 14px; }
@@ -1153,11 +1153,26 @@ html[data-vt] :is(.studio, .studio-form, .studio-msg, .home-enter) { animation: 
 .studio-hero-number .studio-number-unit { flex: none; }
 .studio-hero-number .studio-number-field:focus-within { outline-offset: 2px; }
 .studio-hero-number .studio-row-hint { margin: 0; text-align: center; }
-.studio-form-hero .studio-more { width: auto; min-height: 44px; margin-top: 24px; padding: 0 14px; border: 0; border-radius: 999px; text-align: center; }
-.studio-form-hero .studio-more:hover { background: var(--fill); }
-.studio-form-hero .studio-more-fields { width: 100%; gap: 16px; margin: 8px 0 32px; }
-.studio-form-hero .studio-more[aria-expanded="false"] { margin-bottom: 32px; }
-.studio-form-hero .studio-fields { border: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
-.studio-form-hero .studio-fields .studio-row { padding-left: 0; padding-right: 0; }
+.studio-form-hero #studio-shape { margin-top: 16px; }
+/* The rows: quieter than the big numbers, a label on the left and its control on the right. */
+.studio-form-hero .studio-fields { width: 100%; margin-top: 24px; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
+.studio-form-hero .studio-row { min-height: 56px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.studio-form-hero .studio-row + .studio-row { border-top: 0; }
+.studio-form-hero .studio-row-label { color: var(--ink-soft); font-weight: 400; }
+.studio-form-hero .studio-row .studio-number { grid-template-columns: 44px 80px 44px; gap: 0; }
+/* A 36px step in a 44px target. */
+.studio-form-hero .studio-row .studio-number-button { padding: 4px; background-clip: content-box; }
+.studio-form-hero .studio-row .studio-number-input { font-size: var(--text-body); line-height: 42px; }
+.studio-form-hero .studio-row .studio-number-unit { font-size: var(--text-body); color: var(--ink); font-weight: 600; }
+.studio-number-input:only-child { text-align: center; }
+.studio-form-hero .studio-note { width: 100%; margin-top: 24px; }
 .studio-form-hero .studio-error { width: 100%; margin-top: 16px; }
-.studio-form-hero #studio-create { position: sticky; bottom: calc(16px + env(safe-area-inset-bottom)); margin-top: auto; }
+/* The foot stays within the thumb's reach; the form fades out under it, as under the chat box. */
+.studio-foot { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: auto; padding: 24px 0 calc(16px + env(safe-area-inset-bottom)); background: linear-gradient(to bottom, transparent, var(--color-base-100) 20px); }
+@media (min-width: 601px) { .studio-foot { padding-bottom: calc(24px + env(safe-area-inset-bottom)); } }
+.studio-foot-close { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: var(--fill); color: var(--ink); cursor: pointer; transition: background var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
+.studio-foot-close:hover { background: var(--fill-hover); }
+.studio-foot-close:active { transform: scale(.94); }
+.studio-foot-close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.studio-foot #studio-create { min-width: 96px; }
+@media (prefers-reduced-motion: reduce) { .studio-foot-close { transition: none; } .studio-foot-close:active { transform: none; } }
