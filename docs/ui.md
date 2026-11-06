@@ -361,14 +361,20 @@ screen leads to the next in context:
   `docs/specs/2026-10-14-coach-on-home-design.md` and
   `docs/specs/2026-10-14-coach-card-design.md`.
 - **Progress** (`/progress`; `/history` redirects) keeps the week strip on top, which leads
-  back Home, then your level as its title with the streak (a flame and the weeks in a row
-  at the target) opposite, then the coach's look back over recent weeks, then a gauge per burpee type
-  side by side (best against goal, its course, or the next goal to set), then the period tabs,
-  then **Minutes each day** drawn as GitHub draws commits (a column a week, Monday on top, the
-  darker the more minutes, month names over the weeks that start them, a dark tick under a week
-  that reached its target; a long period scrolls sideways and opens at the newest week), then one
-  chart with both types on their own axes. Design:
-  `docs/specs/2026-10-14-coach-on-home-design.md`.
+  back Home, then your level as its one headline with the streak (an amber flame and the weeks
+  in a row at the target) opposite. "Best in 20 minutes" sits over two columns, one per type:
+  its mark and name, the best at 30px, what the next level needs (`✓ 1B needs 50` once the
+  best is past it; the next level is said only here), then its goal (or the next goal as a
+  quiet pill). The coach's look back follows as one paragraph under the page's only rule.
+  **Days you trained** is drawn as GitHub draws contributions: square cells, a column a week
+  from Monday, Mon/Wed/Fri on the left, month names over the weeks that start them, each day
+  navy for six-count, sky for Navy SEAL, split diagonally for both, a quiet fill for none; a
+  phone shows the latest 18 weeks and the 640px column 34, and a key gives their minutes. The
+  grid never changes with the window. **Reps per 20 minutes** has the window tabs (12 weeks,
+  Year, All time) right under its heading, scoping only the chart and the sessions behind its
+  list icon: one chart, six-count off the left axis as a solid navy line, Navy SEAL off the
+  right as a dashed sky one, each axis's numbers in its line's colour, a small legend above
+  and months below. Design: `docs/specs/2026-11-06-light-screens-design.md`.
 - **Session** (`/session/:session_id`, `/videos/:video_id/session/:session_id`) runs a
   workout at night: the inverted palette above, a fill per rep that follows the camera, and a
   breathing sink in rests. Design: `docs/specs/2026-11-05-night-session-runner-design.md`,

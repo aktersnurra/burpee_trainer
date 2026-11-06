@@ -31,7 +31,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     refute header =~ "min this week"
     assert has_element?(view, "#history-progress #home-week-duration", "25 / 80 min")
     # Each type's goal reads in its own gauge.
-    assert has_element?(view, "#progress-gauge-six_count[data-kind=goal]", "of 150 by")
+    assert has_element?(view, "#progress-gauge-six_count[data-kind=goal]", "Goal 150 by")
     assert has_element?(view, "#progress-gauge-navy_seal[data-kind=none]", "No sessions yet")
     # Progress reads the coach's look back; the note about what's next is for Home.
     assert has_element?(view, "#history-header p#history-coach-summary", "Six-count held")
@@ -64,11 +64,10 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     {:ok, view, _} = live(conn, ~p"/progress")
     assert has_element?(view, "#progress-gauge-six_count .progress-gauge-number", "140")
     assert has_element?(view, "#progress-gauge-navy_seal .progress-gauge-number", "30")
-    assert has_element?(view, "#progress-gauge-navy_seal", "of 60 by")
-    # A chart per type, each on its own scale topped by its goal.
+    assert has_element?(view, "#progress-gauge-navy_seal", "Goal 60 by")
+    # One chart, each type on its own axis topped by its goal.
     assert has_element?(view, "#home-history-trend-axis-six-count", "150")
     assert has_element?(view, "#home-history-trend-axis-navy-seal", "60")
-    assert has_element?(view, "#home-history-trend-plot-navy-seal .home-history-goal-line")
   end
 
   test "a goal on a rising line shows when it will be reached", %{conn: conn, user: user} do
@@ -99,11 +98,16 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
 
     {:ok, view, _} = live(conn, ~p"/progress")
 
-    assert has_element?(view, "#progress-gauge-six_count[data-kind=best]", "Best in 20 min")
+    assert has_element?(
+             view,
+             "#progress-gauge-six_count[data-kind=best] .progress-gauge-number",
+             "130"
+           )
+
     assert has_element?(view, "#progress-set-goal-six_count .hero-plus")
     assert has_element?(view, "#progress-set-goal-six_count", "150 by")
     view |> element("#progress-set-goal-six_count") |> render_click()
-    assert has_element?(view, "#progress-gauge-six_count[data-kind=goal]", "of 150 by")
+    assert has_element?(view, "#progress-gauge-six_count[data-kind=goal]", "Goal 150 by")
 
     assert [%{status: :active, burpee_count_target: 150}] =
              BurpeeTrainer.Goals.list(Scope.for_user(user))
@@ -120,18 +124,22 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
              "110"
            )
 
+    # The next level is said once, under each type's best, ticked once the best is past it.
     assert has_element?(
              view,
-             "#progress-gauge-six_count .progress-gauge-detail",
-             "Ready for 1B"
+             "#progress-gauge-six_count .progress-gauge-needs[data-met=true]",
+             "1B needs 50"
            )
 
-    # Level 1A until both types reach the next level in one week; the line says what that takes.
+    assert has_element?(view, "#progress-gauge-six_count .progress-gauge-needs .hero-check")
+
     assert has_element?(
              view,
-             "#history-next-level",
-             "Level 1B: 50 six-count and 20 Navy SEAL in 20 minutes, both in one week."
+             "#progress-gauge-navy_seal .progress-gauge-needs[data-met=false]",
+             "1B needs 20"
            )
+
+    refute has_element?(view, "#progress-gauge-navy_seal .progress-gauge-needs .hero-check")
   end
 
   test "the streak counts weeks in a row at the target, this one once it is met", %{
@@ -154,17 +162,6 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     {:ok, view, _} = live(conn, ~p"/progress")
     # Progress is titled by your level; it is still named Progress for screen readers.
     assert has_element?(view, "#home-history-heading[aria-label^='Progress, Level']", "Level")
-  end
-
-  test "the week grid names weeks that hit the target, and none when none have", %{
-    conn: conn,
-    user: user
-  } do
-    free_form_session_fixture(user, %{duration_sec_actual: 1_500})
-    {:ok, view, _} = live(conn, ~p"/progress")
-    refute has_element?(view, "#home-history-week-count")
-    refute has_element?(view, ".home-history-week-current, .home-history-week-key")
-    assert has_element?(view, "#history-level", "Level 1A")
   end
 
   test "with nothing to summarize, neither Progress nor Home shows the coach", %{conn: conn} do

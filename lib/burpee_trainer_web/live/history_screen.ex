@@ -15,6 +15,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       history_period: "twelve_weeks",
       history_show_sessions?: false,
       history_weeks: [],
+      history_grid_weeks: [],
       history_streak: 0,
       history_session_return_to: "#home-history-heading",
       history_selected_id: nil,
@@ -257,12 +258,14 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
       {:ok, weeks} = History.weeks(all_sessions, a.current_scope.user, now, a.history_period)
       weeks = from_first_trained_week(weeks)
       {:ok, all_weeks} = History.weeks(all_sessions, a.current_scope.user, now, "all")
+      {:ok, year_weeks} = History.weeks(all_sessions, a.current_scope.user, now, "year")
 
       socket
       |> assign(
         history_available?: history_available?,
         history_gauges: gauges(a.current_scope, all_sessions, now),
         history_weeks: weeks,
+        history_grid_weeks: Enum.take(year_weeks, -HomeHistoryComponents.grid_weeks()),
         history_streak: History.streak(all_weeks),
         history_error: nil,
         history_cursor: next,
@@ -285,6 +288,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
           history_loaded_ids: [],
           history_loaded_count: 0,
           history_weeks: [],
+          history_grid_weeks: [],
           history_streak: 0,
           history_points: %{six_count: [], navy_seal: []}
         )
@@ -335,7 +339,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
     end
   end
 
-  # The grid starts at the first week with training, never a row of empty weeks; this
+  # The chart starts at the first week with training, never a stretch of empty weeks; this
   # week stays, as it is the one in progress.
   defp from_first_trained_week([]), do: []
 

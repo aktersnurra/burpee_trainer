@@ -1,5 +1,5 @@
 defmodule BurpeeTrainerWeb.HomeHistoryComponents do
-  @moduledoc "Progress: the coach's look back, each burpee type's goal, and saved-session inspection."
+  @moduledoc "Progress: level and streak, each type's best and goal, the coach's look back, the days trained, the reps chart and saved-session inspection."
 
   use BurpeeTrainerWeb, :html
 
@@ -7,8 +7,15 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   alias Phoenix.LiveView.JS
 
   # Where the chart's top (each type's goal) and bottom lines sit, in percent of its height.
-  @plot_top 12
-  @plot_bottom 88
+  @plot_top 4
+  @plot_bottom 96
+
+  # The day grid's weeks: as many as fit a phone, and as many as fit the 640px column.
+  @phone_weeks 18
+  @wide_weeks 34
+
+  @doc "How many recent weeks the day grid holds: those of the widest screen."
+  def grid_weeks, do: @wide_weeks
 
   attr(:state, :map, required: true)
 
@@ -40,54 +47,37 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             aria-label={"#{@state.history_streak} #{if(@state.history_streak == 1, do: "week", else: "weeks")} in a row at the weekly target"}
           >
             <.icon name="hero-fire" class="size-5" />
-            <span aria-hidden="true">{@state.history_streak}</span>
+            <span aria-hidden="true">
+              {@state.history_streak} {if(@state.history_streak == 1, do: "week", else: "weeks")}
+            </span>
           </span>
         </div>
-        <p :if={next_level_line(@state)} id="history-next-level" class="history-next-level">
-          {next_level_line(@state)}
-        </p>
         <.history_header state={@state} />
         <p :if={@state.history_error} id="home-history-error" role="status">{@state.history_error}</p>
         <%= if is_nil(@state.history_error) and @state.history_available? do %>
-          <div role="group" aria-label="Period" class="home-history-periods">
-            <button
-              :for={
-                {label, value} <- [
-                  {"12 weeks", "twelve_weeks"},
-                  {"Year", "year"},
-                  {"All time", "all"}
-                ]
-              }
-              id={"home-history-period-#{value}"}
-              type="button"
-              class="home-history-period"
-              phx-click="history_period"
-              phx-value-period={value}
-              aria-pressed={to_string(@state.history_period == value)}
-            >
-              {label}
-            </button>
-          </div>
-          <.week_grid weeks={@state.history_weeks} />
-          <.trend_chart
-            points={@state.history_points}
-            empty?={@state.history_empty?}
-            period={@state.history_period}
-            period_start={List.first(@state.history_weeks).start}
-            now={@state.history_snapshot_now}
-            show_sessions?={@state.history_show_sessions?}
-            gauges={@state.history_gauges}
-          />
+          <.week_grid weeks={@state.history_grid_weeks} />
           <section
-            id="home-history-sessions-panel"
-            hidden={not @state.history_show_sessions?}
-            inert={not @state.history_show_sessions?}
-            aria-label="Saved sessions"
-            class="home-history-sessions-panel"
+            id="home-history-reps"
+            class="home-history-reps"
+            aria-labelledby="home-history-reps-heading"
           >
             <div class="home-history-trend-heading">
-              <h2>Reps per 20 minutes</h2>
+              <h2 id="home-history-reps-heading">Reps per 20 minutes</h2>
+              <%!-- One icon switches the view: it shows the view it leads to. --%>
               <button
+                :if={not @state.history_show_sessions?}
+                id="home-history-density-sessions"
+                type="button"
+                class="home-history-switch home-icon-action"
+                phx-click="history_density_mode"
+                phx-value-mode="sessions"
+                aria-label="Show sessions"
+                title="Sessions"
+              >
+                <.icon name="hero-list-bullet" class="size-5" />
+              </button>
+              <button
+                :if={@state.history_show_sessions?}
                 id="home-history-density-back"
                 type="button"
                 class="home-history-switch home-icon-action"
@@ -99,56 +89,93 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
                 <.icon name="hero-chart-bar" class="size-5" />
               </button>
             </div>
-            <h3
-              :if={is_nil(@state.history_error) and @state.history_available?}
-              id="home-history-sessions-heading"
-              tabindex="-1"
-              class="home-history-sessions-heading sr-only"
-            >
-              Sessions
-            </h3>
-            <div
-              :if={not @state.history_empty? and is_nil(@state.history_error)}
-              id="home-history-table-region"
-              phx-remove={removed_target_focus("home-history-table-region")}
-              role="region"
-              aria-label="Saved workout sessions"
-              tabindex="0"
-              class="home-history-table-region"
-            >
-              <table id="home-history-table" class="home-history-table">
-                <caption class="sr-only">Saved sessions; actual reps and duration</caption>
-                <thead class="sr-only">
-                  <tr>
-                    <th scope="col">Workout</th>
-                    <th scope="col">Reps</th>
-                    <th scope="col">Duration</th>
-                  </tr>
-                </thead>
-                <tbody id="home-history-sessions" phx-update="stream">
-                  <.session_row
-                    :for={{id, session} <- @state.streams.history_sessions}
-                    id={id}
-                    session={session}
-                    timezone={@state.current_scope.user.timezone}
-                    expanded?={@state.history_selected_id == session.id}
-                    confirm?={@state.history_confirm_delete?}
-                  />
-                </tbody>
-              </table>
+            <%!-- The window scopes the chart and the sessions, not the grid above. --%>
+            <div role="group" aria-label="Period" class="home-history-periods">
+              <button
+                :for={
+                  {label, value} <- [
+                    {"12 weeks", "twelve_weeks"},
+                    {"Year", "year"},
+                    {"All time", "all"}
+                  ]
+                }
+                id={"home-history-period-#{value}"}
+                type="button"
+                class="home-history-period"
+                phx-click="history_period"
+                phx-value-period={value}
+                aria-pressed={to_string(@state.history_period == value)}
+              >
+                {label}
+              </button>
             </div>
-            <button
-              :if={@state.history_has_more?}
-              id="home-history-more"
-              phx-remove={removed_target_focus("home-history-more")}
-              type="button"
-              class="home-history-more home-icon-action"
-              phx-click="history_more"
-              aria-label="Load more sessions"
-              title="More sessions"
+            <.trend_chart
+              points={@state.history_points}
+              empty?={@state.history_empty?}
+              period={@state.history_period}
+              period_start={List.first(@state.history_weeks).start}
+              now={@state.history_snapshot_now}
+              show_sessions?={@state.history_show_sessions?}
+              gauges={@state.history_gauges}
+            />
+            <section
+              id="home-history-sessions-panel"
+              hidden={not @state.history_show_sessions?}
+              inert={not @state.history_show_sessions?}
+              aria-label="Saved sessions"
+              class="home-history-sessions-panel"
             >
-              <.icon name="hero-chevron-down" class="size-5" />
-            </button>
+              <h3
+                :if={is_nil(@state.history_error) and @state.history_available?}
+                id="home-history-sessions-heading"
+                tabindex="-1"
+                class="home-history-sessions-heading sr-only"
+              >
+                Sessions
+              </h3>
+              <div
+                :if={not @state.history_empty? and is_nil(@state.history_error)}
+                id="home-history-table-region"
+                phx-remove={removed_target_focus("home-history-table-region")}
+                role="region"
+                aria-label="Saved workout sessions"
+                tabindex="0"
+                class="home-history-table-region"
+              >
+                <table id="home-history-table" class="home-history-table">
+                  <caption class="sr-only">Saved sessions; actual reps and duration</caption>
+                  <thead class="sr-only">
+                    <tr>
+                      <th scope="col">Workout</th>
+                      <th scope="col">Reps</th>
+                      <th scope="col">Duration</th>
+                    </tr>
+                  </thead>
+                  <tbody id="home-history-sessions" phx-update="stream">
+                    <.session_row
+                      :for={{id, session} <- @state.streams.history_sessions}
+                      id={id}
+                      session={session}
+                      timezone={@state.current_scope.user.timezone}
+                      expanded?={@state.history_selected_id == session.id}
+                      confirm?={@state.history_confirm_delete?}
+                    />
+                  </tbody>
+                </table>
+              </div>
+              <button
+                :if={@state.history_has_more?}
+                id="home-history-more"
+                phx-remove={removed_target_focus("home-history-more")}
+                type="button"
+                class="home-history-more home-icon-action"
+                phx-click="history_more"
+                aria-label="Load more sessions"
+                title="More sessions"
+              >
+                <.icon name="hero-chevron-down" class="size-5" />
+              </button>
+            </section>
           </section>
         <% end %>
         <p
@@ -178,120 +205,112 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
   attr(:weeks, :list, required: true)
 
-  # Every day as a square, a column a week, Monday at the top, as GitHub draws commits: the
-  # darker, the more minutes. A tick under a column marks a week that reached its target. On a
-  # narrow screen a long period scrolls sideways, opening at the newest week.
+  # The days you trained, as GitHub draws contributions: a column a week from Monday, Monday on
+  # top, each day in its type's colour (split diagonally for both). A phone holds the latest
+  # 18 weeks and the 640px column 34; the cells stay square, so a wider screen shows more weeks.
   defp week_grid(assigns) do
+    older = max(length(assigns.weeks) - @phone_weeks, 0)
+
+    assigns =
+      assign(assigns,
+        weeks: Enum.with_index(assigns.weeks, &{&1, &2 < older}),
+        phone_minutes: assigns.weeks |> Enum.drop(older) |> grid_minutes(),
+        wide_minutes: grid_minutes(assigns.weeks),
+        phone_weeks: length(assigns.weeks) - older,
+        wide_weeks: length(assigns.weeks)
+      )
+
     ~H"""
     <section :if={@weeks != []} id="home-history-weekly" aria-labelledby="home-history-weekly-heading">
-      <h2 id="home-history-weekly-heading">Minutes each day</h2>
-      <p
-        :if={completed_week_summary(@weeks)}
-        id="home-history-week-count"
-        class="home-history-week-count"
-      >
-        {completed_week_summary(@weeks)}
-      </p>
-      <div class="home-history-calendar-scroll">
-        <div id="home-history-week-grid" class="home-history-calendar">
-          <span class="home-history-calendar-label" aria-hidden="true"></span>
+      <h2 id="home-history-weekly-heading">Days you trained</h2>
+      <div id="home-history-week-grid" class="home-history-days">
+        <span
+          :for={label <- ["", "Mon", "", "Wed", "", "Fri", "", ""]}
+          class="home-history-dayname"
+          aria-hidden="true"
+        >{label}</span>
+        <%= for {week, older?} <- @weeks do %>
           <span
-            :for={label <- ~w(Mon _ Wed _ Fri _ _)}
-            class="home-history-calendar-label"
+            class={["home-history-month", older? && "home-history-days-older"]}
             aria-hidden="true"
-          >{if label != "_", do: label}</span>
-          <span class="home-history-calendar-label" aria-hidden="true"></span>
-          <%= for {week, index} <- Enum.with_index(@weeks) do %>
-            <span class="home-history-month" aria-hidden="true">{month_label(@weeks, index)}</span>
-            <span
-              :for={day <- week.days}
-              id={"home-history-day-#{Date.to_iso8601(day.date)}"}
-              class={[
-                "home-history-day-cell",
-                day_tone(day),
-                day.future? && "home-history-day-future"
-              ]}
-              data-minutes={day.minutes}
-              role={!day.future? && "img"}
-              aria-label={!day.future? && day_title(day)}
-              aria-hidden={day.future? && "true"}
-              title={!day.future? && day_title(day)}
-            ></span>
-            <span
-              id={"home-history-week-#{Date.to_iso8601(week.start)}"}
-              class={["home-history-week-mark", week.target? && "home-history-week-met"]}
-              role="img"
-              aria-label={week_title(week)}
-              title={week_title(week)}
-            ></span>
-          <% end %>
-        </div>
+          >{month_label(week)}</span>
+          <span
+            :for={day <- week.days}
+            id={"home-history-day-#{Date.to_iso8601(day.date)}"}
+            class={[
+              "home-history-day",
+              day_kind(day),
+              older? && "home-history-days-older"
+            ]}
+            data-minutes={day.minutes}
+            role={!day.future? && "img"}
+            aria-label={!day.future? && day_title(day)}
+            aria-hidden={day.future? && "true"}
+            title={!day.future? && day_title(day)}
+          ></span>
+        <% end %>
+      </div>
+      <div class="home-history-days-key">
+        <span class="home-history-days-phone">{@phone_minutes} min in {@phone_weeks} weeks</span>
+        <span class="home-history-days-wide">{@wide_minutes} min in {@wide_weeks} weeks</span>
+        <span class="home-history-days-scale" aria-hidden="true">
+          <i class="home-history-day-six"></i>Six-count <i class="home-history-day-seal"></i>Navy SEAL <i class="home-history-day-both"></i>Both
+        </span>
       </div>
     </section>
     """
   end
 
-  # A month's name over the first column, and over each week that holds a 1st.
-  defp month_label(weeks, index) do
-    start = Enum.at(weeks, index).start
-    last = Date.add(start, 6)
+  defp grid_minutes(weeks), do: weeks |> Enum.sum_by(& &1.seconds) |> div(60)
 
-    cond do
-      index == 0 -> Calendar.strftime(start, "%b")
-      last.day <= 7 -> Calendar.strftime(last, "%b")
-      true -> nil
-    end
+  # A month's name over the week whose Monday is its first.
+  defp month_label(week), do: if(week.start.day <= 7, do: Calendar.strftime(week.start, "%b"))
+
+  defp day_kind(%{future?: true}), do: "home-history-day-future"
+  defp day_kind(%{types: [:six_count, :navy_seal]}), do: "home-history-day-both"
+  defp day_kind(%{types: [:six_count]}), do: "home-history-day-six"
+  defp day_kind(%{types: [:navy_seal]}), do: "home-history-day-seal"
+  defp day_kind(_day), do: nil
+
+  defp day_title(day) do
+    trained =
+      case day.types do
+        [] -> ""
+        types -> Enum.map_join(types, " and ", &type_sentence/1) <> ", "
+      end
+
+    "#{Calendar.strftime(day.date, "%a %-d %b")}: #{trained}#{day_duration(day.seconds)}"
   end
-
-  defp day_tone(%{future?: true}), do: nil
-  defp day_tone(%{minutes: 0, seconds: 0}), do: "home-history-tone-0"
-  defp day_tone(%{minutes: m}) when m < 10, do: "home-history-tone-1"
-  defp day_tone(%{minutes: m}) when m < 20, do: "home-history-tone-2"
-  defp day_tone(%{minutes: m}) when m < 30, do: "home-history-tone-3"
-  defp day_tone(%{minutes: m}) when m < 40, do: "home-history-tone-4"
-  defp day_tone(_), do: "home-history-tone-5"
-
-  defp day_title(day),
-    do: "#{Calendar.strftime(day.date, "%a %-d %b")}: #{day_duration(day.seconds)}"
 
   defp day_duration(0), do: "rest"
   defp day_duration(seconds) when seconds < 60, do: "#{seconds} sec"
   defp day_duration(seconds) when rem(seconds, 60) == 0, do: "#{div(seconds, 60)} min"
   defp day_duration(seconds), do: "#{div(seconds, 60)} min #{rem(seconds, 60)} sec"
 
-  defp week_title(week),
-    do:
-      "#{Fmt.week(week.start)}: #{week.minutes} of #{week.target_minutes} min#{if week.open?, do: ", in progress", else: ""}"
-
-  # Counts the weeks that reached 80 minutes; with none yet it says nothing rather than "0 of 11".
-  defp completed_week_summary(weeks) do
-    completed = Enum.drop(weeks, -1)
-
-    case Enum.count(completed, & &1.target?) do
-      0 -> nil
-      hit -> "#{hit} of the last #{length(completed)} weeks at 80 min"
-    end
-  end
-
   attr(:state, :map, required: true)
 
-  # The coach's look back over recent weeks, then each burpee type's goal side by side.
+  # Each burpee type's best in 20 minutes side by side, then the coach's look back under the
+  # page's only rule.
   defp history_header(assigns) do
     ~H"""
     <header id="history-header" class="history-header">
-      <p :if={summary_line?(@state)} id="history-coach-summary" class="history-coach-summary">
-        <BurpeeTrainerWeb.HomeCoachComponents.summary_body
-          summary={@state.progress_summary}
-          loading?={@state.progress_summary_loading?}
-          field={:review}
-        />
-      </p>
+      <p class="history-best-label">Best in 20 minutes</p>
       <div id="progress-gauges" class="progress-gauges">
         <.gauge
           :for={gauge <- @state.history_gauges}
           gauge={gauge}
           next={BurpeeTrainer.Levels.next(@state.current_level)}
         />
+      </div>
+      <div :if={summary_line?(@state)} class="history-look-back">
+        <p class="history-look-back-label">Coach</p>
+        <p id="history-coach-summary" class="history-coach-summary">
+          <BurpeeTrainerWeb.HomeCoachComponents.summary_body
+            summary={@state.progress_summary}
+            loading?={@state.progress_summary_loading?}
+            field={:review}
+          />
+        </p>
       </div>
     </header>
     """
@@ -300,10 +319,12 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   attr(:gauge, :map, required: true)
   attr(:next, :atom, default: nil)
 
-  # One burpee type: its best against its goal, how the goal is going, and the next goal
-  # when there is none. Its history is a line on the shared chart below. Both types have the same shape, so they read as a pair.
-  # See docs/specs/2026-10-14-coach-on-home-design.md.
+  # One burpee type: its mark and name, its best, what the next level needs (ticked once the
+  # best is past it), then its goal, or the next goal to set. The next level is said here
+  # once, where it is measured. See docs/specs/2026-11-06-light-screens-design.md.
   defp gauge(assigns) do
+    assigns = assign(assigns, :needs, needs(assigns.gauge, assigns.next))
+
     ~H"""
     <section
       id={"progress-gauge-#{@gauge.burpee_type}"}
@@ -311,17 +332,19 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       data-kind={@gauge.kind}
       aria-label={type_sentence(@gauge.burpee_type)}
     >
-      <%!-- The key: the type in its line's colour on the chart below. --%>
+      <%!-- The key: the type's mark, as its line on the chart below. --%>
       <p class={["progress-gauge-type", "progress-key-#{series_class(@gauge.burpee_type)}"]}>
         {type_sentence(@gauge.burpee_type)}
       </p>
       <p class={["progress-gauge-number", @gauge.kind == :reached && "progress-gauge-met"]}>
         {gauge_number(@gauge)}
       </p>
-      <p class="progress-gauge-label">{gauge_label(@gauge)}</p>
-      <p :if={gauge_detail(@gauge, @next)} class="progress-gauge-detail">
-        {gauge_detail(@gauge, @next)}
+      <p :if={@needs} class="progress-gauge-needs" data-met={to_string(elem(@needs, 0))}>
+        <.icon :if={elem(@needs, 0)} name="hero-check" class="size-4" />
+        <span :if={elem(@needs, 0)} class="sr-only">Past it:</span>
+        {elem(@needs, 1)}
       </p>
+      <p :if={gauge_label(@gauge)} class="progress-gauge-label">{gauge_label(@gauge)}</p>
       <%!-- When an honest course exists, when the target comes at this pace. --%>
       <p
         :if={@gauge.kind == :goal and @gauge.course}
@@ -336,13 +359,15 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         :if={@gauge.kind in [:reached, :best]}
         id={"progress-set-goal-#{@gauge.burpee_type}"}
         type="button"
-        class="home-text-action progress-gauge-set"
+        class="progress-gauge-set"
         phx-click="progress_set_goal"
         phx-value-type={@gauge.burpee_type}
         aria-label={"Set goal: #{Fmt.goal_title(@gauge.next)} #{Fmt.goal_by(@gauge.next)}"}
       >
-        <.icon name="hero-plus" class="size-4" />
-        <span>Goal {@gauge.next.burpee_count_target} {Fmt.goal_by(@gauge.next)}</span>
+        <span class="progress-gauge-pill">
+          <.icon name="hero-plus" class="size-4" />
+          <span>Goal {@gauge.next.burpee_count_target} {Fmt.goal_by(@gauge.next)}</span>
+        </span>
       </button>
     </section>
     """
@@ -353,56 +378,26 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   defp gauge_number(%{best: best}), do: best
 
   defp gauge_label(%{kind: :goal, goal: goal}),
-    do: "of #{goal.burpee_count_target} #{Fmt.goal_by(goal)}"
+    do: "Goal #{goal.burpee_count_target} #{Fmt.goal_by(goal)}"
 
   defp gauge_label(%{kind: :reached, reached_on: on}),
     do: "Reached #{Calendar.strftime(on, "%-d %b")}"
 
-  defp gauge_label(%{kind: :best}), do: "Best in 20 min"
   defp gauge_label(%{kind: :first}), do: "First session"
   defp gauge_label(%{kind: :none}), do: "No sessions yet"
+  defp gauge_label(%{kind: :best}), do: nil
 
-  # How this type stands toward the next level (the same one the line under the title names),
-  # and how even the latest tracked session was. A first session of another length says
-  # nothing about reps in 20 minutes.
-  defp gauge_detail(gauge, next) do
+  # What the next level needs of this type, and whether the best in 20 minutes is past it.
+  # A first session of another length says nothing about reps in 20 minutes.
+  defp needs(_gauge, nil), do: nil
+
+  defp needs(gauge, next) do
+    need = BurpeeTrainer.Levels.threshold(next, gauge.burpee_type)
     best = Map.get(gauge, :best)
-
-    level =
-      if next && gauge.kind in [:goal, :reached, :best] && is_integer(best) do
-        need = BurpeeTrainer.Levels.threshold(next, gauge.burpee_type)
-
-        if best >= need,
-          do: "Ready for #{level_label(next)}",
-          else: "#{need - best} to go for #{level_label(next)}"
-      end
-
-    even =
-      case Map.get(gauge, :evenness) do
-        nil -> nil
-        percent -> "#{percent}% even"
-      end
-
-    case Enum.reject([level, even], &is_nil/1) do
-      [] -> nil
-      parts -> Enum.join(parts, " · ")
-    end
+    {is_integer(best) and best >= need, "#{level_label(next)} needs #{need}"}
   end
 
   defp level_label(level), do: level |> Fmt.level() |> String.replace_prefix("Level ", "")
-
-  # What the next level asks, in one line: both types, 20 minutes each, in one week.
-  defp next_level_line(state) do
-    with level when is_atom(level) <- Map.get(state, :current_level),
-         next when not is_nil(next) <- BurpeeTrainer.Levels.next(level) do
-      six = BurpeeTrainer.Levels.threshold(next, :six_count)
-      navy = BurpeeTrainer.Levels.threshold(next, :navy_seal)
-
-      "#{Fmt.level(next)}: #{six} six-count and #{navy} Navy SEAL in 20 minutes, both in one week."
-    else
-      _ -> nil
-    end
-  end
 
   defp type_sentence(:six_count), do: "Six-count"
   defp type_sentence(:navy_seal), do: "Navy SEAL"
@@ -421,9 +416,9 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   attr(:show_sessions?, :boolean, default: false)
   attr(:gauges, :list, default: [])
 
-  # One small chart per type, stacked on the same time axis, each on its own scale: a type's
-  # line is never read against the other's numbers. Each scale tops out at the type's goal
-  # when it has one, drawn dashed.
+  # One chart for both types on one time axis, each on its own scale: six-count reads off the
+  # left axis as a solid navy line, Navy SEAL off the right as a dashed sky one, each axis in
+  # its line's colour. Each scale tops out at the type's goal when it has one.
   def trend_chart(assigns) do
     series = [
       %{
@@ -441,22 +436,24 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
     ]
 
     scales = scales(series, assigns.gauges)
+    bounds = time_bounds(series, assigns.period_start, assigns.now)
 
     plots =
       series
-      |> plot_series(scales, assigns.period_start, assigns.now)
+      |> plot_series(scales, bounds)
       |> Enum.filter(&(&1.points != []))
       |> Enum.map(fn series ->
         {lo, hi} = scales[series.type]
-
-        Map.merge(series, %{
-          lo: lo,
-          hi: hi,
-          goal?: Enum.any?(assigns.gauges, &(&1.burpee_type == series.type and &1.kind == :goal))
-        })
+        Map.merge(series, %{lo: lo, hi: hi})
       end)
 
-    assigns = assign(assigns, plots: plots, plot_top: @plot_top, plot_bottom: @plot_bottom)
+    assigns =
+      assign(assigns,
+        plots: plots,
+        months: month_ticks(bounds),
+        plot_top: @plot_top,
+        plot_bottom: @plot_bottom
+      )
 
     ~H"""
     <figure
@@ -465,40 +462,30 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       class="home-history-trend"
       hidden={@show_sessions?}
       inert={@show_sessions?}
-      aria-labelledby="home-history-trend-label"
+      aria-labelledby="home-history-reps-heading"
     >
-      <figcaption id="home-history-trend-label">
-        <span class="home-history-trend-heading">
-          <span class="font-semibold">Reps per 20 minutes</span>
-          <%!-- One icon switches the view: it shows the view it leads to. --%>
-          <button
-            id="home-history-density-sessions"
-            type="button"
-            class="home-history-switch home-icon-action"
-            phx-click="history_density_mode"
-            phx-value-mode="sessions"
-            aria-label="Show sessions"
-            title="Sessions"
-          >
-            <.icon name="hero-list-bullet" class="size-5" />
-          </button>
-        </span>
-      </figcaption>
       <%= if @empty? or @plots == [] do %>
         <p class="home-history-trend-empty">No measured sessions in this period.</p>
       <% else %>
-        <div
-          :for={plot <- @plots}
-          id={"home-history-trend-plot-#{series_class(plot.type)}"}
-          class="home-history-plot"
-          phx-remove={removed_target_focus("home-history-trend-plot-#{series_class(plot.type)}")}
-        >
-          <p class={["home-history-plot-label", "progress-key-#{series_class(plot.type)}"]}>
-            {plot.label}
-          </p>
+        <figcaption class="home-history-legend">
+          <span
+            :for={plot <- @plots}
+            class={["home-history-legend-item", "progress-key-#{series_class(plot.type)}"]}
+          >
+            {plot.label}{if length(@plots) == 2,
+              do: if(plot.type == :six_count, do: ", left", else: ", right")}
+          </span>
+        </figcaption>
+        <div class="home-history-chart">
           <div
+            :for={plot <- @plots}
             id={"home-history-trend-axis-#{series_class(plot.type)}"}
-            class="home-history-trend-axis"
+            class={[
+              "home-history-trend-axis",
+              "progress-key-#{series_class(plot.type)}",
+              plot.type == :six_count && "home-history-axis-left",
+              plot.type == :navy_seal && "home-history-axis-right"
+            ]}
             aria-hidden="true"
           >
             <span style={"top: #{@plot_top}%"}>{plot.hi}</span>
@@ -508,7 +495,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           <div class="home-history-plot-area">
             <button
               type="button"
-              aria-label={"Show saved sessions, #{plot.label}"}
+              aria-label="Show saved sessions"
               phx-click="history_density_mode"
               phx-value-mode="sessions"
               class="home-history-trend-open-sessions"
@@ -520,15 +507,15 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               class="home-history-svg"
             >
               <line
+                :for={y <- [@plot_top, 50, @plot_bottom]}
                 x1="0"
                 x2="100"
-                y1={@plot_top}
-                y2={@plot_top}
-                class={["home-history-grid", plot.goal? && "home-history-goal-line"]}
+                y1={y}
+                y2={y}
+                class="home-history-grid"
               />
-              <line x1="0" x2="100" y1="50" y2="50" class="home-history-grid" />
-              <line x1="0" x2="100" y1={@plot_bottom} y2={@plot_bottom} class="home-history-grid" />
               <polyline
+                :for={plot <- @plots}
                 class={"home-history-line-#{series_class(plot.type)}"}
                 stroke-dasharray={plot.type == :navy_seal && "5 4"}
                 points={plot.line}
@@ -538,20 +525,25 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
                 vector-effect="non-scaling-stroke"
               />
             </svg>
-            <button
-              :for={point <- plot.points}
-              id={"home-history-point-#{point.id}"}
-              phx-remove={removed_target_focus("home-history-point-#{point.id}")}
-              type="button"
-              phx-click={open_session()}
-              phx-value-id={point.id}
-              phx-value-source="point"
-              aria-label={"#{plot.label}, #{DateTime.to_iso8601(point.completed_at)}, #{point.actual_reps} actual reps, #{point.actual_duration_sec} seconds actual duration, density #{point.density} reps per 20 min"}
-              style={"left: #{point.x}%; top: #{point.y}%;"}
-              class={["home-history-point", "home-history-point-#{series_class(plot.type)}"]}
-            >
-              <span aria-hidden="true"></span>
-            </button>
+            <%= for plot <- @plots do %>
+              <button
+                :for={point <- plot.points}
+                id={"home-history-point-#{point.id}"}
+                phx-remove={removed_target_focus("home-history-point-#{point.id}")}
+                type="button"
+                phx-click={open_session()}
+                phx-value-id={point.id}
+                phx-value-source="point"
+                aria-label={"#{plot.label}, #{DateTime.to_iso8601(point.completed_at)}, #{point.actual_reps} actual reps, #{point.actual_duration_sec} seconds actual duration, density #{point.density} reps per 20 min"}
+                style={"left: #{point.x}%; top: #{point.y}%;"}
+                class={["home-history-point", "home-history-point-#{series_class(plot.type)}"]}
+              >
+                <span aria-hidden="true"></span>
+              </button>
+            <% end %>
+          </div>
+          <div class="home-history-months" aria-hidden="true">
+            <span :for={{x, label} <- @months} style={"left: #{x}%"}>{label}</span>
           </div>
         </div>
       <% end %>
@@ -639,13 +631,12 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
   defp tags(_session), do: []
 
-  defp plot_series(series, scales, period_start, now) do
-    all =
+  # The time axis: from the period's start (or the first point) to now (or the last point).
+  defp time_bounds(series, period_start, now) do
+    timestamps =
       series
       |> Enum.flat_map(& &1.points)
-      |> Enum.sort_by(&{DateTime.to_unix(&1.completed_at, :microsecond), &1.id})
-
-    timestamps = Enum.map(all, &DateTime.to_unix(&1.completed_at, :microsecond))
+      |> Enum.map(&DateTime.to_unix(&1.completed_at, :microsecond))
 
     first =
       case period_start do
@@ -662,6 +653,32 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         nil -> Enum.max(timestamps, fn -> 0 end)
       end
 
+    {first, last}
+  end
+
+  # A month's name under the time axis where the month starts. Over a year, only each
+  # January shows, as its year.
+  defp month_ticks({first, last}) when last <= first, do: []
+
+  defp month_ticks({first, last}) do
+    from = first |> DateTime.from_unix!(:microsecond) |> DateTime.to_date()
+    to = last |> DateTime.from_unix!(:microsecond) |> DateTime.to_date()
+    long? = Date.diff(to, from) > 366
+
+    from
+    |> Date.beginning_of_month()
+    |> Stream.iterate(&(&1 |> Date.end_of_month() |> Date.add(1)))
+    |> Stream.drop_while(&(Date.compare(&1, from) == :lt))
+    |> Enum.take_while(&(Date.compare(&1, to) != :gt))
+    |> Enum.filter(&(not long? or &1.month == 1))
+    |> Enum.map(fn month ->
+      at = DateTime.new!(month, ~T[00:00:00], "Etc/UTC") |> DateTime.to_unix(:microsecond)
+      label = if long?, do: Integer.to_string(month.year), else: Calendar.strftime(month, "%b")
+      {Float.round((at - first) / (last - first) * 100, 2), label}
+    end)
+  end
+
+  defp plot_series(series, scales, {first, last}) do
     Enum.map(series, fn series ->
       {lo, hi} = Map.get(scales, series.type, {0, 1})
 

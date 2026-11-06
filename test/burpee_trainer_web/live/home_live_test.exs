@@ -253,8 +253,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-result-actual-seconds[data-duration-sec='4800']", "1:20:00")
     view = history_route(conn, view)
     assert has_element?(view, "#home-history-trend")
-    # One workout type needs no legend; the line speaks for itself.
-    refute has_element?(view, ".home-history-legend")
     assert has_element?(view, "#home-history-period-twelve_weeks[aria-pressed=true]")
     # A point selects its session in the list: the row has the numbers.
     view |> element("#home-history-point-#{saved.id}") |> render_click()
@@ -310,22 +308,22 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     refute has_element?(view, "#home-history-delete-#{saved.id}")
   end
 
-  test "the day grid shows each day's minutes above the chart", %{conn: conn, user: user} do
+  test "the day grid shows each day's type and minutes above the chart", %{
+    conn: conn,
+    user: user
+  } do
     saved = complete_history(user, DateTime.utc_now(:second), 1_200)
     {:ok, view, _} = live(conn, ~p"/")
     view = history_route(conn, view)
-    week = :sys.get_state(view.pid).socket.assigns.history_weeks |> List.last()
     day = Date.to_iso8601(DateTime.to_date(saved.completed_at))
-
-    assert has_element?(view, "#home-history-day-#{day}[data-minutes='20'][role=img]")
 
     assert has_element?(
              view,
-             "#home-history-week-#{Date.to_iso8601(week.start)}[aria-label*='20 of']"
+             "#home-history-day-#{day}[data-minutes='20'][role=img][aria-label$='Six-count, 20 min']"
            )
 
     # The grid comes before the chart.
-    assert has_element?(view, "#home-history-weekly + #home-history-trend")
+    assert has_element?(view, "#home-history-weekly + #home-history-reps #home-history-trend")
   end
 
   test "History deletion requires confirmation and refreshes owned progress", %{
@@ -336,12 +334,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     foreign = complete_history(user_fixture(), DateTime.utc_now(:second), 1200)
     {:ok, view, _} = live(conn, ~p"/")
     view = history_route(conn, view)
-
-    # Only this week has training, so the grid is this week alone, not a row of empty weeks.
-    assert render(view)
-           |> LazyHTML.from_fragment()
-           |> LazyHTML.query("#home-history-weekly .home-history-week-mark")
-           |> Enum.count() == 1
 
     trash = "#home-history-delete-#{saved.id}"
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
@@ -470,13 +462,15 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert Repo.aggregate(WorkoutSession, :count) == 0
   end
 
-  test "History range changes weekly grid and session summaries together", %{user: user} do
+  test "History range changes the chart and its sessions together, not the day grid", %{
+    user: user
+  } do
     now = ~U[2026-09-23 12:00:00Z]
     recent = complete_history(user, now, 1200)
     previous_year = complete_history(user, ~U[2025-08-01 12:00:00Z], 1200)
     socket = mounted_socket(user) |> Phoenix.Component.assign(home_now: fn -> now end)
     {:noreply, recent_view} = workspace_screen(socket, :history)
-    # The grid starts at the first week with training: only this week in the last 12.
+    # The chart starts at the first week with training: only this week in the last 12.
     assert length(recent_view.assigns.history_weeks) == 1
     assert recent.id in Enum.map(recent_view.assigns.history_points.six_count, & &1.id)
     refute previous_year.id in Enum.map(recent_view.assigns.history_points.six_count, & &1.id)
@@ -491,6 +485,8 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
       HomeLive.handle_event("history_period", %{"period" => "all"}, year_view)
 
     assert length(all_view.assigns.history_weeks) > 52
+    # The day grid holds its recent weeks whatever the window.
+    assert all_view.assigns.history_grid_weeks == recent_view.assigns.history_grid_weeks
     assert length(all_view.assigns.history_points.six_count) == 2
   end
 

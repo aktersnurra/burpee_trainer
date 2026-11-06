@@ -151,7 +151,7 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     refute has_element?(view, "#home-coach-goal-#{goal.id}")
     # A confirmed goal leads Progress.
     render_patch(view, ~p"/progress")
-    assert has_element?(view, "#progress-gauge-six_count[data-kind=goal]", "of 150")
+    assert has_element?(view, "#progress-gauge-six_count[data-kind=goal]", "Goal 150")
     render_patch(view, ~p"/")
     assert BurpeeTrainer.Repo.reload!(goal).status == :active
     assert summary_jobs() == 1

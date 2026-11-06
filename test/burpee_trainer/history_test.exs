@@ -245,6 +245,24 @@ defmodule BurpeeTrainer.HistoryTest do
     assert Enum.map(days, & &1.minutes) == [0, 0, 0, 0, 0, 0, 0]
   end
 
+  test "each day names the burpee types it was trained in, warmups aside" do
+    user = user_fixture()
+    {:ok, user} = BurpeeTrainer.Accounts.update_timezone(user, "Etc/UTC")
+    now = ~U[2026-09-23 12:00:00Z]
+
+    sessions = [
+      session(user, ~U[2026-09-21 12:00:00Z], burpee_type: :navy_seal),
+      session(user, ~U[2026-09-21 13:00:00Z], burpee_type: :six_count),
+      session(user, ~U[2026-09-22 12:00:00Z], burpee_type: :navy_seal),
+      session(user, ~U[2026-09-23 08:00:00Z], burpee_type: :six_count, tags: "warmup")
+    ]
+
+    assert {:ok, weeks} = History.weeks(sessions, user, now, "twelve_weeks")
+
+    assert Enum.map(List.last(weeks).days, & &1.types) ==
+             [[:six_count, :navy_seal], [:navy_seal], [], [], [], [], []]
+  end
+
   test "weekly grid credits authoritative minutes; the open week counts once it is met" do
     user = user_fixture()
     {:ok, user} = BurpeeTrainer.Accounts.update_timezone(user, "Etc/UTC")

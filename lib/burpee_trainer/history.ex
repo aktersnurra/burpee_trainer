@@ -74,6 +74,18 @@ defmodule BurpeeTrainer.History do
           Map.update(acc, date, credited_seconds(session), &(&1 + credited_seconds(session)))
         end)
 
+      # The burpee types a day was trained in: those with credited seconds.
+      types_by_day =
+        for {date, session} <- dated, credited_seconds(session) > 0, reduce: %{} do
+          acc ->
+            Map.update(
+              acc,
+              date,
+              MapSet.new([session.burpee_type]),
+              &MapSet.put(&1, session.burpee_type)
+            )
+        end
+
       weeks =
         for offset <- (count - 1)..0//-1 do
           date = Date.add(context.week_start, -7 * offset)
@@ -81,11 +93,13 @@ defmodule BurpeeTrainer.History do
           days =
             for day <- 0..6, date = Date.add(date, day) do
               seconds = Map.get(seconds_by_day, date, 0)
+              types = Map.get(types_by_day, date, MapSet.new())
 
               %{
                 date: date,
                 seconds: seconds,
                 minutes: div(seconds, 60),
+                types: Enum.filter([:six_count, :navy_seal], &MapSet.member?(types, &1)),
                 future?: Date.compare(date, context.date) == :gt
               }
             end
