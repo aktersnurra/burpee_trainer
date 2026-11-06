@@ -1094,14 +1094,22 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
   .coach-page .coach-page-top { max-width: 664px; margin: -12px auto 0; }
 }
 
-/* What the coach remembers: the workout picker's bottom sheet (88% of the screen, a grip, an
-   x-mark, the scrim), centred in the column on a wide screen. */
+/* What the coach remembers: on a phone the workout picker's bottom sheet (88% of the screen, a
+   grip, an x-mark, the scrim). */
 .home-sheet-backdrop { position: fixed; inset: 0; z-index: 40; background: rgb(32 32 29 / .18); animation: sheet-fade var(--motion-quick) ease backwards; }
 .home-sheet { position: fixed; z-index: 41; inset: auto 0 0 0; width: min(640px, 100%); height: 88svh; margin-inline: auto; overflow-y: auto; overscroll-behavior: contain; padding: 8px var(--gutter) calc(24px + env(safe-area-inset-bottom)); border-radius: var(--radius-surface) var(--radius-surface) 0 0; background: var(--color-base-200); box-shadow: 0 -8px 40px rgb(32 32 29 / .12); text-align: left; animation: sheet-up var(--motion-settle) var(--ease-out) backwards; }
 .home-sheet:focus { outline: none; }
 .home-sheet .home-sheet-grip { display: block; margin: 0 auto 4px; }
 .coach-sheet-leave { animation: sheet-down var(--motion-settle) var(--ease-out) forwards; }
 .coach-sheet-fade-out { animation: sheet-fade var(--motion-settle) ease reverse forwards; }
+/* On a wide screen it is a popup instead: centred, as tall as its lines, settling in place. */
+@keyframes popup-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+@keyframes popup-out { to { opacity: 0; transform: translateY(8px) scale(.98); } }
+@media (min-width: 601px) {
+  .home-sheet { inset: 0; width: min(480px, calc(100% - 48px)); height: fit-content; max-height: min(80svh, 640px); margin: auto; padding: 12px 24px 24px; border-radius: var(--radius-surface); box-shadow: 0 16px 48px rgb(32 32 29 / .16); animation: popup-in var(--motion-quick) var(--ease-out) backwards; }
+  .home-sheet .home-sheet-grip { display: none; }
+  .coach-sheet-leave { animation: popup-out var(--motion-quick) var(--ease-out) forwards; }
+}
 @media (prefers-reduced-motion: reduce) { .home-sheet, .home-sheet-backdrop, .coach-sheet-leave, .coach-sheet-fade-out { animation: none; } }
 .coach-memory-top { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; margin: 0 -12px 8px; }
 .coach-memory-top h2 { margin: 0; text-align: center; font: 600 var(--text-heading)/1.2 var(--font-sans); }

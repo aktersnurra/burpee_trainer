@@ -275,10 +275,11 @@ sheet: a conversation needs the screen above the keyboard, and a stray pull must
 
 A screen's seldom-used extra is an icon beside what it belongs to, opening a sheet, never a
 section of the page. The coach's memory is the bookmark on the Coach page's top row, and opens
-in the workout picker's bottom sheet (`.home-sheet`, `.home-sheet-backdrop`) at every width: 88%
-of the screen, a grip, the x-mark and "What I remember" on its top row, under the scrim; the ✕,
-the scrim, Escape or a pull down (`SheetDrag`, on a phone) close it, and focus returns to the
-bookmark. On a wide screen it is as wide as the 640px column and centred on it. Its two parts,
+on a phone in the workout picker's bottom sheet (`.home-sheet`, `.home-sheet-backdrop`): 88% of
+the screen, a grip, the x-mark and "What I remember" on its top row, under the scrim. On a wide
+screen (601px and up) it is a popup instead: centred, 480px wide, as tall as its lines (at most
+80% of the screen), no grip, settling in place. The ✕, the scrim, Escape or a pull down
+(`SheetDrag`, on a phone) close it, and focus returns to the bookmark. Its two parts,
 "About you" and "Coaching notes", each have a short cobalt track for how full they are; each line
 has × to forget it; a line the coach rewrote this week wears the diff's cobalt highlight (2); "To
 change a line, tell the coach." closes it.
