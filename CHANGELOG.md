@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-06 — Light screens
+
+- **One palette**: navy for six-count and sky for Navy SEAL everywhere (picks, marks, the day grid, the chart), cobalt for what the coach changed and an OK session, green for Good, clay for what's at stake and a Rough session, amber for tags and the streak. A choice is a soft tint of its colour, never solid ink.
+- **One writing box**: the coach, Edit, New's request and Finish's note share one rounded two-line box, the send key in its corner where there is one. Suggestions scroll sideways in one row.
+- **Home and Edit**: a workout reads in plain words (`20 min · 15 reps`, then `5 sets of 3 · 4:30 rest`). Edit closes with an X and shows your request, then only the proposal, the old value struck through in grey and the new on a cobalt highlight, and runs from the play pill.
+- **New**: Sets, Set size (Unbroken only) and Pace sit open as quiet rows under the big steppers, with the sentence the form would make. X and ✓ at the foot.
+- **Finish**: the count, the time and the sets reached, coloured mood pills, amber tags and the note. Trash asks in place as Abort does in the runner.
+- **Progress**: the level and streak lead, then each type's best with what the next level needs and the goal, the coach's look-back, a contributions grid coloured by type, and one chart with six-count on the left axis and Navy SEAL on the right.
+- **Coach page**: `/coach`, from Home's bookmark or Progress's look-back, with the week and the chat. What the coach remembers opens in the picker's bottom sheet, a × on each line. Leaving after a memory change refreshes the progress summary.
+- **Camera setup**: the pose over the feed glows, with ringed joints and a ring round the head; a scan line passes down you while the camera looks, and it all turns green once it has you.
+
 ## 2026-11-05 — Fewer dev dependencies
 
 - **Supply chain**: dev tools run on the machine that holds the commit-signing key, so `mix ci` keeps only long-established ones, `credo --strict` and Dialyzer. VibeKit, ExSlop, ExDNA and Reach (young, one maintainer), and `igniter` and `usage_rules` (installers nothing calls any more) are removed with their eight transitive dependencies. AGENTS.md keeps the Elixir, OTP and Phoenix rules as plain text.
