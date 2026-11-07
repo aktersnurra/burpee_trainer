@@ -123,19 +123,19 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
       }
 
       {request,
-       %Req.Response{
-         status: 200,
-         body:
-           Jason.encode!(%{
-             "choices" => [
-               %{
-                 "message" => %{
-                   "content" => Jason.encode!(if(extracting?, do: constraints, else: layout))
-                 }
+       BurpeeTrainer.ProviderStream.response(
+         request,
+         %{
+           "choices" => [
+             %{
+               "message" => %{
+                 "content" => Jason.encode!(if(extracting?, do: constraints, else: layout))
                }
-             ]
-           })
-       }}
+             }
+           ]
+         },
+         200
+       )}
     end)
 
     user = user_fixture()
@@ -221,7 +221,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     assert unchanged.plan.id == selected.plan.id
   end
 
-  test "back from a proposal keeps it: saved, today's workout on Home, not started", %{
+  test "Save keeps a proposal: saved, today's workout on Home, not started", %{
     view: view,
     user: user,
     selected: selected
@@ -238,7 +238,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
       |> LazyHTML.from_fragment()
       |> LazyHTML.text()
 
-    view |> element("#home-request-keep[aria-label='Close']") |> render_click()
+    view |> element("#home-edit-review #home-request-save[aria-label=Save]") |> render_click()
     refute has_element?(view, "#home-studio")
     assert has_element?(view, "#home-summary", String.trim(name))
 
@@ -246,6 +246,25 @@ defmodule BurpeeTrainerWeb.HomeAuthoringUXTest do
     refute kept.plan.id == selected.plan.id
     assert kept.plan.state == :published
     assert Workouts.current_started_session(Scope.for_user(user)) == nil
+  end
+
+  test "Close on a proposal leaves it: nothing saved, today's workout as it was", %{
+    view: view,
+    user: user,
+    selected: selected
+  } do
+    count = Repo.aggregate(WorkoutPlan, :count)
+    walk(view, reps: 10, minutes: 5, pace_ups: 1)
+    create(view)
+    render_async(view, 2_000)
+    assert has_element?(view, "#home-request-save")
+
+    view |> element("#home-request-abort[aria-label=Close]") |> render_click()
+    refute has_element?(view, "#home-studio")
+    assert Repo.aggregate(WorkoutPlan, :count) == count
+
+    {:ok, unchanged} = Workouts.ensure_home_selection(Scope.for_user(user), selected_slot(user))
+    assert unchanged.plan.id == selected.plan.id
   end
 
   test "a note whose sets do not add up to the reps is explained before any plan", %{view: view} do

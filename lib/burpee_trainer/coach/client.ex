@@ -1,11 +1,13 @@
 defmodule BurpeeTrainer.Coach.Client do
   @moduledoc "Metered Req boundary for chat, strict output, tool calls, and typed decisions."
 
+  alias BurpeeTrainer.Coach.ChatStream
   alias BurpeeTrainer.Workouts.Error
 
   require Logger
 
   @max_response_bytes 262_144
+  @max_stream_bytes 4_194_304
   @max_output_tokens 16_384
   @default_timeout_ms 20_000
   @minimum_timeout_ms 1_000
@@ -27,6 +29,11 @@ defmodule BurpeeTrainer.Coach.Client do
     :output
   ]
 
+  @doc """
+  One chat completion. With `on_content`, the answer streams: the function is called with
+  the answer so far each time it grows, from the calling process, and the result is the
+  same as without it. The model's reasoning is never passed on.
+  """
   @spec chat([map()], keyword()) ::
           {:ok, %{tool_calls: [map()], content: map() | String.t() | nil, usage: map()}}
           | {:error, Error.t()}
@@ -123,7 +130,8 @@ defmodule BurpeeTrainer.Coach.Client do
         config,
         opts,
         &encode_chat(messages, &1, &2, opts),
-        &parse_chat_with_usage(&1, opts)
+        &parse_chat_with_usage(&1, opts),
+        Keyword.get(opts, :on_content)
       )
 
   defp decide_request(state, questions, opts, config),
@@ -132,7 +140,8 @@ defmodule BurpeeTrainer.Coach.Client do
         config,
         opts,
         fn model, _url -> encode_decision(state, questions, model) end,
-        &parse_decision/1
+        &parse_decision/1,
+        nil
       )
 
   # OpenRouter names the app in its logs from these; without a URL a request is an unknown
@@ -151,7 +160,7 @@ defmodule BurpeeTrainer.Coach.Client do
     end
   end
 
-  defp provider_request(config, opts, encode, parse) do
+  defp provider_request(config, opts, encode, parse, on_content) do
     with true <- is_list(config),
          :ok <- require_enabled(config),
          {:ok, url} <- required(config, :url),
@@ -168,11 +177,11 @@ defmodule BurpeeTrainer.Coach.Client do
              decode_body: false,
              http_errors: :return,
              receive_timeout: timeout_ms(config),
-             into: bounded_body(@max_response_bytes),
+             into: bounded_body(@max_response_bytes, on_content),
              body: encoded,
              headers: [{"content-type", "application/json"} | attribution(config)]
            ),
-         body when is_binary(body) <- response.body,
+         body when is_binary(body) <- response_body(response, on_content),
          :ok <- enforce_body_limit(body, @max_response_bytes),
          :ok <- chat_status(response.status, body),
          {:ok, parsed} <- parse.(body) do
@@ -187,7 +196,8 @@ defmodule BurpeeTrainer.Coach.Client do
       {:error, %Error{} = error} ->
         {:error, error}
 
-      {:error, reason} when reason in [:invalid_provider_response, :response_too_large] ->
+      {:error, reason}
+      when reason in [:invalid_provider_response, :response_too_large, :invalid_stream] ->
         invalid_provider_response()
 
       {:error, :provider_disabled} ->
@@ -249,6 +259,8 @@ defmodule BurpeeTrainer.Coach.Client do
       usage: %{include: true}
     }
 
+    body = stream(body, url, Keyword.get(opts, :on_content))
+
     body =
       case Keyword.get(opts, :tools, []) do
         [] ->
@@ -294,6 +306,15 @@ defmodule BurpeeTrainer.Coach.Client do
     if byte_size(encoded) <= @max_response_bytes,
       do: {:ok, encoded},
       else: {:error, Error.new(:authoring_context_too_large)}
+  end
+
+  # A streamed answer reports its usage in its last event; OpenRouter always sends it.
+  defp stream(body, _url, nil), do: body
+
+  defp stream(body, url, _on_content) do
+    if URI.parse(url).host == "openrouter.ai",
+      do: Map.put(body, :stream, true),
+      else: Map.merge(body, %{stream: true, stream_options: %{include_usage: true}})
   end
 
   defp encode_decision(state, questions, model) do
@@ -513,17 +534,68 @@ defmodule BurpeeTrainer.Coach.Client do
 
   defp unique_json_value(value), do: {:ok, value}
 
-  defp bounded_body(limit) do
+  # The body as it arrives, never more than `limit` bytes. A streamed answer that succeeds is
+  # read event by event, and each time it grows `on_content` hears it; an error status is
+  # kept whole, as without streaming.
+  defp bounded_body(limit, on_content) do
     fn {:data, chunk}, {request, response} when is_binary(chunk) ->
       body = if is_binary(response.body), do: response.body, else: ""
 
-      if byte_size(body) + byte_size(chunk) > limit do
-        {:halt, {request, %{response | body: {:error, :response_too_large}}}}
-      else
-        {:cont, {request, %{response | body: body <> chunk}}}
+      streaming? = is_function(on_content, 1) and response.status == 200
+      received = Req.Response.get_private(response, :received, 0) + byte_size(chunk)
+
+      cond do
+        # Each streamed event repeats the envelope around a few characters, so the stream
+        # may be larger than the answer it adds up to, which is held to `limit`.
+        streaming? and received > @max_stream_bytes ->
+          {:halt, {request, %{response | body: {:error, :response_too_large}}}}
+
+        streaming? ->
+          stream = Req.Response.get_private(response, :chat_stream, ChatStream.new())
+          {stream, grew?} = ChatStream.feed(stream, chunk)
+          if grew?, do: on_content.(stream.content)
+
+          response =
+            response
+            |> Req.Response.put_private(:chat_stream, stream)
+            |> Req.Response.put_private(:received, received)
+
+          {:cont, {request, response}}
+
+        byte_size(body) + byte_size(chunk) > limit ->
+          {:halt, {request, %{response | body: {:error, :response_too_large}}}}
+
+        true ->
+          {:cont, {request, %{response | body: body <> chunk}}}
       end
     end
   end
+
+  # A streamed answer is checked as the envelope it adds up to. An adapter that ignores
+  # `into` hands the whole stream over at once.
+  defp response_body(%{status: 200, body: body} = response, on_content)
+       when is_function(on_content, 1) and not is_tuple(body) do
+    stream =
+      case Req.Response.get_private(response, :chat_stream) do
+        nil ->
+          {stream, grew?} = ChatStream.feed(ChatStream.new(), body || "")
+          if grew?, do: on_content.(stream.content)
+          stream
+
+        stream ->
+          stream
+      end
+
+    # A last event the provider did not end with a blank line still counts.
+    with {stream, _grew?} <- ChatStream.feed(stream, "\n\n"),
+         {:ok, envelope} <- ChatStream.envelope(stream) do
+      Jason.encode!(envelope)
+    else
+      :error -> {:error, :invalid_stream}
+    end
+  end
+
+  defp response_body(response, _on_content), do: response.body
 
   defp provider_unavailable, do: {:error, Error.new(:provider_unavailable)}
   defp invalid_provider_response, do: {:error, Error.new(:invalid_provider_response)}

@@ -28,7 +28,8 @@ swipe for Swap.
 
 Edit and New take Home's place as a chat (`HomeStudioComponents`, `data-stage` on `#home-studio`).
 A header carries only Back (⌄, since the studio rises over Home); the title is the workout's name in
-Edit, and "New workout" in New, large under it. With a proposal on screen Back keeps it (saved, today's workout, back on Home); otherwise it leaves with no change.
+Edit, and "New workout" in New, large under it. It leaves with no change, a proposal on screen
+included; Save under the proposal keeps it.
 
 ```
 ‹  Edit workout
@@ -97,11 +98,14 @@ holds, so a value typed and sent with Enter counts. The note goes to the coach w
 which are not said again in the chat: the proposal's card shows what came of them. Back from a
 proposal, or from the request in flight, is to the form as it was.
 
-## Run
+## Save and Run
 
-A proposal's card has Run under it, and nothing else: **Run** saves the proposal, makes it today's workout
-and starts it, as Home's play does, with the camera and warmup choices the device remembers from
-Home; the chat shows no toggles.
+The coach's reason for a proposal (`rationale`, the first field of `workout_layout`, so it is
+written first) streams into the chat as it is written, the app's loader until its first word; the
+model's thinking is never shown. Once the layout checks out the card follows it. Under the card,
+left-aligned: **Save** saves the proposal and makes it today's workout, back on Home; **Run** does
+that and starts it, as Home's play does, with the camera and warmup choices the device remembers
+from Home; the chat shows no toggles.
 
 A proposal changes only by asking the coach in the box under it; there is no editing its numbers
 by hand. To save typing, the coach offers up to three asks it expects next as quiet pills just

@@ -93,4 +93,59 @@ defmodule BurpeeTrainer.Coach.ClientChatTest do
     assert [%{cost_usd: 0.7, prompt_tokens: 10, outcome: "invalid_response"}] =
              Repo.all(BurpeeTrainer.Coach.LlmCall)
   end
+
+  test "a streamed answer is heard as it grows, without its thinking, and recorded once" do
+    scope = scope_fixture()
+    parent = self()
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      {:ok, body, conn} = Plug.Conn.read_body(conn)
+      assert %{"stream" => true} = Jason.decode!(body)
+
+      BurpeeTrainer.ProviderStream.reply(
+        conn,
+        %{
+          "choices" => [%{"message" => %{"content" => ~s({"reply":"Keep Thursday light."})}}],
+          "usage" => %{"prompt_tokens" => 12, "completion_tokens" => 9}
+        },
+        body
+      )
+    end)
+
+    assert {:ok, %{content: %{"reply" => "Keep Thursday light."}, tool_calls: []}} =
+             Client.chat([%{role: "user", content: "hi"}],
+               config: @config,
+               req: Req.new(plug: {Req.Test, __MODULE__}),
+               response_format: {"coach_reply", %{type: "object"}},
+               on_content: &send(parent, {:content, &1}),
+               ledger: %{scope: scope, purpose: "coach_message", run_id: Ecto.UUID.generate()}
+             )
+
+    assert_received {:content, ~s({"reply":"Keep Thursday light."})}
+    refute_received {:content, "Thinking." <> _}
+
+    assert [%{prompt_tokens: 12, completion_tokens: 9, outcome: "ok"}] =
+             Repo.all(BurpeeTrainer.Coach.LlmCall)
+  end
+
+  test "a stream cut short is an invalid answer, not a partial one" do
+    scope = scope_fixture()
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      conn
+      |> Plug.Conn.put_resp_content_type("text/event-stream")
+      |> Plug.Conn.send_resp(
+        200,
+        ~s(data: {"choices":[{"delta":{"content":"{\\"reply\\":\\"Hal"}}]}\n\n)
+      )
+    end)
+
+    assert {:error, %{code: :invalid_provider_response}} =
+             Client.chat([%{role: "user", content: "hi"}],
+               config: @config,
+               req: Req.new(plug: {Req.Test, __MODULE__}),
+               on_content: fn _ -> :ok end,
+               ledger: %{scope: scope, purpose: "coach_message", run_id: Ecto.UUID.generate()}
+             )
+  end
 end

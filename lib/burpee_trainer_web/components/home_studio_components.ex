@@ -1,8 +1,9 @@
 defmodule BurpeeTrainerWeb.HomeStudioComponents do
   @moduledoc """
   The studio: Edit and New as a chat, in place of Home. Edit opens on today's workout as a
-  card and a box to write in; New opens on a form of what to make. A proposal arrives as a
-  new card with Save and Run; back leaves without a change. See `docs/specs/2026-10-29-design-chat-design.md`.
+  card and a box to write in; New opens on a form of what to make. The coach's reason streams
+  in as it is written, then the proposal arrives as a card with Save and Run; X leaves without
+  a change. See `docs/specs/2026-10-29-design-chat-design.md`.
   """
   use BurpeeTrainerWeb, :html
 
@@ -50,9 +51,8 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   attr(:state, :map, required: true)
 
-  # Back: from a proposal on screen, home with it as today's workout; otherwise out of Edit and
-  # out of New's form, and from New's request in flight back to the form. Leaving the studio is a
-  # Close (an X), as at New's foot; only the step back to New's form points back.
+  # Close: out of the studio with nothing changed, whatever is on screen (Save keeps a proposal).
+  # Only the step back from New's request in flight to its form points back.
   defp header(assigns) do
     back = back(assigns.state)
     assigns = assign(assigns, back: back, close?: back.id != "studio-back")
@@ -66,7 +66,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         type="button"
         class="studio-back"
         data-vt={@back.vt}
-        data-vt-from={@back.id == "home-request-keep" && "#studio-proposal .studio-card-name"}
         aria-label={if(@close?, do: "Close", else: @back.label)}
         title={if(@close?, do: "Close", else: "Back")}
         phx-click={@back.click}
@@ -79,17 +78,10 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     """
   end
 
-  # What Back does here: keep the proposal on screen, leave, or step back to New's form.
-  # (New's form leaves by the X at its foot, which does what Back would.)
-  defp back(%{authoring_stage: :review, pending_request: %{}, busy?: false}),
-    do: %{
-      id: "home-request-keep",
-      vt: "drop",
-      click: JS.push("keep_workout_request") |> JS.focus(to: "#home-summary")
-    }
-
+  # What the header's button does here: leave, or step back to New's form.
+  # (New's form leaves by the X at its foot, which does the same.)
   defp back(state) do
-    if edit?(state) or form?(state),
+    if edit?(state) or form?(state) or state.authoring_stage == :review,
       do: %{
         id: "home-request-abort",
         vt: "drop",
@@ -138,7 +130,14 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   defp proposal_thread(assigns) do
     state = assigns.state
     first_busy? = state.busy? and is_nil(state.pending_turn) and state.authoring_stage != :review
-    assigns = assign(assigns, first_busy?: first_busy?, refining?: is_binary(state.pending_turn))
+    streamed = Map.get(state, :streamed)
+
+    assigns =
+      assign(assigns,
+        first_busy?: first_busy?,
+        refining?: is_binary(state.pending_turn),
+        streamed: streamed
+      )
 
     ~H"""
     <%= for turn <- @state.design_turns do %>
@@ -155,7 +154,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       <p id="home-design-ask" class="studio-bubble">{ask(@state)}</p>
     </li>
     <li :if={@first_busy?} class="studio-msg studio-coach">
-      <.working />
+      <.writing text={@streamed} />
     </li>
     <li
       :if={@state.authoring_stage == :review and @state.pending_request}
@@ -166,7 +165,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     <li :if={@refining?} class="studio-msg studio-you">
       <p id="home-design-pending" class="studio-bubble">{@state.pending_turn}</p>
     </li>
-    <li :if={@refining?} class="studio-msg studio-coach"><.working /></li>
+    <li :if={@refining?} class="studio-msg studio-coach"><.writing text={@streamed} /></li>
     <li
       :if={@state.authoring_stage == :review and @state.busy? and not @refining?}
       class="studio-msg studio-coach"
@@ -194,12 +193,14 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
     ~H"""
     <div id="home-edit-review" class={["studio-proposal", @stale? && "studio-proposal-stale"]}>
+      <p :if={@definition["rationale"]} id="studio-reply" class="studio-reply">
+        {@definition["rationale"]}
+      </p>
       <.card
         id="studio-proposal"
         name={@definition["name"]}
         seconds={@definition["target_duration_sec"]}
         reps={@definition["target_reps"]}
-        note={@definition["rationale"]}
         shape={Shape.describe(@definition)}
         rows={@state.review_inspection_rows}
         compare={compare(@state)}
@@ -213,9 +214,23 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       >
         {pauses_label(@state.pending_request.request.timed_rests)}
       </p>
-      <%!-- What to do with it sits right under the card it is about. Run starts it with the
-           camera and warmup choices this device remembers from Home. --%>
+      <%!-- What to do with it sits right under the card it is about: Save makes it today's
+           workout and goes home with it; Run does that and starts it, with the camera and
+           warmup choices this device remembers from Home. --%>
       <div id="home-chat-actions" class="studio-actions">
+        <button
+          id="home-request-save"
+          type="button"
+          class="studio-pill"
+          phx-click={JS.push("keep_workout_request") |> JS.focus(to: "#home-summary")}
+          data-vt="drop"
+          data-vt-from="#studio-proposal .studio-card-name"
+          disabled={@state.busy?}
+          aria-label="Save"
+          title="Save"
+        >
+          <.icon name="hero-check" class="size-6" />
+        </button>
         <button
           id="home-request-run"
           type="button"
@@ -258,6 +273,21 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     end
   end
 
+  attr(:text, :string, default: nil)
+
+  # The coach at work: its loader until its first word, then what it has written so far.
+  defp writing(%{text: text} = assigns) when is_binary(text) do
+    ~H"""
+    <p id="studio-streaming" class="studio-reply chat-streaming" aria-busy="true">{@text}</p>
+    """
+  end
+
+  defp writing(assigns) do
+    ~H"""
+    <.working />
+    """
+  end
+
   attr(:label, :string, default: "Working on it…")
 
   defp working(assigns) do
@@ -273,14 +303,13 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   attr(:name, :string, required: true)
   attr(:seconds, :any, required: true)
   attr(:reps, :any, required: true)
-  attr(:note, :string, default: nil)
   attr(:shape, :string, default: nil)
   attr(:rows, :list, default: [])
   attr(:compare, :any, default: nil)
   attr(:was, :map, default: nil)
   attr(:expanded, :any, default: MapSet.new())
 
-  # A workout, as the coach shows it: its name, its totals, a line on why, its structure as a
+  # A workout, as the coach shows it: its name, its totals, its structure as a
   # sentence (with the one it replaced struck through when that changed), and its table.
   defp card(assigns) do
     assigns =
@@ -305,7 +334,6 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           <.diff changed?={changed?(@was, :reps, @reps)} was={@was && @was.reps} now={@reps} /> reps
         </span>
       </p>
-      <p :if={@note} class="studio-card-note">{@note}</p>
       <p :if={@shape} class="home-shape">
         {@shape}
         <s :if={@was_shape} class="diff-was">was {@was_shape}</s>

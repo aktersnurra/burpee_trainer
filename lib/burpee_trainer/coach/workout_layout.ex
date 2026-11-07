@@ -101,32 +101,40 @@ defmodule BurpeeTrainer.Coach.WorkoutLayout do
     %{
       "type" => "object",
       "additionalProperties" => false,
-      "required" => ["name", "rationale", "phases", "suggestions"],
-      "properties" => %{
-        "name" => %{
-          "type" => "string",
-          "description" =>
-            "The workout's title for the athlete: two to four plain words, not its reps, minutes or level, which are shown beside it."
-        },
-        "rationale" => %{
-          "type" => "string",
-          "description" => BurpeeTrainer.Coach.Rationale.description()
-        },
-        "suggestions" => %{
-          "type" => "array",
-          "maxItems" => @max_suggestions,
-          "description" =>
-            "Up to three changes the athlete is most likely to ask for next about this workout, as they would type them: short imperatives of at most #{@max_suggestion_length} characters, each one the coach can make, and specific to this layout (name the set or the time). For example \"Even out the rests\", \"Add a 1-minute rest at 10:00\", \"Front-load the reps\". Not a change this layout already makes.",
-          "items" => %{"type" => "string"}
-        },
-        "phases" => %{
-          "type" => "array",
-          "minItems" => phase_count,
-          "maxItems" => phase_count,
-          "description" =>
-            "Each non-terminal phase ends where its fixed pause begins; the terminal phase ends the workout.",
-          "items" => phase
-        }
+      "required" => ["rationale", "name", "phases", "suggestions"],
+      # In this order: the model writes the rationale first, and it is shown to the athlete
+      # word by word while the rest of the layout is still being written.
+      "properties" => %Jason.OrderedObject{
+        values: [
+          {"rationale",
+           %{
+             "type" => "string",
+             "description" => BurpeeTrainer.Coach.Rationale.description()
+           }},
+          {"name",
+           %{
+             "type" => "string",
+             "description" =>
+               "The workout's title for the athlete: two to four plain words, not its reps, minutes or level, which are shown beside it."
+           }},
+          {"suggestions",
+           %{
+             "type" => "array",
+             "maxItems" => @max_suggestions,
+             "description" =>
+               "Up to three changes the athlete is most likely to ask for next about this workout, as they would type them: short imperatives of at most #{@max_suggestion_length} characters, each one the coach can make, and specific to this layout (name the set or the time). For example \"Even out the rests\", \"Add a 1-minute rest at 10:00\", \"Front-load the reps\". Not a change this layout already makes.",
+             "items" => %{"type" => "string"}
+           }},
+          {"phases",
+           %{
+             "type" => "array",
+             "minItems" => phase_count,
+             "maxItems" => phase_count,
+             "description" =>
+               "Each non-terminal phase ends where its fixed pause begins; the terminal phase ends the workout.",
+             "items" => phase
+           }}
+        ]
       }
     }
   end

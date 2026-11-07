@@ -199,21 +199,33 @@ so the text draws no ring of its own. The box is the same on a phone and a wide 
 
 Where it sends on its own (Edit, the coach) the send key sits in the bottom-right corner, inside
 the box: a 34px circle in a 44px target. It is grey until there is something to send, then ink;
-the composer stays grey while the coach works. New's note and Finish's note go with the screen's
+the composer stays grey while the coach works. With a mouse and keyboard, Enter sends and
+Shift+Enter starts a new line; on a touch screen the return key is a new line and the arrow sends
+(`ChatDock`). New's note and Finish's note go with the screen's
 ✓ and have no send key. Classes: `.composer`, `.composer-bar`, `.composer-send`.
 
 A conversation's composer (a design's follow-ups, the coach) is docked: `.chat-dock` holds it, fixed at the bottom of the screen above the home
 indicator, and the `ChatDock` hook lifts it onto the iPhone keyboard with a transform, frame by
 frame and never eased, so it rides the keyboard instead of trailing it. A spacer (`.chat-dock-spacer`) keeps the last line clear of
-it. Your messages are soft bubbles on the right (`.studio-bubble`, `.coach-exchange-you`); new
-lines rise in rather than jump.
+it. A screen with a dock (Edit and New's chat, the Coach page, Home once the day is done) scrolls
+inside itself, as tall as what the keyboard leaves (`--viewport-height`), and the page stays at
+the top: were the page to scroll, iOS would slide it under the keyboard and the box would trail. Your messages are soft bubbles on the right (`.studio-bubble`, `.coach-exchange-you`); new
+lines rise in rather than jump. A message moves into the thread when it is sent and the box
+empties (it comes back if the coach cannot answer).
+
+Every reply streams, as in LibreChat: the app's loader until the first word, then the words as the
+coach writes them, plain on the left with a soft dot after the last one (`.chat-streaming`, still
+with reduced motion). The model's thinking is never shown. On the Coach page that is the reply; in
+Edit and New it is the coach's reason for the proposal, and the card follows it once its sets
+check out.
 
 ## 4a1a. Swipes, the drawer and the studio
 
-Swap, Edit and New are three muted 44px icons (`.home-corner`: bars, pencil, plus), a tap each,
-in a centred row under the sets once the workout is opened; closed, Home is the workout and Play
-alone. Every icon button (these, back and close in the studio and drawer, Progress's view
-switches) is the same: 44px, plain and muted, filled on hover, pressed in on a tap. Every view
+Swap, Edit and New are three icons in the start toggles' pill (`.home-corner`: bars, pencil,
+plus; 44px tall, `--color-base-200`, ink), a tap each, in a centred row under the sets once the
+workout is opened; closed, Home is the workout and Play alone. Every other icon button (back and
+close in the studio and drawer, Progress's view switches) is the same: 44px, plain and muted,
+filled on hover, pressed in on a tap. Every view
 shares one 640px column. Swap opens the list of workouts and videos:
 
 - **On a phone** it is a sheet from the bottom, as iOS does it: 88% of the screen with Home showing
@@ -237,10 +249,12 @@ sheet: a conversation needs the screen above the keyboard, and a stray pull must
 - **Header**: a 44px button in the corner, nothing else. Edit's is Close (x-mark). New's form has
   none: it closes from its foot (below). With New's proposal on screen it is Close too; the one
   step back inside New (from a request in flight to its form) points left. The title is the workout itself: in Edit its name, large, under the bar (the heading is
-  for screen readers); in New "New workout" in the same type and place. With a
-  proposal on screen Close keeps it: it is saved and made today's workout, the studio drops away and
-  the proposal's name settles into Home's title (Run still starts it at once). Otherwise Back is
-  one step back, and out of the first. A drawer or sheet is closed with an x-mark, since it
+  for screen readers); in New "New workout" in the same type and place. Close always leaves with
+  nothing changed, a proposal on screen included.
+- **A proposal** is the coach's message, on the left like its words: its reason, then the card
+  (name, totals, sentence, sets), then two pills under it, left-aligned: Save (✓, the toggles'
+  soft pill) saves it and makes it today's workout, the studio drops away and its name settles
+  into Home's title; Run (the ink play pill) does that and starts it. A drawer or sheet is closed with an x-mark, since it
   covers part of Home rather than replacing it. Where a screen's own head leads back (Progress's
   week strip), that stays.
 - **Messages**: the coach's plain on the left, yours in soft bubbles on the right (one bubble,

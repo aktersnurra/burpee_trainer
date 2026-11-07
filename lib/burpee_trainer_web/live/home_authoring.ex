@@ -88,6 +88,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
         source = a.editing_source
         selection = a.home_selection
         text = String.trim(text)
+        live_view = self()
 
         {:noreply,
          socket
@@ -102,7 +103,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
              Coach.prepare_plan(scope, text, interpreted.request,
                workspace_key: key,
                edit_source: source,
-               base_definition: base.definition
+               base_definition: base.definition,
+               on_rationale: &send(live_view, {:studio_streaming, id, &1})
              )
            end
          end)}
@@ -130,6 +132,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
         scope = a.current_scope
         expected = a.home_selection
         key = a.creation_key
+        live_view = self()
 
         {:noreply,
          socket
@@ -140,7 +143,8 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
                 {:ok, _} <- Workouts.verify_home_selection(scope, expected) do
              Coach.prepare_plan(scope, text, interpreted.request,
                workspace_key: key,
-               edit_source: source
+               edit_source: source,
+               on_rationale: &send(live_view, {:studio_streaming, id, &1})
              )
            end
          end)}
@@ -288,6 +292,10 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
+
+  # What the coach has written so far about the work in flight.
+  def handle_info({:studio_streaming, id, text}, socket),
+    do: {:noreply, step(socket, {:streamed, id, text})}
 
   # Each result is reported to the flow, which applies it only while it is the work in
   # flight. A late answer to discarded or superseded work reaches no clause below.
@@ -476,6 +484,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
       key = socket.assigns.creation_key
       source = socket.assigns.editing_source
       text = HomeWorkoutRequest.instruction(params)
+      live_view = self()
 
       {:noreply,
        socket
@@ -484,7 +493,11 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
        |> adjustment_form("")
        |> start_async({:new_request, id}, fn ->
          with {:ok, request} <- Coach.prepare_new_request(scope, request, params.note || "") do
-           Coach.prepare_plan(scope, text, request, workspace_key: key, edit_source: source)
+           Coach.prepare_plan(scope, text, request,
+             workspace_key: key,
+             edit_source: source,
+             on_rationale: &send(live_view, {:studio_streaming, id, &1})
+           )
          end
        end)}
     else

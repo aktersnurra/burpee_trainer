@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-11-07 — Streaming chats
+
+- **Replies stream**: the Coach page's reply and, in Edit and New, the coach's reason for a proposal appear word by word as the coach writes them, with a soft dot after the last word. The app's loader shows until the first word; the model's thinking is never shown.
+- **Save and Run**: a proposal is the coach's message on the left, its reason above the card, and Save (✓) and Run (▶) under it. Save makes it today's workout without starting it; X leaves with nothing changed.
+- **Enter sends** with a mouse and keyboard; Shift+Enter is a new line. A touch screen keeps the return key for new lines.
+- **Coach page**: the week is one card, closed to its minutes against the target and open on its sessions. The box empties when a message is sent.
+- **Home**: Swap, Edit and New wear the start toggles' pill.
+- **Text box on an iPhone**: it stays on the keyboard while you scroll the conversation. A screen with a box now scrolls inside itself, as tall as what the keyboard leaves, so iOS no longer slides the page under the keyboard as you scroll.
+
 ## 2026-11-06 — Light screens
 
 - **One palette**: navy for six-count and sky for Navy SEAL everywhere (picks, marks, the day grid, the chart), cobalt for what the coach changed and an OK session, green for Good, clay for what's at stake and a Rough session, amber for tags and the streak. A choice is a soft tint of its colour, never solid ink.

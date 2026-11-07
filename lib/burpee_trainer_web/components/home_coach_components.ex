@@ -61,8 +61,8 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   attr(:state, :map, required: true)
 
   @doc """
-  The Coach page: Back, "Coach" and the memory bookmark on top, then the week's sessions, the
-  chat and the box (no week bar under the header). Arriving from Progress, the look back is the chat's first message.
+  The Coach page: Back, "Coach" and the memory bookmark on top, then the week as a card that
+  opens on its sessions, the chat, and the box pinned to the foot. Arriving from Progress, the look back is the chat's first message.
   """
   def page(assigns) do
     ~H"""
@@ -103,7 +103,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           </button>
         </header>
         <section id="coach-page-body" aria-labelledby="coach-page-heading">
-          <.week_rows state={@state} />
+          <.week_card state={@state} />
           <.conversation
             state={@state}
             field={if(@state.coach_from == :progress, do: :review, else: :text)}
@@ -115,6 +115,24 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       </div>
       <.memory_sheet :if={Map.get(@state, :coach_memory_open?, false)} state={@state} />
     </main>
+    """
+  end
+
+  attr(:state, :map, required: true)
+
+  # The week, closed to its minutes against the target; open, its sessions as rows.
+  defp week_card(assigns) do
+    ~H"""
+    <details :if={@state.coach_week != []} id="coach-week-card" class="coach-week-card">
+      <summary class="coach-week-summary">
+        <span>This week</span>
+        <span class="coach-week-total">
+          {div(@state.slot.completed_sec, 60)} / {div(@state.slot.weekly_target_sec, 60)} min
+        </span>
+        <.icon name="hero-chevron-down" class="size-4 coach-week-chevron" />
+      </summary>
+      <.week_rows state={@state} />
+    </details>
     """
   end
 
@@ -207,9 +225,23 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           class="coach-exchange"
         >
           <p class="coach-exchange-you">{@state.coach_pending_message}</p>
+          <%!-- The reply as it is written; it lands in the thread once it is whole. --%>
+          <p
+            :if={Map.get(@state, :coach_streaming)}
+            id="home-coach-streaming"
+            class="coach-exchange-coach chat-streaming"
+            aria-busy="true"
+          >
+            {@state.coach_streaming}
+          </p>
         </li>
       </ol>
-      <p :if={@state.coach_busy?} id="home-coach-loading" role="status" class="coach-pending-status">
+      <p
+        :if={@state.coach_busy? and is_nil(Map.get(@state, :coach_streaming))}
+        id="home-coach-loading"
+        role="status"
+        class="coach-pending-status"
+      >
         <.burpee_loader class="coach-summary-loader" size={32} />
         <span>Sending to the coach</span>
       </p>

@@ -93,19 +93,19 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
       }
 
       {request,
-       %Req.Response{
-         status: if(provider_down?, do: 503, else: 200),
-         body:
-           Jason.encode!(%{
-             "choices" => [
-               %{
-                 "message" => %{
-                   "content" => Jason.encode!(if(extracting?, do: constraints, else: layout))
-                 }
+       BurpeeTrainer.ProviderStream.response(
+         request,
+         %{
+           "choices" => [
+             %{
+               "message" => %{
+                 "content" => Jason.encode!(if(extracting?, do: constraints, else: layout))
                }
-             ]
-           })
-       }}
+             }
+           ]
+         },
+         if(provider_down?, do: 503, else: 200)
+       )}
     end)
 
     user = user_fixture()
@@ -246,8 +246,24 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     refute has_element?(view, "#home-edit-instruction", instruction)
     refute has_element?(view, "#home-edit-review")
     assert Repo.aggregate(WorkoutPlan, :count) == count
+
+    # The coach's reason reads as it is written, in place of the loader; words for work no
+    # longer in flight change nothing.
+    id = :sys.get_state(view.pid).socket.assigns.update_id
+    send(view.pid, {:studio_streaming, make_ref(), "Not this"})
+    refute has_element?(view, "#studio-streaming")
+    send(view.pid, {:studio_streaming, id, "Continuous sets"})
+    assert has_element?(view, "#studio-streaming[aria-busy=true]", "Continuous sets")
+    refute has_element?(view, "#home-update-loading")
+
     send(planner, :release_plan)
     render_async(view)
+    # Once whole, the reason is the coach's message, above the card it is about.
+    refute has_element?(view, "#studio-streaming")
+
+    assert has_element?(view, "#home-edit-review #studio-reply + #studio-proposal")
+
+    assert has_element?(view, "#studio-reply", "Continuous sets and local recovery.")
     assert_receive {:provider_request, _interpretation}
     assert_receive {:provider_request, body}
 
@@ -267,13 +283,12 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     assert has_element?(view, "#home-edit-review #home-inspection table")
     assert has_element?(view, "#home-edit-review td.home-changed.home-prescription-reps", "75")
 
-    # Edit refines by talking, so there is no way back to a form; Run sits under the card, and
-    # nothing saves a proposal without running it.
+    # Edit refines by talking, so there is no way back to a form; Save and Run sit under the
+    # card, and the coach's reason reads above it as its message.
     refute has_element?(view, "#home-request-edit")
 
+    assert has_element?(view, "#home-edit-review #home-request-save[aria-label=Save]")
     assert has_element?(view, "#home-edit-review #home-request-run[aria-label=Run]")
-
-    refute has_element?(view, "#home-request-save")
     refute has_element?(view, "#home-chat-dock #home-request-run")
 
     assert has_element?(view, "#home-edit-review .home-prescription-reps", "75")

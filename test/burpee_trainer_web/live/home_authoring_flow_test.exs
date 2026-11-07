@@ -68,6 +68,21 @@ defmodule BurpeeTrainerWeb.HomeAuthoringFlowTest do
       assert reviewed.update_id == nil
     end
 
+    test "the coach's words show only for the work in flight, and go when it settles" do
+      a = make_ref()
+      b = make_ref()
+
+      {started, []} = Flow.update(model(authoring_stage: :new), {:review_started, a, "A"})
+      {writing, []} = Flow.update(started, {:streamed, a, "Two even"})
+      assert writing.streamed == "Two even"
+
+      assert {^writing, []} = Flow.update(writing, {:streamed, b, "Not this one"})
+
+      {failed, []} = Flow.update(writing, {:review_failed, a, "Coach unavailable."})
+      assert failed.streamed == nil
+      assert {^failed, []} = Flow.update(failed, {:streamed, a, "Late"})
+    end
+
     test "editing the form discards the preparation and ignores its result" do
       id = make_ref()
       {started, _} = Flow.update(model(authoring_stage: :editing), {:review_started, id, "x"})

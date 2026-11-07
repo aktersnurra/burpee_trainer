@@ -44,16 +44,24 @@ BurpeeTrainer.ReqStub.default(fn request ->
       _ -> if String.contains?(String.downcase(instruction), "shorter"), do: max(base_reps - 20, 20), else: base_reps
     end
 
+  reply? = get_in(body, ["response_format", "json_schema", "name"]) == "coach_reply"
+
   content =
     cond do
+      reply? ->
+        %{"reply" => "Then keep Thursday light: two easy sets of six-count, no jumps, and tell me how the knee feels after."}
+
       constraints ->
         Process.sleep(delay)
         r = constraints["target_reps"]
         a = div(r, 2)
         pace = constraints["requested_pace_sec"] || 5
-        %{"name" => "Steady #{r}", "rationale" => "Two even sets with a proper breather between them.",
-          "suggestions" => ["Split it into four sets", "Add a 1-minute rest at 10:00", "Front-load the reps"],
-          "phases" => [%{"sets" => [%{"reps" => a, "sec_per_rep" => pace, "sec_per_burpee" => pace}, %{"reps" => r - a, "sec_per_rep" => pace, "sec_per_burpee" => pace}], "rests" => [%{"share" => 1}]}]}
+        # In the schema's order, as the model writes it: the rationale first, so it streams.
+        %Jason.OrderedObject{values: [
+          {"rationale", "Two even sets with a proper breather between them, so the second half holds the same pace as the first."},
+          {"name", "Steady #{r}"},
+          {"suggestions", ["Split it into four sets", "Add a 1-minute rest at 10:00", "Front-load the reps"]},
+          {"phases", [%{"sets" => [%{"reps" => a, "sec_per_rep" => pace, "sec_per_burpee" => pace}, %{"reps" => r - a, "sec_per_rep" => pace, "sec_per_burpee" => pace}], "rests" => [%{"share" => 1}]}]}]}
 
       fixed ->
         Map.merge(fixed, %{"set_reps" => []})
@@ -64,7 +72,22 @@ BurpeeTrainer.ReqStub.default(fn request ->
           "timed_rests" => [], "set_reps" => [div(reps, 2), reps - div(reps, 2)]}
     end
 
-  {request, %Req.Response{status: 200, body: Jason.encode!(%{"choices" => [%{"message" => %{"content" => Jason.encode!(content)}}]})}}
+  envelope = %{"choices" => [%{"message" => %{"content" => Jason.encode!(content)}}]}
+
+  # A streamed answer arrives in pieces, as the HTTP adapter hands them to `into`.
+  if body["stream"] do
+    sse = BurpeeTrainer.ProviderStream.sse(envelope)
+    pieces = for <<piece::binary-size(160) <- sse>>, do: piece
+    pieces = pieces ++ [binary_part(sse, length(pieces) * 160, byte_size(sse) - length(pieces) * 160)]
+
+    Enum.reduce(pieces, {request, %Req.Response{status: 200, body: ""}}, fn piece, acc ->
+      Process.sleep(60)
+      {:cont, acc} = request.into.({:data, piece}, acc)
+      acc
+    end)
+  else
+    {request, %Req.Response{status: 200, body: Jason.encode!(envelope)}}
+  end
 end)
 
 user = user_fixture()

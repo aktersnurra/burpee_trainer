@@ -17,6 +17,8 @@ defmodule BurpeeTrainerWeb.HomeCoach do
       coach_busy?: false,
       coach_reply: nil,
       coach_pending_message: nil,
+      # The reply so far while the coach writes it.
+      coach_streaming: nil,
       coach_status: nil,
       coach_memory_open?: false,
       # Whether this page changed the memory (a forget, or the coach writing as it talked),
@@ -83,17 +85,23 @@ defmodule BurpeeTrainerWeb.HomeCoach do
       true ->
         scope = socket.assigns.current_scope
         history = Enum.map(socket.assigns.coach_thread, &{&1.message, &1.reply})
+        live_view = self()
 
         {:noreply,
          socket
          |> assign(
            coach_busy?: true,
            coach_status: nil,
+           coach_streaming: nil,
            coach_pending_message: text,
-           coach_message_form: to_form(%{"text" => text}, as: :coach_message)
+           # The message moves into the thread; the box empties, as in the studio.
+           coach_message_form: to_form(%{"text" => ""}, as: :coach_message)
          )
          |> start_async(:coach_reply, fn ->
-           Agent.run(scope, :coach_page, text, history: history)
+           Agent.run(scope, :coach_page, text,
+             history: history,
+             on_reply: &send(live_view, {:coach_streaming, &1})
+           )
          end)}
     end
   end
@@ -113,6 +121,12 @@ defmodule BurpeeTrainerWeb.HomeCoach do
   end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
+
+  # The reply as the coach writes it; one arriving after the answer is in changes nothing.
+  def handle_info({:coach_streaming, text}, %{assigns: %{coach_busy?: true}} = socket),
+    do: {:noreply, assign(socket, coach_streaming: text)}
+
+  def handle_info({:coach_streaming, _text}, socket), do: {:noreply, socket}
 
   # This week's conversation; it starts over with the week, as the report does.
   defp this_week(scope), do: Exchange.since(scope, week_start_utc(scope))
@@ -141,6 +155,7 @@ defmodule BurpeeTrainerWeb.HomeCoach do
      |> assign(
        coach_busy?: false,
        coach_pending_message: nil,
+       coach_streaming: nil,
        # The reply reads in the conversation; this line is for failures only.
        coach_reply: nil,
        coach_message_form: to_form(%{"text" => ""}, as: :coach_message),
@@ -150,12 +165,16 @@ defmodule BurpeeTrainerWeb.HomeCoach do
      |> refresh()}
   end
 
+  # A message the coach could not answer goes back in the box, to send again.
   def handle_async(:coach_reply, _, socket),
     do:
       {:noreply,
        assign(socket,
          coach_busy?: false,
          coach_pending_message: nil,
+         coach_streaming: nil,
+         coach_message_form:
+           to_form(%{"text" => socket.assigns.coach_pending_message}, as: :coach_message),
          coach_reply: "Coach unavailable. Try again later."
        )}
 end

@@ -9,7 +9,8 @@ defmodule BurpeeTrainer.Coach do
     WorkoutLayout,
     RestFitter,
     WorkoutGuidance,
-    WorkoutRequest
+    WorkoutRequest,
+    PartialJson
   }
 
   alias BurpeeTrainer.PlanCompiler.WorkoutDefinition
@@ -156,7 +157,10 @@ defmodule BurpeeTrainer.Coach do
     end
   end
 
-  @doc "Compile and audit a review candidate without creating a WorkoutPlan."
+  @doc """
+  Compile and audit a review candidate without creating a WorkoutPlan. `on_rationale` hears
+  the coach's reason for the layout as it is written, the text so far each time it grows.
+  """
   @spec prepare_plan(Accounts.Scope.t(), String.t(), WorkoutRequest.t()) ::
           {:ok, map()} | {:error, Error.t()}
   @spec prepare_plan(Accounts.Scope.t(), String.t(), WorkoutRequest.t(), keyword()) ::
@@ -463,6 +467,7 @@ defmodule BurpeeTrainer.Coach do
     do:
       opts
       |> Keyword.take([:req, :config, :budget])
+      |> stream_rationale(purpose, Keyword.get(opts, :on_rationale))
       |> Keyword.merge(
         response_format: format,
         ledger: %{
@@ -471,6 +476,18 @@ defmodule BurpeeTrainer.Coach do
           run_id: Keyword.get_lazy(opts, :run_id, &Ecto.UUID.generate/0)
         }
       )
+
+  # The layout's rationale, its first field, heard as it is written (`on_rationale`).
+  defp stream_rationale(opts, "layout", on_rationale) when is_function(on_rationale, 1) do
+    Keyword.put(opts, :on_content, fn content ->
+      case PartialJson.first_string(content, "rationale") do
+        text when is_binary(text) and text != "" -> on_rationale.(text)
+        _not_yet -> :ok
+      end
+    end)
+  end
+
+  defp stream_rationale(opts, _purpose, _on_rationale), do: opts
 
   defp outside_authoring_transaction do
     if BurpeeTrainer.Repo.in_transaction?(),

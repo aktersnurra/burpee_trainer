@@ -922,6 +922,10 @@ a.history-look-back:focus-visible { outline: 2px solid var(--focus); outline-off
 .chat-dock-inner { display: grid; gap: 8px; max-width: var(--chat-w); margin-inline: auto; pointer-events: auto; }
 .chat-dock .composer textarea { max-height: 9rem; }
 .chat-dock-spacer { height: calc(var(--chat-dock-height, 0px) + 16px); }
+/* A screen with a box scrolls inside itself, as tall as what the keyboard leaves
+   (--viewport-height), so iOS never slides the page under the keyboard while you scroll. */
+:is(#home-page, #coach-page):has(.chat-dock) { position: fixed; inset: 0 0 auto; height: var(--viewport-height, 100dvh); margin: 0; overflow-y: auto; overscroll-behavior: contain; }
+#home-page:has(.chat-dock) > .studio { min-height: 100%; }
 
 /* The design as a conversation: what you asked, what it became, newest last. */
 
@@ -972,6 +976,9 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 
 /* The drawer, Edit and New, one tap each, in a row under the opened workout's sets. */
 .home-corner { display: flex; justify-content: center; gap: 8px; padding-top: 20px; }
+/* Swap, Edit and New wear the start toggles' pill, so the controls round play read as one set. */
+.home-corner .home-corner-action { width: auto; min-width: 44px; padding-inline: 14px; border-radius: 999px; background: var(--color-base-200); color: var(--ink); }
+.home-corner .home-corner-action:hover { background: var(--color-base-300); }
 
 /* One icon button everywhere: 44px, plain and muted, filled on hover, pressed in on a tap. */
 .home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch, .coach-page-action { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--muted); cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
@@ -1005,15 +1012,15 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .studio-error { margin: 0; color: #a55643; font-size: var(--text-small); }
 .studio-error:empty { display: none; }
 
-/* A workout card: label, name, two chips, why, then the table in small type. */
 /* A workout in the studio reads as it does on Home: no card, the name at the title size, its
-   totals one muted line, then its sets. A total the proposal changed shows the diff. */
-.studio-card { width: 100%; max-width: 354px; margin: 6px auto 0; padding: 8px 0 0; text-align: center; }
+   totals one muted line, then its sets. A total the proposal changed shows the diff. It is the
+   coach's message, so it sits on the left with the coach's words, as on the Coach page. */
+.studio-card { width: 100%; margin: 6px 0 0; padding: 8px 0 0; text-align: left; }
 .studio-card-name { margin: 0; font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; text-wrap: balance; }
-.studio-card-totals { display: flex; flex-wrap: wrap; justify-content: center; margin: 12px 0 0; }
+.studio-card-totals { display: flex; flex-wrap: wrap; margin: 12px 0 0; }
+.studio-card .home-shape { text-align: left; }
 .studio-chip { color: var(--muted); font-size: var(--text-body); font-variant-numeric: tabular-nums; }
 .studio-chip + .studio-chip::before { content: "·"; margin: 0 0 0 .25em; color: var(--muted); font-weight: 400; }
-.studio-card-note { max-width: 46ch; margin: 14px auto 0; color: var(--muted); font-size: var(--text-small); line-height: 1.5; }
 .studio-card-table { margin: 0; text-align: left; }
 .studio-proposal { display: grid; gap: 8px; transition: opacity var(--motion-quick) ease; }
 .studio-proposal-stale { opacity: .45; }
@@ -1027,8 +1034,14 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .studio-pill:hover:not(:disabled) { background: var(--fill-hover); }
 .studio-pill-wide { width: 100%; }
 .studio-pill:disabled { opacity: .4; cursor: default; }
-/* Run sits under the workout as Play does on Home: the ink pill, centred. */
-.studio-actions { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 18px; }
+/* Save and Run sit under the workout, on the left with it; Run is the ink pill, as Play on Home. */
+.studio-actions { display: flex; align-items: center; gap: 8px; margin-top: 18px; }
+/* The coach's words: body text on the left, no bubble, as on the Coach page. */
+.studio-reply { max-width: 60ch; margin: 0; color: var(--ink); font-size: var(--text-body); line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+/* While a reply is being written, a dot follows its last word. */
+.chat-streaming::after { content: ""; display: inline-block; width: .5em; height: .5em; margin-left: .25em; border-radius: 50%; background: currentColor; vertical-align: .05em; animation: stream-dot 1s ease-in-out infinite; }
+@keyframes stream-dot { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .chat-streaming::after { animation: none; } }
 /* The coach's suggested asks, just above the box: one row that scrolls sideways and fades at its
    right edge, so the guesses never push the box up the screen. On a phone it runs on to the
    screen's edge, so the last guess can scroll clear of the fade. */
@@ -1087,7 +1100,17 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .coach-page-title { margin: 0; text-align: center; font: 600 var(--text-heading)/1.2 var(--font-sans); }
 .coach-page-title:focus { outline: none; }
 .coach-page #home-week-progress { margin-top: 14px; }
-.coach-page .coach-week { margin-top: 16px; }
+/* The week on the Coach page: one card, closed to its minutes, open on its sessions. */
+.coach-week-card { margin: 16px 0 24px; border: 1px solid var(--line); border-radius: var(--radius-surface); background: var(--color-base-200); }
+.coach-week-summary { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 16px; border-radius: var(--radius-surface); color: var(--ink); font-size: var(--text-body); list-style: none; cursor: pointer; }
+.coach-week-summary::-webkit-details-marker { display: none; }
+.coach-week-summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.coach-week-total { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
+.coach-week-chevron { flex: none; color: var(--muted); transition: transform var(--motion-quick) var(--ease-out); }
+.coach-week-card[open] .coach-week-chevron { transform: rotate(180deg); }
+.coach-page .coach-week-card .coach-week { margin: 0; padding: 0 16px; }
+.coach-week-card .coach-week-item:last-child { border-bottom: 0; }
+@media (prefers-reduced-motion: reduce) { .coach-week-chevron { transition: none; } }
 .coach-page-action { color: var(--muted); text-decoration: none; }
 @media (min-width: 601px) {
   .coach-page #coach-page-body { max-width: 640px; margin-inline: auto; }

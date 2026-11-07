@@ -156,6 +156,12 @@ defmodule BurpeeTrainerWeb.HomeLive do
     end
   end
 
+  def handle_info({:coach_streaming, _text} = message, socket),
+    do: HomeCoach.handle_info(message, socket)
+
+  def handle_info({:studio_streaming, _id, _text} = message, socket),
+    do: HomeAuthoring.handle_info(message, socket)
+
   # The coach noted or forgot something about the owner; the thread says so.
   def handle_info(:coach_memory, socket), do: {:noreply, HomeCoach.refresh(socket)}
 

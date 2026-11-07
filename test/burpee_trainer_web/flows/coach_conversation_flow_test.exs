@@ -117,7 +117,10 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
       )
 
     Req.Test.stub(__MODULE__, fn conn ->
-      Req.Test.json(conn, Agent.get_and_update(replies, fn [head | tail] -> {head, tail} end))
+      BurpeeTrainer.ProviderStream.reply(
+        conn,
+        Agent.get_and_update(replies, fn [head | tail] -> {head, tail} end)
+      )
     end)
 
     Req.default_options(plug: {Req.Test, __MODULE__})
@@ -155,6 +158,70 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
     render_patch(view, ~p"/")
     assert BurpeeTrainer.Repo.reload!(goal).status == :active
     assert summary_jobs() == 1
+  end
+
+  test "the reply reads as it is written, then lands in the thread", %{conn: conn} do
+    previous_provider = Application.get_env(:burpee_trainer, :llm_provider)
+    previous_req = Req.default_options()
+
+    on_exit(fn ->
+      Application.put_env(:burpee_trainer, :llm_provider, previous_provider)
+      Req.default_options(previous_req)
+    end)
+
+    Application.put_env(:burpee_trainer, :llm_provider,
+      enabled: true,
+      url: "https://provider.test/v1",
+      api_key: "k",
+      model: "m"
+    )
+
+    test_pid = self()
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      send(test_pid, {:provider_waiting, self()})
+      assert_receive :release, 5_000
+
+      BurpeeTrainer.ProviderStream.reply(conn, %{
+        "choices" => [
+          %{"message" => %{"content" => Jason.encode!(%{"reply" => "Keep Thursday light."})}}
+        ]
+      })
+    end)
+
+    Req.default_options(plug: {Req.Test, __MODULE__})
+    {:ok, view, _} = live(conn, ~p"/coach")
+    Req.Test.allow(__MODULE__, self(), view.pid)
+
+    view
+    |> form("#home-coach-message-form", coach_message: %{text: "My knee is sore"})
+    |> render_submit()
+
+    assert_receive {:provider_waiting, provider}
+    # The message moves into the thread and the box empties.
+    assert has_element?(view, "#home-coach-pending .coach-exchange-you", "My knee is sore")
+    refute has_element?(view, "#home-coach-message-text", "My knee is sore")
+    # Before its first word, the loader; then the words, with no loader beside them.
+    assert has_element?(view, "#home-coach-loading[role=status]")
+    send(view.pid, {:coach_streaming, "Keep Thurs"})
+
+    assert has_element?(
+             view,
+             "#home-coach-pending #home-coach-streaming[aria-busy=true]",
+             "Keep Thurs"
+           )
+
+    refute has_element?(view, "#home-coach-loading")
+
+    send(provider, :release)
+    render_async(view)
+
+    refute has_element?(view, "#home-coach-streaming")
+    assert has_element?(view, "#home-coach-thread .coach-exchange-coach", "Keep Thursday light.")
+
+    # A piece arriving after the answer is in changes nothing.
+    send(view.pid, {:coach_streaming, "Keep"})
+    refute has_element?(view, "#home-coach-streaming")
   end
 
   defp summary_jobs, do: BurpeeTrainer.Repo.aggregate(summary_job_query(), :count)

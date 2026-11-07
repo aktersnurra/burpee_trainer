@@ -42,6 +42,31 @@ defmodule BurpeeTrainer.Coach.AgentTest do
     assert {:ok, %{reply: "Keep going."}} = Agent.run(scope, :coach_page, "How am I doing?", opts)
   end
 
+  test "on the Coach page the reply is heard as it is written, after the tools have run" do
+    scope = scope_fixture()
+    pid = start_supervised!({Elixir.Agent, fn -> [call("goals", %{}), final("Keep going.")] end})
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      BurpeeTrainer.ProviderStream.reply(
+        conn,
+        Elixir.Agent.get_and_update(pid, fn [head | rest] -> {head, rest} end)
+      )
+    end)
+
+    test_pid = self()
+
+    assert {:ok, %{reply: "Keep going."}} =
+             Agent.run(scope, :coach_page, "How am I doing?",
+               config: @config,
+               req: Req.new(plug: {Req.Test, __MODULE__}),
+               on_reply: &send(test_pid, {:reply, &1})
+             )
+
+    assert_received {:reply, "Keep going."}
+    # The tool call wrote no reply, and none of the JSON around it is ever heard.
+    refute_received {:reply, _}
+  end
+
   test "the coach keeps its memory as it talks, reading the snapshot it began with" do
     scope = scope_fixture()
 

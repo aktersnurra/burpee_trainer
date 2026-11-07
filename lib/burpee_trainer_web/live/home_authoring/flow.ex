@@ -13,6 +13,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
 
   Work in flight is identified by `update_id`. A result is applied only while it is the
   one in flight, so a late answer to a discarded or superseded request changes nothing.
+  While it is in flight, `streamed` is what the coach has written about it so far.
   """
 
   @type stage :: :idle | :new | :editing | :review
@@ -35,6 +36,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
     previous: nil,
     busy?: false,
     update_id: nil,
+    streamed: nil,
     local_error: nil
   ]
 
@@ -106,10 +108,17 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
         %__MODULE__{authoring_stage: :review, pending_request: %{}, busy?: false} = m,
         {:refine_started, id, text}
       ),
-      do: {%{m | busy?: true, update_id: id, pending_turn: text, local_error: nil}, []}
+      do:
+        {%{m | busy?: true, update_id: id, pending_turn: text, streamed: nil, local_error: nil},
+         []}
 
   def update(%__MODULE__{} = m, {:confirm_started, id}),
-    do: {%{m | busy?: true, update_id: id, local_error: nil}, []}
+    do: {%{m | busy?: true, update_id: id, streamed: nil, local_error: nil}, []}
+
+  # The coach's words on the work in flight, as they are written.
+  def update(%__MODULE__{busy?: true} = m, {:streamed, id, text}) when is_binary(text) do
+    if current?(m, id), do: {%{m | streamed: text}, []}, else: {m, []}
+  end
 
   # Work finishing: applied only while it is the one in flight.
 
@@ -182,10 +191,11 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
 
   # Drops the preparation and cancels the request still running for it.
   defp discard(%__MODULE__{busy?: true, update_id: id} = m) when not is_nil(id) do
-    {%{clear(m) | busy?: false, update_id: nil}, [{:cancel_async, {:new_request, id}}]}
+    {%{clear(m) | busy?: false, update_id: nil, streamed: nil},
+     [{:cancel_async, {:new_request, id}}]}
   end
 
-  defp discard(m), do: {%{clear(m) | busy?: false, update_id: nil}, []}
+  defp discard(m), do: {%{clear(m) | busy?: false, update_id: nil, streamed: nil}, []}
 
   defp clear(m),
     do: %{
@@ -234,7 +244,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring.Flow do
 
   defp settle(m, id, apply_result) do
     if current?(m, id) do
-      apply_result.(%{m | busy?: false, update_id: nil})
+      apply_result.(%{m | busy?: false, update_id: nil, streamed: nil})
     else
       {m, []}
     end

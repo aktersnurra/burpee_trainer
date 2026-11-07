@@ -1,7 +1,7 @@
 defmodule BurpeeTrainer.Coach.Agent do
   @moduledoc "Bounded scoped coach loop; tool errors are visible to the model, not exceptions."
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{Client, Tool, Tools, AgentPrompt}
+  alias BurpeeTrainer.Coach.{Client, Tool, Tools, AgentPrompt, PartialJson}
 
   @tools %{
     planner: [
@@ -17,6 +17,7 @@ defmodule BurpeeTrainer.Coach.Agent do
   @create_tools [Tools.History, Tools.Goals, Tools.ProposeWorkout]
   @selection_reminder "Nothing was chosen. Call select_workout or propose_workout for this slot, then reply."
   @create_reminder "Nothing was designed. Call propose_workout for this slot, then reply."
+  # `on_reply` hears the reply as it is written, the text so far each time it grows.
   @spec run(Scope.t(), :planner | :coach_page, String.t() | nil, keyword()) ::
           {:ok, %{reply: String.t(), memory_written?: boolean()}} | {:error, term()}
   def run(%Scope{} = scope, surface, input, opts \\ []) when surface in [:planner, :coach_page] do
@@ -62,9 +63,10 @@ defmodule BurpeeTrainer.Coach.Agent do
     if byte_size(Jason.encode!(messages)) > 262_144 do
       {:error, :agent_budget_exhausted}
     else
-      opts =
+      chat_opts =
         opts
         |> Keyword.take([:config, :req, :budget])
+        |> stream_reply(Keyword.get(opts, :on_reply))
         |> Keyword.merge(
           tools: Enum.map(tools, &Tool.definition/1),
           response_format:
@@ -80,7 +82,7 @@ defmodule BurpeeTrainer.Coach.Agent do
           }
         )
 
-      case Client.chat(messages, opts) do
+      case Client.chat(messages, chat_opts) do
         {:ok, %{tool_calls: [], content: %{"reply" => reply} = content}}
         when is_binary(reply) and map_size(content) == 1 ->
           cond do
@@ -140,6 +142,17 @@ defmodule BurpeeTrainer.Coach.Agent do
           {:error, :invalid_provider_response}
       end
     end
+  end
+
+  defp stream_reply(opts, nil), do: opts
+
+  defp stream_reply(opts, on_reply) do
+    Keyword.put(opts, :on_content, fn content ->
+      case PartialJson.first_string(content, "reply") do
+        text when is_binary(text) and text != "" -> on_reply.(text)
+        _not_yet -> :ok
+      end
+    end)
   end
 
   defp original_selection(scope, %{surface: :planner, slot: slot}) when is_map(slot),

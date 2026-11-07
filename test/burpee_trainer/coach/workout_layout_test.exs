@@ -41,7 +41,9 @@ defmodule BurpeeTrainer.Coach.WorkoutLayoutTest do
     schema = WorkoutLayout.json_schema(request)
     assert schema["properties"]["phases"]["minItems"] == 3
     assert schema["properties"]["phases"]["maxItems"] == 3
-    assert schema["required"] == ["name", "rationale", "phases", "suggestions"]
-    refute Map.has_key?(schema["properties"], "events")
+    assert schema["required"] == ["rationale", "name", "phases", "suggestions"]
+    refute schema["properties"]["events"]
+    # The rationale is written first, so it can be shown while the sets are still coming.
+    assert [{"rationale", _} | _] = schema["properties"].values
   end
 end
