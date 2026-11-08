@@ -20,7 +20,7 @@ defmodule BurpeeTrainerWeb.Flows.VideoWorkoutFlowTest do
     render_click(session, "video_ended", %{"watched_sec" => 120})
 
     session
-    |> form("#video-log-form", %{"workout_session" => %{"burpee_count_actual" => "10"}})
+    |> form("#session-completion-form", %{"workout_session" => %{"burpee_count_actual" => "10"}})
     |> render_submit()
 
     completed = Repo.get!(WorkoutSession, String.to_integer(id))

@@ -49,43 +49,46 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     assert Repo.aggregate(WorkoutSession, :count) == 1
   end
 
-  test "finishing a video logs its count, the video's length, mood, tags and a note", %{
-    conn: conn,
-    user: user
-  } do
+  test "a video finishes on the plan's finish screen and logs its count, length, mood, tags and note",
+       %{conn: conn, user: user} do
     video = video_fixture(%{burpee_count: nil, duration_sec: 600})
 
     assert {:ok, started} =
              Workouts.start_video(Scope.for_user(user), video.id, Ecto.UUID.generate())
 
     assert {:ok, view, _html} = live(conn, ~p"/videos/#{video.id}/session/#{started.id}")
-    refute has_element?(view, "#video-completion")
+    refute has_element?(view, "#session-completion-review")
 
     render_click(view, "video_ended")
 
-    assert has_element?(view, "#video-completion h1", "Workout complete")
+    assert has_element?(
+             view,
+             "#session-completion-review #session-completion-heading",
+             video.name
+           )
+
     refute has_element?(view, "#workout-video")
-    assert has_element?(view, "#video-actual-reps[value='0']")
-    assert has_element?(view, "#video-reps-less[disabled]")
+    assert has_element?(view, "#session-actual-reps[value='0']")
+    assert has_element?(view, "#completion-reps-less[disabled]")
 
     view
-    |> form("#video-log-form", %{"workout_session" => %{"burpee_count_actual" => "36"}})
+    |> form("#session-completion-form", %{"workout_session" => %{"burpee_count_actual" => "36"}})
     |> render_change()
 
-    view |> element("#video-reps-more") |> render_click()
-    assert has_element?(view, "#video-actual-reps[value='37']")
+    view |> element("#completion-reps-more") |> render_click()
+    assert has_element?(view, "#session-actual-reps[value='37']")
 
-    view |> element("#video-completion-mood button[phx-value-mood='1']") |> render_click()
+    view |> element("#session-completion-mood button[phx-value-mood='1']") |> render_click()
 
     assert has_element?(
              view,
-             "#video-completion-mood button[phx-value-mood='1'][aria-pressed='true']"
+             "#session-completion-mood button[phx-value-mood='1'][aria-pressed='true']"
            )
 
-    view |> element("#video-completion-tags button[phx-value-tag='hot']") |> render_click()
+    view |> element("#session-completion-tags button[phx-value-tag='hot']") |> render_click()
 
     view
-    |> form("#video-log-form", %{
+    |> form("#session-completion-form", %{
       "workout_session" => %{"burpee_count_actual" => "37", "note_post" => "Strong finish"}
     })
     |> render_submit()
@@ -97,6 +100,7 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     assert completed.burpee_count_planned == nil
     assert completed.burpee_count_actual == 37
     assert completed.duration_sec_actual == 600
+    assert completed.capture_mode == :logged
     assert completed.mood == 1
     assert completed.tags == "hot"
     assert completed.note_post == "Strong finish"
@@ -111,64 +115,100 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     assert {:ok, view, _html} = live(conn, ~p"/videos/#{video.id}/session/#{started.id}")
     render_click(view, "video_ended")
 
-    assert has_element?(view, "#video-actual-reps[value='100']")
-    assert has_element?(view, "#video-completion", "of 100")
-    assert has_element?(view, "#video-completion", "20:00")
+    assert has_element?(view, "#session-actual-reps[value='100']")
+    assert has_element?(view, "#session-completion-review", "of 100")
+    assert has_element?(view, "#session-completion-review", "20:00")
   end
 
-  test "the workout can be discarded while watching and from the finish screen", %{
-    conn: conn,
-    user: user
-  } do
+  test "Abort while watching and the trash on the finish screen each ask in place, then delete",
+       %{conn: conn, user: user} do
     video = video_fixture(%{burpee_count: 10, duration_sec: 600})
 
-    for finished? <- [false, true] do
+    for {finished?, button, armed} <- [
+          {false, "#video-abort-btn", "abort"},
+          {true, "#session-discard-btn", "delete"}
+        ] do
       assert {:ok, started} =
                Workouts.start_video(Scope.for_user(user), video.id, Ecto.UUID.generate())
 
       assert {:ok, view, _html} = live(conn, ~p"/videos/#{video.id}/session/#{started.id}")
       if finished?, do: render_click(view, "video_ended")
 
-      refute has_element?(view, "#video-discard-confirm")
-      view |> element("#video-discard-btn") |> render_click()
-      verb = if finished?, do: "Discard", else: "Abort"
-      assert has_element?(view, "#video-discard-confirm", "#{verb} this workout?")
-      refute has_element?(view, "#video-discard-btn")
+      # The first tap asks; a tap anywhere else lets go.
+      view |> element(button) |> render_click()
+      assert has_element?(view, "#video-session[data-armed='#{armed}']")
+      assert has_element?(view, "#{button}[aria-pressed='true']")
+      render_click(view, "disarm")
+      refute has_element?(view, "#video-session[data-armed]")
+      assert Repo.get(WorkoutSession, started.id)
 
-      view |> element("#video-discard-keep") |> render_click()
-      refute has_element?(view, "#video-discard-confirm")
-      assert has_element?(view, "#video-discard-btn")
-
-      view |> element("#video-discard-btn") |> render_click()
-      view |> element("#video-discard-yes") |> render_click()
-
+      # Asked again, the second tap deletes.
+      view |> element(button) |> render_click()
+      view |> element(button) |> render_click()
       assert_redirect(view, ~p"/")
       refute Repo.get(WorkoutSession, started.id)
     end
   end
 
-  test "watching offers Finish early or Abort, and Finish early logs the time reached", %{
-    conn: conn,
-    user: user
-  } do
+  test "watching offers Finish early and Abort as icons; Finish early asks, then logs the time reached",
+       %{conn: conn, user: user} do
     video = video_fixture(%{burpee_count: 100, duration_sec: 1200})
 
     assert {:ok, started} =
              Workouts.start_video(Scope.for_user(user), video.id, Ecto.UUID.generate())
 
     assert {:ok, view, _html} = live(conn, ~p"/videos/#{video.id}/session/#{started.id}")
-    assert has_element?(view, "#video-finish-early", "Finish early")
-    assert has_element?(view, "#video-discard-btn", "Abort")
+    assert has_element?(view, "#video-finish-early[aria-label='Finish early']")
+    assert has_element?(view, "#video-abort-btn[aria-label='Abort workout']")
     refute has_element?(view, "#video-session a[href='/']")
 
+    # The first tap asks; the hook ends the video on the second.
+    view |> element("#video-finish-early") |> render_click()
+    assert has_element?(view, "#video-session[data-armed='finish']")
+
     render_click(view, "video_ended", %{"watched_sec" => 312})
-    assert has_element?(view, "#video-completion", "5:12")
+    refute has_element?(view, "#video-session[data-armed]")
+    assert has_element?(view, "#session-completion-review", "5:12")
 
     view
-    |> form("#video-log-form", %{"workout_session" => %{"burpee_count_actual" => "40"}})
+    |> form("#session-completion-form", %{"workout_session" => %{"burpee_count_actual" => "40"}})
     |> render_submit()
 
     assert Repo.get!(WorkoutSession, started.id).duration_sec_actual == 312
+  end
+
+  test "with the device's camera on, the camera counts the reps and the session is tracked",
+       %{conn: conn, user: user} do
+    video = video_fixture(%{burpee_count: 100, duration_sec: 1200})
+    route = fn session -> ~p"/videos/#{video.id}/session/#{session.id}" end
+
+    assert {:ok, started} =
+             Workouts.start_video(Scope.for_user(user), video.id, Ecto.UUID.generate())
+
+    {:ok, without, _html} = live(conn, route.(started))
+    refute has_element?(without, "#pose-tracker")
+
+    camera = %{"start_choices" => %{"camera" => true, "warmup" => true}}
+    {:ok, view, _html} = conn |> put_connect_params(camera) |> live(route.(started))
+
+    assert has_element?(
+             view,
+             "#video-session[data-camera='true'] #pose-tracker[phx-hook='PoseTracker']"
+           )
+
+    render_click(view, "video_ended", %{"watched_sec" => 1200, "counted_reps" => 97})
+    assert has_element?(view, "#session-actual-reps[value='97']")
+    assert has_element?(view, "#session-count-source", "Counted by camera")
+    view |> element("#completion-reps-more") |> render_click()
+    assert has_element?(view, "#session-count-source", "Camera counted 97")
+
+    view
+    |> form("#session-completion-form", %{"workout_session" => %{"burpee_count_actual" => "98"}})
+    |> render_submit()
+
+    completed = Repo.get!(WorkoutSession, started.id)
+    assert completed.burpee_count_actual == 98
+    assert completed.capture_mode == :tracked
   end
 
   test "forged completion fields never complete the session", %{conn: conn, user: user} do
@@ -190,17 +230,18 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
           {"note_post", String.duplicate("x", 501)}
         ] do
       render_hook(view, "save", %{"workout_session" => Map.put(valid, field, forged)})
-      assert has_element?(view, "#video-log-form")
+      assert has_element?(view, "#session-completion-form")
       assert Repo.get!(WorkoutSession, started.id).state == :started
     end
 
     for {event, params} <- [
           {"set_mood", %{"mood" => "7"}},
           {"toggle_tag", %{"tag" => "unknown"}},
-          {"step_reps", %{"step" => "50"}}
+          {"step_reps", %{"step" => "50"}},
+          {"video_ended", %{"counted_reps" => -4}}
         ] do
       render_hook(view, event, params)
-      assert has_element?(view, "#video-actual-reps[value='10']")
+      assert has_element?(view, "#session-actual-reps[value='10']")
     end
   end
 
@@ -229,7 +270,7 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     on_exit(fn -> :telemetry.detach(telemetry_id) end)
 
     view
-    |> form("#video-log-form", %{"workout_session" => %{"burpee_count_actual" => "10"}})
+    |> form("#session-completion-form", %{"workout_session" => %{"burpee_count_actual" => "10"}})
     |> render_submit()
 
     assert_redirect(view, ~p"/")

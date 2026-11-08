@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-08 — Videos end like every workout
+
+- **One finish screen**: a video ends on the same Finish as a plan session: the count between − and + (typed too), the mood, tags and note, trash on the left asking in place ("Delete this session?") and ✓ on the right. The Keep/Discard question is gone.
+- **Finish early and Abort**: while a video plays they are the runner's flag and X, each asking in place before it acts.
+- **Camera counting**: with Home's camera toggle on, the camera counts the reps while the video plays, its feed small in the video's corner with the count over it. Finish starts at its count, adjustable, and the session is saved as camera-counted. The counter needs no beat to count, so it works without a plan; with no beat to judge it by, a video keeps no cadence and no pose trace.
+
 ## 2026-11-08 — Progress is one chart; deleting asks in place
 
 - **Chart**: "Reps per 20 minutes" reads a session longer than 20 minutes as the 20-minute session it is as good as, fatigue counted, so a good 40-minute session no longer looks weaker.

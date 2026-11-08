@@ -223,11 +223,42 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   attr(:form, :any, required: true)
   attr(:name, :string, required: true)
 
+  attr(:events, :map,
+    default: nil,
+    doc: """
+    nil when the runner's hook drives the screen; for a LiveView, the events it sends:
+    `step`, `mood`, `tag`, `change`, `submit`, `arm`, `disarm` and `discard`
+    """
+  )
+
+  attr(:count, :integer, default: nil, doc: "the count, when the LiveView holds it")
+  attr(:mood, :integer, default: nil)
+  attr(:tags, :list, default: [])
+  attr(:source, :string, default: nil, doc: "who counted, when it was not the athlete")
+  attr(:armed, :string, default: nil, doc: "\"delete\" while trash asks")
+  slot(:meta, doc: "what was planned and how long it took; the runner fills its own")
+
   # Finish: the count and how it went, then trash on the left and ✓ on the right. Trash asks in
   # place, as Abort does in the runner: armed, the page steps back and its question shows.
+  # Every session ends here: the runner's hook drives it (no `events`), a video's LiveView
+  # drives it through `events`, with the count typed as well as stepped.
   def completion_review(assigns) do
+    # The hook writes the runner's errors; a LiveView's come with its form.
+    errors = fn field -> if assigns.events, do: field_errors(assigns.form, field), else: [] end
+
+    assigns =
+      assign(assigns,
+        reps_errors: errors.(:burpee_count_actual),
+        note_errors: errors.(:note_post)
+      )
+
     ~H"""
-    <.panel id="session-completion-review" heading_id="session-completion-heading" hidden={@hidden}>
+    <.panel
+      id="session-completion-review"
+      heading_id="session-completion-heading"
+      hidden={@hidden}
+      armed={@armed}
+    >
       <div class="session-finish">
         <section id="session-completion-summary" class="session-finish-summary">
           <h1
@@ -244,6 +275,9 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             <button
               id="completion-reps-less"
               type="button"
+              phx-click={@events && @events.step}
+              phx-value-step={@events && "-1"}
+              disabled={@count == 0}
               aria-label="One rep fewer"
               title="One rep fewer"
               aria-controls="session-actual-reps"
@@ -252,15 +286,33 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               <.icon name="hero-minus" class="size-6" />
             </button>
             <span
+              :if={is_nil(@events)}
               id="session-actual-reps"
               aria-describedby="completion-reps-error"
               class="session-finish-count qs-tabular"
             >
               0
             </span>
+            <%!-- A video often has no count, so it is typed as well as stepped. --%>
+            <label :if={@events} for="session-actual-reps" class="sr-only">Burpees done</label>
+            <input
+              :if={@events}
+              id="session-actual-reps"
+              name={@form[:burpee_count_actual].name}
+              form="session-completion-form"
+              value={@count}
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              autocomplete="off"
+              aria-describedby="completion-reps-error"
+              class="session-finish-count session-reps-input qs-tabular"
+            />
             <button
               id="completion-reps-more"
               type="button"
+              phx-click={@events && @events.step}
+              phx-value-step={@events && "1"}
               aria-label="One rep more"
               title="One rep more"
               aria-controls="session-actual-reps"
@@ -270,15 +322,16 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             </button>
           </div>
           <%!-- What was planned and how long it took, then how far through the plan's sets. --%>
-          <p class="session-finish-meta qs-tabular">
+          <p :if={@meta == []} class="session-finish-meta qs-tabular">
             of <span id="session-planned-reps">0</span>
             reps · <span id="session-actual-duration">0:00</span>
             of <span id="session-planned-duration">0:00</span>
           </p>
+          <p :if={@meta != []} class="session-finish-meta qs-tabular">{render_slot(@meta)}</p>
           <p id="session-sets-done" class="session-finish-sets qs-tabular" hidden></p>
           <%!-- Who counted; after a correction, the original and a way back. --%>
-          <p id="session-count-source" class="session-finish-source" hidden>
-            <span id="session-count-source-text"></span>
+          <p id="session-count-source" class="session-finish-source" hidden={is_nil(@source)}>
+            <span id="session-count-source-text">{@source}</span>
             <button
               id="completion-reps-undo"
               type="button"
@@ -288,7 +341,12 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               Undo
             </button>
           </p>
-          <p id="completion-reps-error" class="mt-2 text-sm text-[var(--session-error-ink)]" hidden>
+          <p
+            id="completion-reps-error"
+            class="mt-2 text-sm text-[var(--session-error-ink)]"
+            hidden={@reps_errors == []}
+          >
+            {Enum.join(@reps_errors, " ")}
           </p>
         </section>
 
@@ -300,10 +358,24 @@ defmodule BurpeeTrainerWeb.SessionComponents do
         >
         </div>
 
-        <.form for={@form} id="session-completion-form" class="session-finish-form">
+        <.form
+          for={@form}
+          id="session-completion-form"
+          class="session-finish-form"
+          phx-change={@events && @events.change}
+          phx-submit={@events && @events.submit}
+        >
           <div id="session-completion-fields">
-            <.mood_pills id="session-completion-mood" />
-            <.tag_pills id="session-completion-tags" />
+            <.mood_pills
+              id="session-completion-mood"
+              mood={@mood}
+              click={@events && @events.mood}
+            />
+            <.tag_pills
+              id="session-completion-tags"
+              tags={@tags}
+              click={@events && @events.tag}
+            />
             <div class="session-note-field composer">
               <label for="completion-note-input" class="sr-only">Note</label>
               <textarea
@@ -314,10 +386,16 @@ defmodule BurpeeTrainerWeb.SessionComponents do
                 aria-describedby="completion-note-error"
                 class="session-note-input"
               >{@form[:note_post].value}</textarea>
-              <p id="completion-note-error" hidden></p>
+              <p
+                id="completion-note-error"
+                class={@events && "mt-2 text-sm text-[var(--session-error-ink)]"}
+                hidden={@note_errors == []}
+              >
+                {Enum.join(@note_errors, " ")}
+              </p>
             </div>
 
-            <div class="hidden">
+            <div :if={is_nil(@events)} class="hidden">
               <.input field={@form[:burpee_type]} type="hidden" />
               <.input field={@form[:burpee_count_planned]} type="hidden" />
               <.input field={@form[:duration_sec_planned]} type="hidden" />
@@ -330,9 +408,12 @@ defmodule BurpeeTrainerWeb.SessionComponents do
             <button
               id="session-discard-btn"
               type="button"
-              aria-pressed="false"
-              aria-label="Delete session"
-              title="Delete session"
+              phx-click={@events && if(@armed, do: @events.discard, else: @events.arm)}
+              phx-value-choice={@events && "delete"}
+              phx-click-away={@events && @armed && @events.disarm}
+              aria-pressed={to_string(@armed == "delete")}
+              aria-label={if(@armed, do: "Tap again to delete", else: "Delete session")}
+              title={if(@armed, do: "Tap again to delete", else: "Delete session")}
               class="session-finish-trash"
             >
               <.icon name="hero-trash" class="size-6" />
@@ -342,6 +423,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               type="submit"
               aria-label="Save"
               title="Save"
+              phx-disable-with={@events && ""}
               class="session-finish-save"
             >
               <span id="session-save-icon-ready" aria-hidden="true">
@@ -355,13 +437,20 @@ defmodule BurpeeTrainerWeb.SessionComponents do
         </.form>
       </div>
       <%!-- Armed, trash's question takes the page's place; the live status says it aloud. --%>
-      <div id="session-delete-question" class="session-pause-question" aria-hidden="true">
+      <div
+        id="session-delete-question"
+        class="session-pause-question"
+        aria-hidden={to_string(@armed != "delete")}
+      >
         <p class="session-finish-question">Delete this session?</p>
         <p class="session-finish-consequence">It won't be saved. Tap again to delete.</p>
       </div>
     </.panel>
     """
   end
+
+  defp field_errors(form, field),
+    do: Enum.map(form[field].errors, fn {message, _opts} -> message end)
 
   attr(:id, :string, required: true)
   attr(:mood, :integer, default: nil)
@@ -417,6 +506,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   attr(:heading_id, :string, required: true)
   attr(:hidden, :boolean, required: true)
   attr(:class, :string, default: nil)
+  attr(:armed, :string, default: nil)
   slot(:inner_block, required: true)
 
   defp panel(assigns) do
@@ -424,6 +514,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
     <section
       id={@id}
       data-session-panel
+      data-armed={@armed}
       hidden={@hidden}
       inert={@hidden && "inert"}
       aria-labelledby={@heading_id}

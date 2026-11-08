@@ -1,19 +1,37 @@
 defmodule BurpeeTrainerWeb.VideoLive.Show do
-  @moduledoc "Loads one exact immutable video-session snapshot."
+  @moduledoc """
+  A video session: the video plays from its immutable snapshot, then it ends on the same
+  finish screen as a plan session (`SessionComponents.completion_review`). Finish early,
+  Abort and the finish screen's trash ask in place before they act. With the device's camera
+  on (`StartChoices`), the camera counts the reps as the video plays (`VideoHook`, the
+  `PoseTracker`), and the finish screen starts at its count.
+  """
 
   use BurpeeTrainerWeb, :live_view
 
   alias BurpeeTrainer.Workouts
   alias BurpeeTrainer.Workouts.WorkoutSession
-  alias BurpeeTrainerWeb.{Fmt, Params, SessionComponents}
+  alias BurpeeTrainerWeb.{Fmt, Params, SessionComponents, StartChoices}
 
   # The plan session's finish screen choices, so a video logs the same way.
   @mood_options SessionComponents.mood_options()
   @tag_options SessionComponents.tag_options()
   @tag_values Enum.map(@tag_options, &elem(&1, 1))
+  # What asks before it acts: Finish early and Abort while watching, trash when finished.
+  @armable ~w(finish abort delete)
+  @events %{
+    step: "step_reps",
+    mood: "set_mood",
+    tag: "toggle_tag",
+    change: "validate",
+    submit: "save",
+    arm: "arm",
+    disarm: "disarm",
+    discard: "discard"
+  }
 
   @impl true
-  def mount(%{"video_id" => video_id, "session_id" => session_id}, _session, socket) do
+  def mount(%{"video_id" => video_id, "session_id" => session_id}, session, socket) do
     scope = socket.assigns.current_scope
 
     with {:ok, video_id} <- Params.positive_id(video_id),
@@ -24,10 +42,23 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
             workout_video_id: ^video_id,
             video_snapshot: snapshot
           } = workout_session} <- Workouts.resume_session(scope, session_id) do
-      {:ok, mount_video_session(socket, video_id, snapshot, workout_session)}
+      {:ok,
+       socket
+       |> assign(:camera?, camera?(socket, session))
+       |> mount_video_session(video_id, snapshot, workout_session)}
     else
       _unavailable -> unavailable_video(socket)
     end
+  end
+
+  # The device's camera choice, as Home's toggle left it.
+  defp camera?(socket, session) do
+    choices =
+      if connected?(socket),
+        do: StartChoices.from_connect_params(get_connect_params(socket)),
+        else: session["start_choices"] || %{}
+
+    Map.get(choices, "camera", false)
   end
 
   defp mount_video_session(socket, video_id, snapshot, session) do
@@ -46,7 +77,8 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
     |> assign(:workout_session, session)
     |> assign(:finished?, false)
     |> assign(:watched_sec, video.duration_sec)
-    |> assign(:confirm_discard?, false)
+    |> assign(:armed, nil)
+    |> assign(:counted_reps, nil)
     |> assign(:reps, video.burpee_count || 0)
     |> assign(:mood, nil)
     |> assign(:tags, [])
@@ -62,7 +94,8 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
   end
 
   @impl true
-  # The hook sends how far the video got: its end, or where Finish early stopped it.
+  # The hook sends how far the video got (its end, or where Finish early stopped it) and,
+  # with the camera on, how many reps it counted.
   def handle_event("video_ended", params, socket) do
     duration = socket.assigns.video.duration_sec
 
@@ -72,16 +105,30 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
         _whole_video -> duration
       end
 
-    {:noreply, assign(socket, finished?: true, confirm_discard?: false, watched_sec: watched)}
+    socket =
+      case params do
+        %{"counted_reps" => reps}
+        when socket.assigns.camera? and is_integer(reps) and reps >= 0 ->
+          assign(socket, reps: reps, counted_reps: reps)
+
+        _not_counted ->
+          socket
+      end
+
+    {:noreply, assign(socket, finished?: true, armed: nil, watched_sec: watched)}
   end
 
-  def handle_event("ask_discard", _params, socket),
-    do: {:noreply, assign(socket, :confirm_discard?, true)}
+  # The first tap asks; the question shows until a second tap, or a tap anywhere else.
+  def handle_event("arm", %{"choice" => choice}, socket) when choice in @armable,
+    do: {:noreply, assign(socket, :armed, choice)}
 
-  def handle_event("keep", _params, socket),
-    do: {:noreply, assign(socket, :confirm_discard?, false)}
+  def handle_event("arm", _params, socket), do: {:noreply, socket}
 
-  def handle_event("discard", _params, socket) do
+  def handle_event("disarm", _params, socket), do: {:noreply, assign(socket, :armed, nil)}
+
+  # Abort while watching, or trash on the finish screen, asked and tapped again.
+  def handle_event("discard", _params, %{assigns: %{armed: armed}} = socket)
+      when armed in ["abort", "delete"] do
     with {:ok, session} <- own_video_session(socket),
          {:ok, _discarded} <-
            Workouts.discard_started_session(socket.assigns.current_scope, session.id) do
@@ -93,10 +140,12 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
       {:error, _reason} ->
         {:noreply,
          socket
-         |> assign(:confirm_discard?, false)
+         |> assign(:armed, nil)
          |> put_flash(:error, "Could not discard this workout. Please try again.")}
     end
   end
+
+  def handle_event("discard", _params, socket), do: {:noreply, socket}
 
   def handle_event("step_reps", %{"step" => step}, socket) when step in ["-1", "1"] do
     reps = max(socket.assigns.reps + String.to_integer(step), 0)
@@ -126,10 +175,14 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
 
   def handle_event("validate", %{"workout_session" => params}, socket) when is_map(params) do
     case own_video_session(socket) do
-      {:ok, _session} ->
+      {:ok, session} ->
+        note = string_param(params, "note_post", socket.assigns.note)
+
+        # The note renders from the form, so what is typed survives a tap on a mood or tag.
         {:noreply,
          socket
-         |> assign(:note, string_param(params, "note_post", socket.assigns.note))
+         |> assign(:note, note)
+         |> assign(:form, to_form(Ecto.Changeset.change(session, note_post: note)))
          |> assign(:reps, typed_reps(params, socket.assigns.reps))}
 
       :refused ->
@@ -151,7 +204,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
   defp save(socket, session, params) do
     scope = socket.assigns.current_scope
 
-    case Workouts.complete_session(scope, session.id, params, :logged) do
+    case Workouts.complete_session(scope, session.id, params, capture(socket.assigns)) do
       {:ok, session} ->
         _events = Workouts.session_milestones(scope, session)
         {:noreply, socket |> put_flash(:info, "Session logged.") |> push_navigate(to: ~p"/")}
@@ -163,6 +216,11 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
         {:noreply, put_flash(socket, :error, "Could not log this session. Please try again.")}
     end
   end
+
+  # Counted by the camera, a video is a tracked session; with no beat to keep, it has no
+  # cadence to judge it by.
+  defp capture(%{counted_reps: reps}) when is_integer(reps), do: :manual_correction
+  defp capture(_assigns), do: :logged
 
   # Only the signed-in user's own started video session is completed or discarded here.
   defp own_video_session(%{
@@ -188,6 +246,11 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
     }
   end
 
+  # Who counted, in the runner's words; once corrected, what the camera counted stays in view.
+  defp count_source(nil, _reps), do: nil
+  defp count_source(counted, counted), do: "Counted by camera"
+  defp count_source(counted, _reps), do: "Camera counted #{counted}"
+
   defp typed_reps(params, reps) do
     case Integer.parse(string_param(params, "burpee_count_actual", "")) do
       {typed, ""} when typed >= 0 -> typed
@@ -202,12 +265,10 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
     end
   end
 
-  defp field_errors(form, field) do
-    Enum.map(form[field].errors, fn {message, _opts} -> message end)
-  end
-
   @impl true
   def render(assigns) do
+    assigns = assign(assigns, :events, @events)
+
     ~H"""
     <Layouts.app
       flash={@flash}
@@ -220,202 +281,131 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
         data-session-id={@workout_session.id}
         data-client-session-id={@workout_session.client_session_id}
         data-content-hash={@workout_session.content_hash}
+        data-camera={to_string(@camera?)}
+        data-armed={@armed}
+        phx-window-keydown={@armed && "disarm"}
+        phx-key="Escape"
         class="session-surface mx-auto w-full max-w-[480px] px-1 pb-10 pt-[max(2rem,env(safe-area-inset-top))] text-[var(--session-ink)]"
       >
         <section :if={!@finished?} id="video-watch" aria-labelledby="video-heading">
-          <h1 id="video-heading" class="qs-heading-tight text-2xl font-medium">{@video.name}</h1>
-          <p class="qs-tabular mt-1 text-sm text-[var(--session-muted)]">
-            {Fmt.burpee_type(@video.burpee_type)} · {Fmt.duration_sec(@video.duration_sec)}
-          </p>
-          <video
-            id="workout-video"
-            phx-hook="VideoHook"
-            src={~p"/videos/stream/#{@video.filename}"}
-            controls
-            playsinline
-            class="mt-6 aspect-video w-full rounded-2xl bg-black"
-          ></video>
-          <%!-- As when a workout is paused: finish early, or abort it. --%>
+          <%!-- Armed, the title gives way to Finish early's or Abort's question. --%>
+          <div class="video-watch-head">
+            <div id="video-title-block">
+              <h1 id="video-heading" class="qs-heading-tight text-2xl font-medium">{@video.name}</h1>
+              <p class="qs-tabular mt-1 text-sm text-[var(--session-muted)]">
+                {Fmt.burpee_type(@video.burpee_type)} · {Fmt.duration_sec(@video.duration_sec)}
+              </p>
+            </div>
+            <div
+              id="video-finish-question"
+              class="session-pause-question"
+              aria-hidden={to_string(@armed != "finish")}
+            >
+              <p class="video-question">Finish early?</p>
+              <p class="video-question-meta">What you've done is kept.</p>
+            </div>
+            <div
+              id="video-abort-question"
+              class="session-pause-question"
+              aria-hidden={to_string(@armed != "abort")}
+            >
+              <p class="video-question">Abort workout?</p>
+              <p class="video-question-meta">It won't be saved.</p>
+            </div>
+          </div>
+          <div class="relative mt-6">
+            <video
+              id="workout-video"
+              phx-hook="VideoHook"
+              src={~p"/videos/stream/#{@video.filename}"}
+              controls
+              playsinline
+              class="aspect-video w-full rounded-2xl bg-black"
+            ></video>
+            <%!-- With the camera on, its feed in the video's corner and what it has counted. --%>
+            <div
+              :if={@camera?}
+              id="pose-tracker"
+              phx-hook="PoseTracker"
+              phx-update="ignore"
+              class="video-camera"
+            >
+              <video
+                id="pose-tracker-preview"
+                class="absolute inset-0 h-full w-full object-cover scale-x-[-1]"
+                muted
+                playsinline
+                aria-hidden="true"
+              ></video>
+              <canvas
+                id="pose-tracker-canvas"
+                class="absolute inset-0 h-full w-full"
+                aria-hidden="true"
+              ></canvas>
+              <p class="video-camera-count qs-tabular" role="status">
+                <span class="sr-only">Reps counted:</span>
+                <span id="video-camera-count">0</span>
+              </p>
+            </div>
+          </div>
+
           <div
-            :if={!@confirm_discard?}
             id="video-watch-actions"
-            class="mx-auto mt-10 flex max-w-[360px] flex-col items-center gap-1.5"
+            class="video-watch-actions"
+            role="group"
+            aria-label="Session actions"
           >
+            <%!-- Armed, the hook ends the video on the second tap, with how far it got. --%>
             <button
               id="video-finish-early"
               type="button"
-              class="session-finish-early-action px-6 py-4 text-lg font-medium"
+              phx-click={if(@armed != "finish", do: "arm")}
+              phx-value-choice="finish"
+              phx-click-away={@armed == "finish" && "disarm"}
+              aria-pressed={to_string(@armed == "finish")}
+              aria-label={if(@armed == "finish", do: "Tap again to finish", else: "Finish early")}
+              title={if(@armed == "finish", do: "Tap again to finish", else: "Finish early")}
+              class="video-chip"
             >
-              Finish early
+              <.icon name="hero-flag" class="size-6" />
             </button>
             <button
-              id="video-discard-btn"
+              id="video-abort-btn"
               type="button"
-              phx-click="ask_discard"
-              aria-controls="video-discard-confirm"
-              class="min-h-14 px-6 text-base font-medium text-[var(--session-muted)] transition-colors hover:text-[var(--session-ink)]"
+              phx-click={if(@armed == "abort", do: "discard", else: "arm")}
+              phx-value-choice="abort"
+              phx-click-away={@armed == "abort" && "disarm"}
+              aria-pressed={to_string(@armed == "abort")}
+              aria-label={if(@armed == "abort", do: "Tap again to abort", else: "Abort workout")}
+              title={if(@armed == "abort", do: "Tap again to abort", else: "Abort workout")}
+              class="video-chip"
             >
-              Abort
+              <.icon name="hero-x-mark" class="size-6" />
             </button>
           </div>
-          <.discard_confirm :if={@confirm_discard?} verb="Abort" />
         </section>
 
-        <section
-          :if={@finished?}
-          id="video-completion"
-          aria-labelledby="video-completion-heading"
-          class="pt-6"
-        >
-          <.form for={@form} id="video-log-form" phx-change="validate" phx-submit="save">
-            <div class="text-center">
-              <h1 id="video-completion-heading" class="qs-heading-tight text-3xl font-medium">
-                Workout complete
-              </h1>
-              <%!-- The count is the result: type it, or correct it with − and +. --%>
-              <div class="session-reps-stepper mt-10">
-                <button
-                  id="video-reps-less"
-                  type="button"
-                  phx-click="step_reps"
-                  phx-value-step="-1"
-                  disabled={@reps == 0}
-                  aria-label="One rep fewer"
-                  title="One rep fewer"
-                  aria-controls="video-actual-reps"
-                  class="session-reps-step"
-                >
-                  <.icon name="hero-minus" class="size-6" />
-                </button>
-                <label for="video-actual-reps" class="sr-only">Burpees done</label>
-                <input
-                  id="video-actual-reps"
-                  name={@form[:burpee_count_actual].name}
-                  value={@reps}
-                  type="text"
-                  inputmode="numeric"
-                  pattern="[0-9]*"
-                  autocomplete="off"
-                  aria-describedby="video-reps-error"
-                  class="session-reps-input qs-tabular"
-                />
-                <button
-                  id="video-reps-more"
-                  type="button"
-                  phx-click="step_reps"
-                  phx-value-step="1"
-                  aria-label="One rep more"
-                  title="One rep more"
-                  aria-controls="video-actual-reps"
-                  class="session-reps-step"
-                >
-                  <.icon name="hero-plus" class="size-6" />
-                </button>
-              </div>
-              <p class="qs-tabular mt-5 text-lg text-[var(--session-muted)]">
-                <span :if={@video.burpee_count}>of {@video.burpee_count} · </span>{Fmt.duration_sec(
-                  @watched_sec
-                )}
-              </p>
-              <p
-                :for={message <- field_errors(@form, :burpee_count_actual)}
-                id="video-reps-error"
-                class="mt-2 text-sm text-[var(--session-error-ink)]"
-              >
-                {message}
-              </p>
-            </div>
-
-            <SessionComponents.mood_pills id="video-completion-mood" mood={@mood} click="set_mood" />
-            <SessionComponents.tag_pills id="video-completion-tags" tags={@tags} click="toggle_tag" />
-            <div class="session-note-field composer">
-              <label for="video-note-input" class="sr-only">Note</label>
-              <textarea
-                id="video-note-input"
-                name={@form[:note_post].name}
-                rows="2"
-                placeholder="How did it go?"
-                class="session-note-input"
-              >{@note}</textarea>
-            </div>
-            <p
-              :for={message <- field_errors(@form, :note_post)}
-              class="mt-2 text-sm text-[var(--session-error-ink)]"
-            >
-              {message}
-            </p>
-
-            <%!-- A finished workout is saved or discarded; nothing else. --%>
-            <div
-              :if={!@confirm_discard?}
-              id="video-completion-actions"
-              class="mt-12 flex items-center justify-between gap-3"
-            >
-              <button
-                id="video-discard-btn"
-                type="button"
-                phx-click="ask_discard"
-                aria-label="Discard session"
-                title="Discard session"
-                aria-controls="video-discard-confirm"
-                class="inline-flex size-14 items-center justify-center rounded-full border border-[var(--session-border)] text-[var(--session-ink)] transition-colors hover:bg-[var(--session-border)]/35"
-              >
-                <.icon name="hero-trash" class="size-6" />
-              </button>
-              <button
-                id="video-save-btn"
-                type="submit"
-                aria-label="Save session"
-                title="Save session"
-                phx-disable-with
-                class="inline-flex size-14 items-center justify-center rounded-full bg-[var(--session-ink)] text-[var(--session-bg)] transition-opacity hover:opacity-90"
-              >
-                <.icon name="hero-check" class="size-6" />
-              </button>
-            </div>
-          </.form>
-          <.discard_confirm :if={@confirm_discard?} verb="Discard" />
-        </section>
+        <div :if={@finished?} id="video-finish">
+          <SessionComponents.completion_review
+            hidden={false}
+            form={@form}
+            name={@video.name}
+            events={@events}
+            count={@reps}
+            mood={@mood}
+            tags={@tags}
+            source={count_source(@counted_reps, @reps)}
+            armed={if(@armed == "delete", do: "delete")}
+          >
+            <:meta>
+              <span :if={@video.burpee_count}>of {@video.burpee_count} reps · </span>{Fmt.duration_sec(
+                @watched_sec
+              )} of {Fmt.duration_sec(@video.duration_sec)}
+            </:meta>
+          </SessionComponents.completion_review>
+        </div>
       </div>
     </Layouts.app>
-    """
-  end
-
-  attr(:verb, :string, required: true)
-
-  # The question takes the actions' place; Keep puts them back.
-  defp discard_confirm(assigns) do
-    ~H"""
-    <div
-      id="video-discard-confirm"
-      role="group"
-      aria-labelledby="video-discard-question"
-      aria-describedby="video-discard-consequence"
-      class="mt-12 text-center"
-    >
-      <p id="video-discard-question" class="text-lg font-medium">{@verb} this workout?</p>
-      <p id="video-discard-consequence" class="mt-1 text-sm text-[var(--session-muted)]">
-        Nothing will be saved.
-      </p>
-      <div class="mt-5 grid grid-cols-2 gap-3">
-        <button
-          id="video-discard-keep"
-          type="button"
-          phx-click="keep"
-          class="min-h-14 rounded-full border border-[var(--session-border)] text-base font-medium text-[var(--session-ink)] transition-colors hover:bg-[var(--session-border)]/35"
-        >
-          Keep
-        </button>
-        <button
-          id="video-discard-yes"
-          type="button"
-          phx-click="discard"
-          class="min-h-14 rounded-full bg-[var(--session-error-ink)] text-base font-medium text-white transition-opacity hover:opacity-90"
-        >
-          {@verb}
-        </button>
-      </div>
-    </div>
     """
   end
 end

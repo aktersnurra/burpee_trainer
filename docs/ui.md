@@ -330,8 +330,19 @@ every animation here.
   Abort does in the runner: the first tap arms it (`aria-pressed`, "Tap again to delete", the
   question said aloud), the page steps back out of reach, ✓ shrinks away and trash slides to
   the middle in `--clay` under "Delete this session?"; the second tap deletes. A tap anywhere
-  else or Escape lets go. A video's finish shares the mood and tag pills
-  (`SessionComponents.mood_pills/1`, `tag_pills/1`).
+  else or Escape lets go. Every session ends on this screen
+  (`SessionComponents.completion_review/1`): the runner's hook drives a plan's; a video's
+  LiveView drives its own through the component's `events`, its title the video's name, the
+  count typed as well as stepped, and `of 100 reps · 5:12 of 20:00` (the video's count when
+  it has one, the time watched).
+- Watching a video: the title, the video, and under it Finish early (flag) and Abort (X) as
+  quiet 48px rounds. Each asks in place as the runner's pause does: the title gives way to
+  "Finish early?" or "Abort workout?", the other round steps aside and the armed one slides
+  to the middle (Finish early in ink, Abort in `--clay`); the second tap acts, a tap anywhere
+  else or Escape lets go. With Home's camera toggle on, the camera's feed sits small and
+  mirrored in the video's top-right corner with the count over it, and Finish starts at that
+  count ("Counted by camera", then "Camera counted 97" once corrected); a camera that
+  cannot start disappears and the athlete counts.
 - A chevron only means "opens here" or, pointing down at the end of a list, "more".
 - Every pick (burpee type, set style) is the same: its options as quiet pills side by side, the
   chosen one a soft tint of its colour (2), never solid ink; a set style takes the picked type's
