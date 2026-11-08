@@ -322,12 +322,19 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
               playsinline
               class="aspect-video w-full rounded-2xl bg-black"
             ></video>
-            <%!-- With the camera on, its feed in the video's corner and what it has counted. --%>
+            <%!-- With the camera on, the camera sets up as the page opens: its feed fills the
+                 screen, as the plan session's camera setup does, until a raised hand (or play)
+                 starts the video. Then it shrinks to the video's corner with what it has
+                 counted. The hook owns the stage (`setup`, `failed`, `live`). --%>
             <div
               :if={@camera?}
               id="pose-tracker"
               phx-hook="PoseTracker"
               phx-update="ignore"
+              data-stage="setup"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="video-camera-status"
               class="video-camera"
             >
               <video
@@ -342,6 +349,52 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
                 class="absolute inset-0 h-full w-full"
                 aria-hidden="true"
               ></canvas>
+              <div class="video-camera-vignette" aria-hidden="true"></div>
+              <.link
+                id="video-camera-back"
+                navigate={~p"/"}
+                aria-label="Back to Home"
+                title="Back to Home"
+                class="video-camera-back"
+              >
+                <.icon name="hero-arrow-left" class="size-5" />
+              </.link>
+              <div class="video-camera-title">
+                <p id="video-camera-status" role="status" aria-live="polite" tabindex="-1">
+                  Starting camera
+                </p>
+                <p id="video-camera-detail">{@video.name}</p>
+              </div>
+              <div class="video-camera-foot">
+                <button
+                  id="video-camera-retry"
+                  type="button"
+                  hidden
+                  aria-label="Try the camera again"
+                  title="Try the camera again"
+                  class="video-camera-chip"
+                >
+                  <.icon name="hero-arrow-path" class="size-6" />
+                </button>
+                <button
+                  id="video-camera-play"
+                  type="button"
+                  aria-label="Play the video"
+                  title="Play the video"
+                  class="video-camera-chip"
+                >
+                  <.icon name="hero-play-solid" class="size-6" />
+                </button>
+                <button
+                  id="video-camera-off"
+                  type="button"
+                  aria-label="Continue without camera"
+                  title="Continue without camera"
+                  class="video-camera-chip"
+                >
+                  <.icon name="hero-video-camera-slash" class="size-6" />
+                </button>
+              </div>
               <p class="video-camera-count qs-tabular" role="status">
                 <span class="sr-only">Reps counted:</span>
                 <span id="video-camera-count">0</span>

@@ -345,10 +345,17 @@ every animation here.
   quiet 48px rounds. Each asks in place as the runner's pause does: the title gives way to
   "Finish early?" or "Abort workout?", the other round steps aside and the armed one slides
   to the middle (Finish early in ink, Abort in `--clay`); the second tap acts, a tap anywhere
-  else or Escape lets go. With Home's camera toggle on, the camera's feed sits small and
-  mirrored in the video's top-right corner with the count over it, and Finish starts at that
-  count ("Counted by camera", then "Camera counted 97" once corrected); a camera that
-  cannot start disappears and the athlete counts.
+  else or Escape lets go. With Home's camera toggle on, the camera sets up as the page opens,
+  as the plan session's camera setup: the feed fills the screen under its vignette, the status
+  at the top ("Starting camera", "Step into frame", then "Hand up" over "or tap play") and the
+  chips at the foot (play, and the camera with a slash to carry on without it); Back to Home
+  at the top left. A raised hand plays the video (no timer: it never starts while you step
+  back), as does the play chip; refused without a tap, the status says "Tap play" and the chip
+  fills and breathes (under reduced motion it only fills). Playing, the feed sits small and mirrored in
+  the video's top-right corner with the count over it, counting from the first frame of the
+  video, and Finish starts at that count ("Counted by camera", then "Camera counted 97" once
+  corrected). A camera that cannot start says "Camera unavailable" over Retry and the slashed
+  camera; without it the video plays as before and the athlete counts.
 - A chevron only means "opens here" or, pointing down at the end of a list, "more".
 - Every pick (burpee type, set style) is the same: its options as quiet pills side by side, the
   chosen one a soft tint of its colour (2), never solid ink; a set style takes the picked type's

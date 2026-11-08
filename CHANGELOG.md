@@ -9,6 +9,7 @@
 - **One finish screen**: a video ends on the same Finish as a plan session: the count between − and + (typed too), the mood, tags and note, trash on the left asking in place ("Delete this session?") and ✓ on the right. The Keep/Discard question is gone.
 - **Finish early and Abort**: while a video plays they are the runner's flag and X, each asking in place before it acts.
 - **Camera counting**: with Home's camera toggle on, the camera counts the reps while the video plays, its feed small in the video's corner with the count over it. Finish starts at its count, adjustable, and the session is saved as camera-counted. The counter needs no beat to count, so it works without a plan; with no beat to judge it by, a video keeps no cadence and no pose trace.
+- **Hand up to play**: with the camera on, the camera sets up as the video page opens, its feed filling the screen as a plan session's camera setup does, so the browser asks for it before anything plays. Once it finds you, raising a hand plays the video (the play chip does too; if the browser wants a tap first, the chip says so). Only reps from when the video starts count. A camera that cannot start offers Retry, or carrying on without it.
 
 ## 2026-11-08 — Progress is one chart; deleting asks in place
 

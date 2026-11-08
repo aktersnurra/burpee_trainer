@@ -610,11 +610,36 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 #video-session[data-armed="finish"] #video-abort-btn { opacity: 0; transform: scale(.6); pointer-events: none; }
 #video-session[data-armed="finish"] #video-finish-early { background: var(--ink); color: var(--color-base-100); transform: translateX(calc((var(--pill-h) + 24px) / 2)) scale(1.15); }
 #video-session[data-armed="abort"] #video-abort-btn { background: var(--clay); color: var(--color-base-100); transform: translateX(calc(-1 * (var(--pill-h) + 24px) / 2)) scale(1.15); }
-.video-camera { position: absolute; top: 8px; right: 8px; width: 18%; min-width: 64px; max-width: 104px; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 12px; background: #000; box-shadow: 0 2px 8px rgb(0 0 0 / .3); pointer-events: none; }
+.video-camera { position: absolute; top: 8px; right: 8px; width: 18%; min-width: 64px; max-width: 104px; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 12px; background: #000; box-shadow: 0 2px 8px rgb(0 0 0 / .3); pointer-events: none; animation: video-camera-in var(--motion-settle) var(--ease-out); }
+.video-camera[hidden] { display: none; }
 .video-camera-count { position: absolute; inset-inline: 0; bottom: 4px; margin: 0; color: #fff; text-align: center; font: 600 20px/1 var(--font-sans); text-shadow: 0 1px 3px rgb(0 0 0 / .6); }
+@keyframes video-camera-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
+/* Camera setup, as the plan session's: the feed fills the screen under a vignette, the
+   status at the top ("Hand up"), the chips at the foot. Playing, it is the corner box above. */
+.video-camera-vignette, .video-camera-back, .video-camera-title, .video-camera-foot { display: none; }
+.video-camera:is([data-stage="setup"], [data-stage="failed"]) { position: fixed; inset: 0; z-index: 50; width: auto; min-width: 0; max-width: none; aspect-ratio: auto; border-radius: 0; box-shadow: none; background: #262722; color: #F4F2EE; pointer-events: auto; }
+.video-camera:is([data-stage="setup"], [data-stage="failed"]) .video-camera-count { display: none; }
+.video-camera[data-stage="failed"] :is(#pose-tracker-preview, #pose-tracker-canvas) { visibility: hidden; }
+.video-camera:is([data-stage="setup"], [data-stage="failed"]) .video-camera-vignette { display: block; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(to bottom, rgb(38 39 34 / .85) 0, rgb(38 39 34 / 0) 300px), linear-gradient(to top, rgb(38 39 34 / .7) 0, rgb(38 39 34 / 0) 260px), radial-gradient(ellipse at center, rgb(0 0 0 / 0) 55%, rgb(0 0 0 / .45) 100%); }
+.video-camera:is([data-stage="setup"], [data-stage="failed"]) .video-camera-back { display: grid; position: absolute; z-index: 2; top: max(20px, env(safe-area-inset-top)); left: 16px; width: 44px; height: 44px; place-items: center; border-radius: 4px; color: #F4F2EE; transition: background-color 150ms ease; }
+.video-camera-back:hover { background: #3A3B35; }
+.video-camera:is([data-stage="setup"], [data-stage="failed"]) .video-camera-title { display: block; position: absolute; z-index: 2; inset-inline: 16px; top: 150px; text-align: center; }
+#video-camera-status { margin: 0; font: 600 var(--text-title)/1.1 var(--font-sans); letter-spacing: -0.03em; }
+#video-camera-status:focus { outline: none; }
+#video-camera-detail { margin: 8px 0 0; color: #A9A79F; font: 400 var(--text-body)/1.35 var(--font-sans); }
+.video-camera:is([data-stage="setup"], [data-stage="failed"]) .video-camera-foot { display: flex; position: absolute; z-index: 2; inset-inline: 0; bottom: calc(120px + env(safe-area-inset-bottom)); justify-content: center; gap: 16px; }
+.video-camera-chip { display: inline-grid; place-items: center; width: var(--pill-h); height: var(--pill-h); border: 0; border-radius: 999px; background: #3A3B35; color: #F4F2EE; transition: background-color var(--motion-quick) var(--ease-out); }
+.video-camera-chip[hidden] { display: none; }
+.video-camera-chip:focus-visible, .video-camera-back:focus-visible { outline: 2px solid #F4F2EE; outline-offset: 2px; }
+/* Refused without a tap, play is the one thing to press: it fills and breathes. */
+#video-camera-play[data-attention] { background: #F4F2EE; color: #262722; animation: video-play-attention 1.6s var(--ease-out) infinite; }
+@keyframes video-play-attention { 0%, 100% { box-shadow: 0 0 0 0 rgb(244 242 238 / .45); } 50% { box-shadow: 0 0 0 12px rgb(244 242 238 / 0); } }
 @media (prefers-reduced-motion: reduce) {
   #video-title-block,
-  .video-chip { transition: none; }
+  .video-chip,
+  .video-camera-chip { transition: none; }
+  .video-camera,
+  #video-camera-play[data-attention] { animation: none; }
 }
 @media (prefers-reduced-motion: reduce) {
   #burpee-session :is(button, a) { transition: none; }

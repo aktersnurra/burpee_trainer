@@ -196,6 +196,21 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
              "#video-session[data-camera='true'] #pose-tracker[phx-hook='PoseTracker']"
            )
 
+    # The camera's setup is a dialog over the page, named by its status, its chips labelled
+    # and a way back Home, as the plan session's camera setup.
+    assert has_element?(
+             view,
+             "#pose-tracker[data-stage='setup'][role=dialog][aria-modal=true][aria-labelledby='video-camera-status']"
+           )
+
+    assert has_element?(view, "#video-camera-status[role=status][aria-live=polite]")
+
+    for label <- ["Play the video", "Continue without camera", "Try the camera again"] do
+      assert has_element?(view, "#pose-tracker button[aria-label='#{label}']")
+    end
+
+    assert has_element?(view, "#video-camera-back[href='/'][aria-label='Back to Home']")
+
     render_click(view, "video_ended", %{"watched_sec" => 1200, "counted_reps" => 97})
     assert has_element?(view, "#session-actual-reps[value='97']")
     assert has_element?(view, "#session-count-source", "Counted by camera")
