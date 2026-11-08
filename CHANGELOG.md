@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-08 — Longer sessions count the fatigue
+
+- **Catch-up reps**: a session longer than 20 minutes is no longer planned as 20-minute sessions back to back. Forty minutes holds one and a half times a good 20-minute session's reps, and the same curve gives an hour about 1.9 times (70 Navy SEAL in 20 minutes: 105 in forty, about 133 in an hour, not 210). The rep ceiling, the progression range, the coach's prompt (which now gets the slot's range as total reps) and New's starting reps all use it.
+
 ## 2026-11-08 — The coach remembers patterns, not notes
 
 - **Memory**: the review after a workout reads it with the nine before it, notes and all, and keeps what recurs (what drains you, where you fade, what hurts) as an insight in its own words, never a copy of one note. Before, it read one session alone and could keep nothing.

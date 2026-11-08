@@ -4,14 +4,15 @@ defmodule BurpeeTrainer.Coach.RepCeiling do
   picks a saved one. The athlete's recent best decides: 10% above their best 20-minute pace
   for the type in the last eight weeks, whatever their level. Only with no session of the
   type in that time does the level after their current one cap it. Easier is always
-  allowed. A longer slot (weekend catch-up) is compared at its 20-minute-equivalent pace.
+  allowed. A longer slot (weekend catch-up) is compared as the 20-minute session it is as
+  good as, fatigue counted (`Endurance`): forty minutes holds one and a half times the reps.
   """
 
   alias BurpeeTrainer.Accounts.Scope
+  alias BurpeeTrainer.Coach.Endurance
   alias BurpeeTrainer.{Levels, UserTime, Workouts}
 
   # Level landmarks and the recent best are counts for a 20-minute session.
-  @landmark_duration_sec 1_200
   @recent_days 56
   @headroom_pct 110
 
@@ -44,10 +45,12 @@ defmodule BurpeeTrainer.Coach.RepCeiling do
   def allows?({:level, max_rank}, burpee_type, reps, duration_sec),
     do: rank(Levels.level_for_count(burpee_type, pace(reps, duration_sec))) <= max_rank
 
-  @doc "Reps per 20 minutes; a session shorter than 20 minutes counts as its own reps."
+  @doc """
+  The reps of the 20-minute session `reps` in `duration_sec` is as good as; a session shorter
+  than 20 minutes counts as its own reps.
+  """
   @spec pace(non_neg_integer(), pos_integer()) :: non_neg_integer()
-  def pace(reps, duration_sec),
-    do: div(reps * @landmark_duration_sec, max(duration_sec, @landmark_duration_sec))
+  def pace(reps, duration_sec), do: floor(reps / Endurance.factor(duration_sec))
 
   @doc "The athlete's best reps per 20 minutes in the last eight weeks, per burpee type; nil for none."
   @spec recent_bests(Scope.t()) :: %{atom() => pos_integer() | nil}

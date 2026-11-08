@@ -110,7 +110,8 @@ effect immediately for the next run. Agent writes compare `updated_at` and fail 
   best decides, at most 10% above their best 20-minute pace for the type in the last eight
   weeks, whatever their level. Only with no session of the type in that time does the level
   after their current one cap it. A longer slot (weekend catch-up) is compared at its
-  20-minute-equivalent pace; easier is always allowed.
+  20-minute-equivalent pace, fatigue counted (`Coach.Endurance`: forty minutes holds 1.5
+  times a 20-minute session's reps, an hour about 1.9); easier is always allowed.
 
 ### Coach page conversation
 

@@ -8,7 +8,7 @@ defmodule BurpeeTrainer.Coach.NewDefaults do
   """
 
   alias BurpeeTrainer.Accounts.Scope
-  alias BurpeeTrainer.Coach.{Progression, RepCeiling, WorkoutGuidance}
+  alias BurpeeTrainer.Coach.{Endurance, Progression, RepCeiling, WorkoutGuidance}
   alias BurpeeTrainer.Levels
 
   @standard_min 20
@@ -17,8 +17,6 @@ defmodule BurpeeTrainer.Coach.NewDefaults do
   @rep_step 5
   @big_rep_steps_from 50
   @pace_step 0.5
-  # Beyond a standard session the same pace is not held for longer.
-  @long_session_factor 0.9
   # Without a history the movement fills this share of the time; the rest is recovery.
   @work_share 0.85
 
@@ -167,8 +165,9 @@ defmodule BurpeeTrainer.Coach.NewDefaults do
     Levels.threshold(Levels.next(current) || current, burpee_type)
   end
 
+  # Beyond a standard session fatigue counts: forty minutes holds 1.5 times the reps.
   defp scale(rate, duration_sec) when duration_sec > @standard_min * 60,
-    do: rate * duration_sec / 1_200 * @long_session_factor
+    do: rate * Endurance.factor(duration_sec)
 
   defp scale(rate, duration_sec), do: rate * duration_sec / 1_200
 

@@ -1,6 +1,6 @@
 defmodule BurpeeTrainer.Coach.AgentPrompt do
   @moduledoc "Bounded scoped facts shared by conversation, planning, and authoring."
-  alias BurpeeTrainer.Coach.{Memory, Tools, Policy, Voice}
+  alias BurpeeTrainer.Coach.{Memory, Progression, Tools, Policy, Voice}
   alias BurpeeTrainer.{Levels, Workouts}
 
   # How the next session moves on from the last one of its type, designed or picked.
@@ -24,7 +24,7 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   for this type in the last eight weeks, whatever their level; only with no session of the \
   type in that time does the level after their current one cap it. For a session longer \
   than 20 minutes, compare its reps per 20 minutes with the landmarks and their recent \
-  sessions. #{@progression} The rationale appears under the workout: one sentence in the voice above on why this session \
+  sessions, fatigue counted: forty minutes holds one and a half times the reps of twenty. #{@progression} The rationale appears under the workout: one sentence in the voice above on why this session \
   suits them now; why, not what, since the name, reps and minutes are shown above it. Finish with one sentence explaining your choice.
   """
 
@@ -33,7 +33,8 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   workouts suits them today. Never go more than 10% above their best 20-minute reps for \
   this type in the last eight weeks (with no recent session, above the level after their \
   current one); easier sessions are fine. For a session longer than 20 minutes, compare its \
-  reps per 20 minutes with the landmarks. #{@progression} The rationale appears under the workout: one sentence in the voice \
+  reps per 20 minutes with the landmarks, fatigue counted: forty minutes holds one and a \
+  half times the reps of twenty. #{@progression} The rationale appears under the workout: one sentence in the voice \
   above on why this session suits them now; why, not what, since the name, reps and minutes \
   are shown above it. Finish with one sentence explaining your design.
   """
@@ -74,7 +75,10 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
   today's share of missed minutes across the remaining weekend days; completed_sec, remaining_sec and \
   weekly_target_sec describe this week's training time. progression: the deterministic rate \
   decision, its reason and evidence_ids; limits are reps per 20 minutes, not total reps \
-  in a longer session. A null maximum means establish a baseline within the rep ceiling.
+  in a longer session. slot_reps is that range as total reps for this slot, with the \
+  fatigue of a longer session counted: forty minutes holds one and a half times a \
+  twenty-minute session's reps, an hour about 1.9 times, never two or three times; plan \
+  within it. A null maximum means establish a baseline within the rep ceiling.
   """
 
   @doc "Progression guidance shared by saved-workout selection and workout design."
@@ -94,8 +98,7 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
       goals: goals["goals"] |> Enum.take(20),
       current_level: Levels.current_level(Workouts.list_sessions(scope)),
       slot: slot,
-      progression:
-        slot && Map.from_struct(BurpeeTrainer.Coach.Progression.for_type(scope, slot.burpee_type)),
+      progression: slot && progression(scope, slot),
       recent_sessions: sessions |> Enum.take(10) |> Enum.map(&Tools.History.summary/1),
       landmarks:
         Enum.map(Levels.all_levels(), fn level ->
@@ -106,6 +109,16 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
           }
         end)
     }
+  end
+
+  # The decision, and its range as total reps for this slot so a longer one is never scaled
+  # by hand as if fatigue did not count.
+  defp progression(scope, slot) do
+    decision = Progression.for_type(scope, slot.burpee_type)
+
+    decision
+    |> Map.from_struct()
+    |> Map.put(:slot_reps, Progression.slot_reps(decision, slot.duration_sec))
   end
 
   # `history` is the conversation so far, as `{message, reply}` pairs, oldest first; the

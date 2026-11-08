@@ -176,11 +176,11 @@ defmodule BurpeeTrainer.Coach.ProposeWorkoutTest do
     slot = six_count_slot(scope, 2400)
     run = run(scope, slot)
 
-    # 120 reps in 40 minutes is 60 per 20 minutes: level_1b, the next level up from level_1a.
+    # 120 reps in 40 minutes is 80 per 20 minutes: level_1b, the next level up from level_1a.
     assert {:ok, %{"duration_sec" => 2400}, _} =
              ProposeWorkout.call(scope, args(120, List.duplicate({10, 5.0, 5.0}, 12)), run)
 
-    # 220 reps in 40 minutes is 110 per 20 minutes: level_1c, two levels up.
+    # 220 reps in 40 minutes is 146 per 20 minutes: level_1c, two levels up.
     assert {:error, @over_cap} =
              ProposeWorkout.call(scope, args(220, List.duplicate({10, 5.0, 5.0}, 22)), run)
   end

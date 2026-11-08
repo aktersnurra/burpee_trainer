@@ -49,8 +49,8 @@ defmodule BurpeeTrainer.Coach.NewDefaultsTest do
 
       assert NewDefaults.suggested_reps(scope, :six_count, 1_200) == 110
       assert NewDefaults.suggested_reps(scope, :six_count, 600) == 55
-      # A longer session does not hold the same rate for longer.
-      assert NewDefaults.suggested_reps(scope, :six_count, 2_400) == 195
+      # Forty minutes holds one and a half times the reps of twenty, not twice.
+      assert NewDefaults.suggested_reps(scope, :six_count, 2_400) == 165
     end
 
     test "the push is a step, never more than 10% past the best, and always past it" do

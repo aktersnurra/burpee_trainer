@@ -12,7 +12,7 @@ Delete tests that:
 - cover removed or unreachable code; or
 - duplicate a full flow without adding a distinct failure mode.
 
-Provider-dependent coverage uses the local recorded-response plug. Tests do not make paid provider calls. Property-based tests cover the pure cores: the rest fitter, Home state, weekly policy and week window, levels, goals and gauges, fatigue, coach memory batches, and insight metrics and validation, and the set breakdown. `PlanCompiler` and `WorkoutRequest` validation are covered by examples.
+Provider-dependent coverage uses the local recorded-response plug. Tests do not make paid provider calls. Property-based tests cover the pure cores: the rest fitter, Home state, weekly policy and week window, levels, goals and gauges, fatigue, coach memory batches, and insight metrics and validation, the set breakdown, and how a longer session's reps scale (`Coach.Endurance`). `PlanCompiler` and `WorkoutRequest` validation are covered by examples.
 
 A test that builds a training slot from the clock pins what it depends on (for example `%{slot | duration_sec: 1200}`): late in the week the slot is a longer catch-up, and a test written on a weekday then fails on Sunday.
 

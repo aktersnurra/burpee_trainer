@@ -49,19 +49,26 @@ defmodule BurpeeTrainer.Coach.ProgressionTest do
     assert decision.max_reps_per_20 == 72
   end
 
-  test "forty-minute catch-up is compared at the same rate, never twice the intensity" do
+  test "forty minutes holds one and a half times a twenty-minute session's reps, not twice" do
+    # 150 in forty minutes is as good as 100 in twenty, so it counts as a repeat of it.
     long = %{
       session(2, 1)
-      | burpee_count_actual: 200,
-        burpee_count_planned: 200,
+      | burpee_count_actual: 150,
+        burpee_count_planned: 150,
         duration_sec_actual: 2400,
         duration_sec_planned: 2400
     }
 
     decision = Progression.decide([long, session(1, 4)], :six_count, @now)
     assert decision.action == :progress
-    assert Progression.allows?(decision, 210, 2400)
-    refute Progression.allows?(decision, 211, 2400)
+    assert decision.baseline_reps_per_20 == 100
+
+    # 101 to 105 per twenty minutes is 152 to 157 in forty.
+    assert Progression.slot_reps(decision, 2400) == %{min: 152, max: 157}
+    assert Progression.allows?(decision, 157, 2400)
+    refute Progression.allows?(decision, 158, 2400)
+    refute Progression.allows?(decision, 151, 2400)
+    assert Progression.slot_reps(%Progression{}, 2400) == nil
   end
 
   test "warmups, other types, future, stale and short unprescribed sessions are not progression evidence" do

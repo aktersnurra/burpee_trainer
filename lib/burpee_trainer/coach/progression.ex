@@ -1,6 +1,6 @@
 defmodule BurpeeTrainer.Coach.Progression do
   @moduledoc "Evidence-based rate decisions for automatic coaching; manual choices remain independent."
-  alias BurpeeTrainer.Coach.AuthoritativeSession
+  alias BurpeeTrainer.Coach.{AuthoritativeSession, Endurance}
   alias BurpeeTrainer.Workouts
   alias BurpeeTrainer.Workouts.SetBreakdown
 
@@ -46,10 +46,24 @@ defmodule BurpeeTrainer.Coach.Progression do
   def allows?(%__MODULE__{max_reps_per_20: nil}, _reps, _duration), do: true
 
   def allows?(decision, reps, duration) do
-    window = max(duration, 1200)
+    %{min: min, max: max} = slot_reps(decision, duration)
+    reps >= min and reps <= max
+  end
 
-    reps * 1200 >= decision.min_reps_per_20 * window and
-      reps * 1200 <= decision.max_reps_per_20 * window
+  @doc """
+  The decision's range as total reps for a session of `duration_sec`, with the fatigue of a
+  longer session counted (`Endurance`); nil while there is no maximum.
+  """
+  @spec slot_reps(t(), pos_integer()) :: %{min: non_neg_integer(), max: pos_integer()} | nil
+  def slot_reps(%__MODULE__{max_reps_per_20: nil}, _duration), do: nil
+
+  def slot_reps(decision, duration) do
+    factor = Endurance.factor(duration)
+
+    %{
+      min: ceil(decision.min_reps_per_20 * factor),
+      max: floor(decision.max_reps_per_20 * factor)
+    }
   end
 
   @spec explanation(t()) :: String.t()
@@ -186,14 +200,17 @@ defmodule BurpeeTrainer.Coach.Progression do
 
   defp successful?(_), do: false
 
-  # An unfinished prescription must not look faster because it ended early.
+  # An unfinished prescription must not look faster because it ended early. A longer
+  # session reads as the twenty-minute session it is as good as.
   defp rate(session),
     do:
-      div(
-        session.burpee_count_actual * 1200,
-        max(1200, max(session.duration_sec_actual, session.duration_sec_planned || 0))
+      per_20(
+        session.burpee_count_actual,
+        max(session.duration_sec_actual, session.duration_sec_planned || 0)
       )
 
   defp planned_rate(session),
-    do: div(session.burpee_count_planned * 1200, max(1200, session.duration_sec_planned))
+    do: per_20(session.burpee_count_planned, session.duration_sec_planned)
+
+  defp per_20(reps, duration), do: floor(reps / Endurance.factor(duration))
 end
