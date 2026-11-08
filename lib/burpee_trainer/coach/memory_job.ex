@@ -2,7 +2,8 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
   @moduledoc """
   The memory's background review, as the Hermes agent runs one after a turn: after a session
   with feedback, or an exchange in which the coach wrote nothing itself, the model reads the
-  memory and what happened and returns memory operations, which `Memory.write/3` applies per
+  memory and what happened (a session with the nine before it, so it writes patterns, not
+  copies of one note) and returns memory operations, which `Memory.write/3` applies per
   part, all or nothing. A rejected batch (a part full, a text that matched nothing) goes back
   once with the reason, as the tool would answer the coach. Without a provider nothing
   changes.
@@ -40,12 +41,19 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
     required: ["operations"]
   }
 
+  # How many sessions a session's review reads, itself included.
+  @window 10
+
   @task """
   Review what just happened with the athlete and keep the coach's memory of them up to \
   date. Return operations, each with its target part: add {content}; patch {old_text, \
   content}; remove {old_text}; leave unused fields null. Most events change nothing; then \
-  return no operations. A note the athlete wrote about a session is the one place they say \
-  how it felt: read it for what will still matter next time. The athlete sees every change.
+  return no operations. A session comes with the ones before it (`earlier`, newest first): \
+  read its notes, tags and mood across all of them for what recurs (what drains the \
+  athlete, where they fade, what hurts, what helps) and write that as one insight in your \
+  own words, never a copy of a note. One session alone makes an entry only for a lasting \
+  fact, such as an injury. When a pattern sharpens or breaks, patch its entry. The \
+  athlete sees every change.
   """
 
   @doc "Admits a job for an exchange the owner just had with the coach."
@@ -209,17 +217,20 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
     end
   end
 
+  # A session is read with the ones before it, so the review sees what recurs rather than
+  # one day's feelings.
   defp event(scope, %{"session_id" => id}) when is_integer(id) do
     case Workouts.get_session(scope, id) do
       %WorkoutSession{state: :completed} = session ->
+        earlier =
+          scope
+          |> Workouts.list_recent_training_sessions()
+          |> Enum.filter(&(DateTime.compare(&1.completed_at, session.completed_at) == :lt))
+          |> Enum.take(@window - 1)
+
         session
-        |> History.summary()
-        |> Map.merge(%{
-          "kind" => "session",
-          "note_before" => session.note_pre,
-          "note_after" => session.note_post,
-          "tags" => session.tags
-        })
+        |> session_event()
+        |> Map.merge(%{"kind" => "session", "earlier" => Enum.map(earlier, &session_event/1)})
 
       _ ->
         nil
@@ -227,4 +238,14 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
   end
 
   defp event(_scope, _args), do: nil
+
+  defp session_event(session) do
+    session
+    |> History.summary()
+    |> Map.merge(%{
+      "note_before" => session.note_pre,
+      "note_after" => session.note_post,
+      "tags" => session.tags
+    })
+  end
 end

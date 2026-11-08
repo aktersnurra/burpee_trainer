@@ -52,9 +52,9 @@ entries.
   lands at once and shows in the tool's answer, and in the prompt from the next turn.
 - **Guidance.** `Memory.guidance/0` says what to keep (preferences, corrections, schedule
   and body changes, agreements) and what to skip (results, what is only true today, what is
-  vague; how a hard session felt, where they fade or what they push through, is not only
-  true today and is kept), to patch rather than add a second entry, to merge past 80% full, and never to
-  mention the memory to the athlete.
+  vague; a pattern across sessions is kept as an insight, not a copy of a note), to patch
+  rather than add a second entry, to merge past 80% full, and never to mention the memory to
+  the athlete.
 - **Claude** reads the same snapshot as `memory` in `get_coach_context`, and the parts with
   their entries and usage through `list_memory`.
 
@@ -62,7 +62,10 @@ entries.
 
 - **The coach, as it talks**, with the memory tool on the Coach page.
 - **A background review** (`MemoryJob`), as Hermes runs one after turns: after a session
-  with feedback, and after an exchange in which the coach wrote nothing. The model returns
+  with feedback, and after an exchange in which the coach wrote nothing. A session is read
+  with the nine before it (`earlier`: summaries, notes, tags), and the review writes what
+  recurs across them in its own words; one session alone makes an entry only for a lasting
+  fact such as an injury. The model returns
   operations with a target each; each part's batch is applied as the tool would, in the order
   the parts first appear. A rejection goes back once with its reason, a fresh snapshot (so a
   part already written reads as written) and an ask for the rejected part only.

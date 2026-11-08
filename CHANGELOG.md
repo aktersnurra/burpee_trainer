@@ -1,8 +1,8 @@
 # Changelog
 
-## 2026-11-08 — The coach keeps how a session felt
+## 2026-11-08 — The coach remembers patterns, not notes
 
-- **Memory**: a note on how a hard session went (where you fade, what you push through) is kept. Before, the review could file it as "only true today" and keep nothing.
+- **Memory**: the review after a workout reads it with the nine before it, notes and all, and keeps what recurs (what drains you, where you fade, what hurts) as an insight in its own words, never a copy of one note. Before, it read one session alone and could keep nothing.
 
 ## 2026-11-07 — Streaming chats
 

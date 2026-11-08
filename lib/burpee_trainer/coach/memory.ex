@@ -220,9 +220,9 @@ defmodule BurpeeTrainer.Coach.Memory do
     Keep both yourself with the memory tool, without being asked, when you learn something \
     that will still matter next week: a preference, a correction, a change to their \
     schedule or body, an agreement. Skip results (reps, times, levels; they are kept \
-    elsewhere), what is only true today, and what is vague. How a hard session felt is not \
-    only true today: where they fade, what hurts, what they push through or are tempted to \
-    cut is how the next one will go, so keep it. An entry is one dense, specific \
+    elsewhere), what is only true today, and what is vague. A pattern across sessions (what \
+    drains them, where they fade, what hurts) will still matter: keep it as an insight, not \
+    a copy of what they wrote. An entry is one dense, specific \
     fact in plain words about the athlete, in the third person, with no internal names \
     (six-count, not six_count). When a fact changes, patch its entry rather than adding \
     another; remove what is no longer true. Each part has a size limit; past 80% full, \

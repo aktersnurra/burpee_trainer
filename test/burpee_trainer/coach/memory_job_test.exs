@@ -151,7 +151,7 @@ defmodule BurpeeTrainer.Coach.MemoryJobTest do
     assert Memory.list(scope) == []
   end
 
-  test "a session's review hands the model what the athlete wrote about it" do
+  test "a session's review reads it with the sessions before it, notes and all" do
     previous = Application.get_env(:burpee_trainer, :llm_provider)
     previous_req = Req.default_options()
 
@@ -164,12 +164,17 @@ defmodule BurpeeTrainer.Coach.MemoryJobTest do
     Req.default_options(plug: {Req.Test, __MODULE__})
 
     scope = scope_fixture()
+    now = DateTime.utc_now(:second)
 
-    session =
+    noted = fn note, days_ago ->
       scope.user
-      |> free_form_session_fixture()
-      |> Ecto.Changeset.change(note_post: "Heavy after rep 8 of the late sets")
+      |> free_form_session_fixture(%{completed_at: DateTime.add(now, -days_ago, :day)})
+      |> Ecto.Changeset.change(note_post: note)
       |> Repo.update!()
+    end
+
+    for day <- 12..1//-1, do: noted.("Slept 5 hours, day #{day}", day)
+    session = noted.("Heavy after rep 8 of the late sets", 0)
 
     reply(%{"operations" => []})
 
@@ -177,14 +182,12 @@ defmodule BurpeeTrainer.Coach.MemoryJobTest do
              perform_job(MemoryJob, %{"user_id" => scope.user.id, "session_id" => session.id})
 
     assert_received {:request, %{"messages" => [_task, _snapshot, %{"content" => input}]}}
+    %{"event" => event} = Jason.decode!(input)
+    assert %{"kind" => "session", "note_after" => "Heavy after rep 8 of the late sets"} = event
 
-    assert %{
-             "event" => %{
-               "kind" => "session",
-               "note_after" => "Heavy after rep 8 of the late sets"
-             }
-           } =
-             Jason.decode!(input)
+    # The nine before it, newest first, so a pattern can show across ten.
+    assert Enum.map(event["earlier"], & &1["note_after"]) ==
+             Enum.map(1..9, &"Slept 5 hours, day #{&1}")
   end
 
   test "an exchange always admits a job; a session only when it carries feedback" do
