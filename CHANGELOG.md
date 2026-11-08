@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-08 — The drawer filters again
+
+- **Filters**: the filter icon beside Workouts and Videos opens type and level picks, starting on both types and your level and every one above; reset puts them back. A long workout's level is read as the 20-minute session it is as good as, so a 40-minute catch-up is no longer graded a level or two too hard.
+
 ## 2026-11-08 — Videos end like every workout
 
 - **One finish screen**: a video ends on the same Finish as a plan session: the count between − and + (typed too), the mood, tags and note, trash on the left asking in place ("Delete this session?") and ✓ on the right. The Keep/Discard question is gone.

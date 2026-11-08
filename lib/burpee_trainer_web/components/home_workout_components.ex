@@ -258,13 +258,74 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               {if tab == :workouts, do: "Workouts", else: "Videos"}
             </button>
           </div>
+          <button
+            id="home-filter-toggle"
+            class="home-text-action home-icon-action"
+            type="button"
+            phx-click="toggle_filters"
+            aria-expanded={to_string(@state.filters_open?)}
+            aria-controls="home-filters"
+            aria-label="Filter"
+            title="Filter"
+          >
+            <.icon name="hero-adjustments-horizontal" class="size-5" />
+          </button>
+        </div>
+        <%!-- The list opens on both types and the athlete's level and every one above. --%>
+        <div :if={@state.filters_open?} id="home-filters">
+          <div role="group" aria-label="Burpee type">
+            <button
+              :for={type <- [:six_count, :navy_seal]}
+              id={"home-type-#{type}"}
+              type="button"
+              phx-click="filter"
+              phx-value-kind="type"
+              phx-value-filter={type}
+              aria-pressed={to_string(MapSet.member?(@state.filters.types, type))}
+            >
+              {BurpeeTrainerWeb.Fmt.burpee_type(type)}
+            </button>
+          </div>
+          <div class="home-filter-level-heading">
+            <span>Levels</span>
+            <button
+              id="home-filter-reset"
+              type="button"
+              phx-click="reset_filters"
+              class="home-text-action home-icon-action"
+              aria-label="Reset filters"
+              title="Reset filters"
+            >
+              <.icon name="hero-arrow-path" class="size-5" />
+            </button>
+          </div>
+          <div role="group" aria-label="Level" aria-describedby="home-current-level">
+            <button
+              :for={level <- Enum.reverse(BurpeeTrainer.Levels.all_levels())}
+              id={"home-level-#{level}"}
+              type="button"
+              phx-click="filter"
+              phx-value-kind="level"
+              phx-value-filter={level}
+              aria-pressed={to_string(MapSet.member?(@state.filters.levels, level))}
+            >
+              {level |> BurpeeTrainerWeb.Fmt.level() |> String.replace_prefix("Level ", "")}
+            </button>
+          </div>
+          <p id="home-current-level" class="sr-only">
+            {BurpeeTrainerWeb.Fmt.level(@state.current_level)} is your level.
+          </p>
         </div>
         <p
           :if={@state.alternatives_empty?}
           id="home-alternatives-empty"
           class="home-local-message"
         >
-          No {if(@state.active_tab == :videos, do: "videos", else: "workouts")} yet.
+          <%= if @state.alternatives_filtered_out? do %>
+            No {if(@state.active_tab == :videos, do: "videos", else: "workouts")} match these filters.
+          <% else %>
+            No {if(@state.active_tab == :videos, do: "videos", else: "workouts")} yet.
+          <% end %>
         </p>
         <div id="home-alternatives" phx-update="stream">
           <.alternative

@@ -182,6 +182,36 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-tab-videos[role=tab][aria-selected=true]")
   end
 
+  test "the drawer's filters start on every level from the athlete's up and narrow the list", %{
+    conn: conn,
+    user: user
+  } do
+    recommendation_fixture(user)
+    easy = plan_fixture(user, %{name: "Easy ten", target_reps: 10})
+    {:ok, view, _} = live(conn, ~p"/")
+    view |> element("#home-summary") |> render_click()
+    open_swap(view)
+    assert has_element?(view, "#home-filter-toggle[aria-expanded=false][aria-label=Filter]")
+    view |> element("#home-filter-toggle") |> render_click()
+    assert has_element?(view, "#home-filter-toggle[aria-expanded=true]")
+    # A new athlete is at 1A, so every level is on, and both types.
+    assert has_element?(view, "#home-level-level_1a[aria-pressed=true]")
+    assert has_element?(view, "#home-level-graduated[aria-pressed=true]")
+    assert has_element?(view, "#home-type-six_count[aria-pressed=true]")
+    assert has_element?(view, "#home-alternative-plan-#{easy.id}")
+
+    view |> element("#home-level-level_1a") |> render_click()
+    assert has_element?(view, "#home-level-level_1a[aria-pressed=false]")
+    refute has_element?(view, "#home-alternative-plan-#{easy.id}")
+    view |> element("#home-type-navy_seal") |> render_click()
+    view |> element("#home-type-six_count") |> render_click()
+    assert has_element?(view, "#home-alternatives-empty", "No workouts match these filters.")
+
+    view |> element("#home-filter-reset") |> render_click()
+    assert has_element?(view, "#home-level-level_1a[aria-pressed=true]")
+    assert has_element?(view, "#home-alternative-plan-#{easy.id}")
+  end
+
   test "alternative rows carry real metadata; a tap uses a workout or starts a video", %{
     conn: conn,
     user: user

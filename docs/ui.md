@@ -224,7 +224,7 @@ check out.
 Swap, Edit and New are three icons in the start toggles' pill (`.home-corner`: bars, pencil,
 plus; 44px tall, `--color-base-200`, ink), a tap each, in a centred row under the sets once the
 workout is opened; closed, Home is the workout and Play alone. Every other icon button (back and
-close in the studio and drawer, Progress's view switches) is the same: 44px, plain and muted,
+close in the studio and drawer, the drawer's filter) is the same: 44px, plain and muted,
 filled on hover, pressed in on a tap. Every view
 shares one 640px column. Swap opens the list of workouts and videos:
 
@@ -241,6 +241,12 @@ shares one 640px column. Swap opens the list of workouts and videos:
   pan-y`), so a sideways stroke never pans the page; scrollers inside it still scroll sideways.
 - A tap on a workout makes it today's: its name flies from its row into Home's title while the
   list leaves. A tap on a video starts it.
+- The filter icon (adjustments) at the tabs' end opens the filters under them: the two types and
+  the eight levels as picks (4a2), with a reset (arrow-path) beside "Levels". They start on both
+  types and the athlete's level and every one above, so an easier workout waits behind a tap. A
+  workout's level is that of the 20-minute session it is as good as, fatigue counted, so a long
+  catch-up is not graded on its raw reps. With the filters hiding everything, the list says so
+  ("No workouts match these filters."); with nothing at all, "No workouts yet."
 
 Edit and New are the studio, a full-screen chat on the same page and gutter as Home. They rise from
 the bottom like the sheet grown to the full screen, and drop away the same way. They are never a

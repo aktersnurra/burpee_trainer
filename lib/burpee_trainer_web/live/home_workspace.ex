@@ -14,6 +14,8 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
         expanded?: false,
         chooser_open?: false,
         delete_armed_id: nil,
+        filters_open?: false,
+        filters: BurpeeTrainer.Coach.Catalog.default_filters(socket.assigns.current_level),
         active_tab: :workouts,
         instruction: "",
         authoring_stage: :idle,
@@ -29,7 +31,8 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
         local_error: nil,
         expanded_groups: MapSet.new(),
         inspection_rows: [],
-        alternatives_empty?: true
+        alternatives_empty?: true,
+        alternatives_filtered_out?: false
       )
       |> HomeAuthoring.adjustment_form("")
       |> stream(:alternatives, [], dom_id: &"home-alternative-#{&1.id}")

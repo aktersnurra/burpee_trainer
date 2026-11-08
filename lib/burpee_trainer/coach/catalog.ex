@@ -1,10 +1,32 @@
 defmodule BurpeeTrainer.Coach.Catalog do
+  alias BurpeeTrainer.Coach.RepCeiling
   alias BurpeeTrainer.Levels
 
-  def plan_level(p), do: Levels.level_for_count(p.burpee_type, p.target_reps)
+  @types [:six_count, :navy_seal]
 
-  def video_level(%{burpee_count: n, burpee_type: t}) when is_integer(n) and n > 0,
-    do: Levels.level_for_count(t, n)
+  @doc "The drawer's filters as it opens: both types, the athlete's level and every one above."
+  def default_filters(level) do
+    levels = Enum.reverse(Levels.all_levels())
+    %{types: MapSet.new(@types), levels: MapSet.new(Enum.drop(levels, index(level)))}
+  end
+
+  @doc "The items of a type and a level the filters keep."
+  def filter(items, filters, level_fun),
+    do:
+      Enum.filter(items, fn item ->
+        MapSet.member?(filters.types, item.burpee_type) and
+          MapSet.member?(filters.levels, level_fun.(item))
+      end)
+
+  # A workout's level is that of the 20-minute session it is as good as, fatigue counted: a
+  # 40-minute catch-up is not graded on its raw reps.
+  def plan_level(p),
+    do:
+      Levels.level_for_count(p.burpee_type, RepCeiling.pace(p.target_reps, p.target_duration_sec))
+
+  def video_level(%{burpee_count: n, burpee_type: t, duration_sec: d})
+      when is_integer(n) and n > 0 and is_integer(d) and d > 0,
+      do: Levels.level_for_count(t, RepCeiling.pace(n, d))
 
   def video_level(_), do: nil
 

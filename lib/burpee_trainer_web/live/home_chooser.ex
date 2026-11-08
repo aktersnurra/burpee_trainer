@@ -31,6 +31,48 @@ defmodule BurpeeTrainerWeb.HomeChooser do
      |> refresh_alternatives()}
   end
 
+  def handle_event("toggle_filters", _, socket),
+    do: {:noreply, assign(socket, filters_open?: not socket.assigns.filters_open?)}
+
+  # A type or level pill turns its filter on or off; the list follows at once.
+  def handle_event("filter", %{"kind" => kind, "filter" => value}, socket)
+      when kind in ["type", "level"] and is_binary(value) do
+    {key, allowed} =
+      if kind == "type",
+        do: {:types, [:six_count, :navy_seal]},
+        else: {:levels, BurpeeTrainer.Levels.all_levels()}
+
+    case Enum.find(allowed, &(Atom.to_string(&1) == value)) do
+      nil ->
+        {:noreply, socket}
+
+      choice ->
+        set = Map.fetch!(socket.assigns.filters, key)
+
+        set =
+          if MapSet.member?(set, choice),
+            do: MapSet.delete(set, choice),
+            else: MapSet.put(set, choice)
+
+        {:noreply,
+         socket
+         |> assign(filters: Map.put(socket.assigns.filters, key, set), delete_armed_id: nil)
+         |> refresh_alternatives()}
+    end
+  end
+
+  def handle_event("filter", _params, socket), do: {:noreply, socket}
+
+  def handle_event("reset_filters", _, socket),
+    do:
+      {:noreply,
+       socket
+       |> assign(
+         filters: Catalog.default_filters(socket.assigns.current_level),
+         delete_armed_id: nil
+       )
+       |> refresh_alternatives()}
+
   def handle_event("toggle_group", %{"id" => id}, socket) do
     rows =
       if socket.assigns.authoring_stage == :review,
@@ -159,21 +201,24 @@ defmodule BurpeeTrainerWeb.HomeChooser do
 
   def refresh_alternatives(%{assigns: %{home_selection: nil, home_state: :choose}} = socket) do
     a = socket.assigns
+    source = source(a)
 
     items =
       case a.active_tab do
         :workouts ->
-          Workouts.list_library(a.current_scope)
+          source
+          |> Catalog.filter(a.filters, &Catalog.plan_level/1)
           |> Catalog.order_plans([], a.slot, a.current_level)
           |> Enum.map(&alternative_item/1)
 
         :videos ->
-          BurpeeTrainer.Videos.list_home_videos()
+          source
+          |> Catalog.filter(a.filters, &Catalog.video_level/1)
           |> Catalog.order_videos(a.current_level)
           |> Enum.map(&alternative_item/1)
       end
 
-    put_alternatives(socket, items)
+    put_alternatives(socket, items, source != [])
   end
 
   def refresh_alternatives(socket) do
@@ -185,12 +230,14 @@ defmodule BurpeeTrainerWeb.HomeChooser do
         user_id: a.current_scope.user.id
       )
 
+    source = source(a)
+
     items =
       case a.active_tab do
         :workouts ->
           plans =
             Catalog.order_plans(
-              Workouts.list_library(a.current_scope),
+              Catalog.filter(source, a.filters, &Catalog.plan_level/1),
               Map.get(r.ranked_plan_ids, "ids", []),
               a.slot,
               a.current_level
@@ -210,7 +257,8 @@ defmodule BurpeeTrainerWeb.HomeChooser do
           )
 
         :videos ->
-          BurpeeTrainer.Videos.list_home_videos()
+          source
+          |> Catalog.filter(a.filters, &Catalog.video_level/1)
           |> Catalog.order_videos(a.current_level)
           |> Enum.map(
             &%{
@@ -224,15 +272,20 @@ defmodule BurpeeTrainerWeb.HomeChooser do
           )
       end
 
-    put_alternatives(socket, items)
+    put_alternatives(socket, items, source != [])
   end
 
-  defp put_alternatives(socket, items) do
+  # The tab's whole list, before the filters.
+  defp source(%{active_tab: :workouts} = a), do: Workouts.list_library(a.current_scope)
+  defp source(%{active_tab: :videos}), do: BurpeeTrainer.Videos.list_home_videos()
+
+  # `any?`: whether the tab has anything before the filters, so an empty list can say which.
+  defp put_alternatives(socket, items, any?) do
     armed = socket.assigns.delete_armed_id
     items = Enum.map(items, &Map.put(&1, :armed?, &1.kind == :plan and &1.source_id == armed))
 
     socket
-    |> assign(alternatives_empty?: items == [])
+    |> assign(alternatives_empty?: items == [], alternatives_filtered_out?: items == [] and any?)
     |> stream(:alternatives, items, reset: true)
   end
 

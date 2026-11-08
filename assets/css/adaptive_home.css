@@ -1179,3 +1179,17 @@ html[data-vt] :is(.studio, .studio-form, .studio-msg, .home-enter) { animation: 
 .studio-foot-close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .studio-foot #studio-create { min-width: 96px; }
 @media (prefers-reduced-motion: reduce) { .studio-foot-close { transition: none; } .studio-foot-close:active { transform: none; } }
+
+/* The drawer's filters: picks like New's, quiet pills at rest, an "on" one in its tint (a type in
+   its own colour, a level in a soft ink), each a 44px target; the reset sits by "Levels". */
+#home-filters { display: grid; gap: 12px; padding: 12px 0 16px; border-bottom: 1px solid var(--line); animation: home-fade-in var(--motion-quick) ease; }
+#home-filters [role="group"] { display: flex; flex-wrap: wrap; gap: 8px; }
+#home-filters [role="group"] button { min-height: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--fill); color: var(--muted); font: 400 var(--text-body)/1 var(--font-sans); white-space: nowrap; cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, box-shadow var(--motion-quick) ease; }
+#home-filters [role="group"] button:hover { background: var(--fill-hover); }
+#home-filters [role="group"] button[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 30%, transparent); color: var(--ink); }
+#home-filters #home-type-six_count[aria-pressed="true"] { background: color-mix(in srgb, var(--six) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--six) 45%, transparent); color: var(--six); }
+#home-filters #home-type-navy_seal[aria-pressed="true"] { background: color-mix(in srgb, var(--seal) 32%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--seal-line) 60%, transparent); color: color-mix(in srgb, var(--six) 75%, var(--seal-line)); }
+#home-filters [role="group"] button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.home-filter-level-heading { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: var(--text-small); }
+#home-filter-toggle[aria-expanded="true"] { color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { #home-filters, #home-filters [role="group"] button { animation: none; transition: none; } }

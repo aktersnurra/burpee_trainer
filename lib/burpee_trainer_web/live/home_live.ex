@@ -394,7 +394,10 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "close_chooser",
              "tab",
              "select_alternative",
-             "delete_workout"
+             "delete_workout",
+             "toggle_filters",
+             "filter",
+             "reset_filters"
            ] do
     HomeChooser.handle_event(event, params, socket)
   end
@@ -428,6 +431,9 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "open_chooser",
              "select_alternative",
              "tab",
+             "toggle_filters",
+             "filter",
+             "reset_filters",
              "toggle_group"
            ] do
     HomeChooser.handle_event(event, params, socket)

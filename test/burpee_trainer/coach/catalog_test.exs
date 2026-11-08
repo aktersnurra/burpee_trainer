@@ -13,7 +13,13 @@ defmodule BurpeeTrainer.Coach.CatalogTest do
             {2, "a", 100},
             {1, "A", 100}
           ] do
-        %WorkoutVideo{id: id, name: name, burpee_type: :six_count, burpee_count: count}
+        %WorkoutVideo{
+          id: id,
+          name: name,
+          burpee_type: :six_count,
+          burpee_count: count,
+          duration_sec: 1200
+        }
       end
 
     # 100 reps is level 1C, 150 is 1D.
@@ -56,11 +62,35 @@ defmodule BurpeeTrainer.Coach.CatalogTest do
   test "unknown video exclusion and plan levels" do
     assert Catalog.video_level(%WorkoutVideo{burpee_type: :six_count, burpee_count: nil}) == nil
 
+    # Forty minutes holds 1.5 times the reps: 200 in 40 minutes is 133 in 20, not 200.
     assert Catalog.plan_level(%WorkoutPlan{
              burpee_type: :six_count,
              target_reps: 200,
              target_duration_sec: 2400
+           }) ==
+             Catalog.plan_level(%WorkoutPlan{
+               burpee_type: :six_count,
+               target_reps: 133,
+               target_duration_sec: 1200
+             })
+
+    refute Catalog.plan_level(%WorkoutPlan{
+             burpee_type: :six_count,
+             target_reps: 200,
+             target_duration_sec: 2400
            }) == :level_2
+  end
+
+  test "the drawer opens on both types, the athlete's level and every level above" do
+    filters = Catalog.default_filters(:level_1c)
+    assert filters.types == MapSet.new([:six_count, :navy_seal])
+
+    assert filters.levels ==
+             MapSet.new([:level_1c, :level_1d, :level_2, :level_3, :level_4, :graduated])
+
+    easy = %WorkoutPlan{burpee_type: :six_count, target_reps: 10, target_duration_sec: 1200}
+    hard = %WorkoutPlan{burpee_type: :six_count, target_reps: 400, target_duration_sec: 1200}
+    assert Catalog.filter([easy, hard], filters, &Catalog.plan_level/1) == [hard]
   end
 
   test "the coach's ranking leads, unknown and repeated IDs dropped" do
