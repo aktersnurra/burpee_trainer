@@ -185,26 +185,6 @@ defmodule BurpeeTrainer.Coach.Memory do
     {plan.add != [] or plan.forget != [], plan.notes}
   end
 
-  @doc "The owner removes one entry by hand."
-  @spec forget(Scope.t(), integer()) :: :ok | {:error, :not_found}
-  def forget(%Scope{user: %{id: user_id}} = scope, id) when is_integer(id) do
-    query =
-      from n in __MODULE__,
-        where: n.id == ^id and n.user_id == ^user_id and is_nil(n.forgotten_at)
-
-    case Repo.one(query) do
-      nil ->
-        {:error, :not_found}
-
-      note ->
-        note |> Ecto.Changeset.change(forgotten_at: DateTime.utc_now()) |> Repo.update!()
-        broadcast(scope)
-        :ok
-    end
-  end
-
-  def forget(_scope, _id), do: {:error, :not_found}
-
   @doc """
   What to keep and how, for the coach and for Claude; the guidance Hermes gives its agent,
   in a coach's terms.

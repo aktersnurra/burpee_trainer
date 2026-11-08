@@ -61,121 +61,33 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             class="home-history-reps"
             aria-labelledby="home-history-reps-heading"
           >
-            <div class="home-history-trend-heading">
-              <h2 id="home-history-reps-heading">Reps per 20 minutes</h2>
-              <%!-- One icon switches the view: it shows the view it leads to. --%>
-              <button
-                :if={not @state.history_show_sessions?}
-                id="home-history-density-sessions"
-                type="button"
-                class="home-history-switch home-icon-action"
-                phx-click="history_density_mode"
-                phx-value-mode="sessions"
-                aria-label="Show sessions"
-                title="Sessions"
-              >
-                <.icon name="hero-list-bullet" class="size-5" />
-              </button>
-              <button
-                :if={@state.history_show_sessions?}
-                id="home-history-density-back"
-                type="button"
-                class="home-history-switch home-icon-action"
-                aria-label="Show chart"
-                title="Chart"
-                phx-click="history_density_mode"
-                phx-value-mode="chart"
-              >
-                <.icon name="hero-chart-bar" class="size-5" />
-              </button>
-            </div>
-            <%!-- The window scopes the chart and the sessions, not the grid above. --%>
-            <div role="group" aria-label="Period" class="home-history-periods">
-              <button
-                :for={
-                  {label, value} <- [
-                    {"12 weeks", "twelve_weeks"},
-                    {"Year", "year"},
-                    {"All time", "all"}
-                  ]
-                }
-                id={"home-history-period-#{value}"}
-                type="button"
-                class="home-history-period"
-                phx-click="history_period"
-                phx-value-period={value}
-                aria-pressed={to_string(@state.history_period == value)}
-              >
-                {label}
-              </button>
-            </div>
+            <h2 id="home-history-reps-heading" class="home-history-trend-heading">
+              Reps per 20 minutes
+            </h2>
             <.trend_chart
               points={@state.history_points}
               empty?={@state.history_empty?}
-              period={@state.history_period}
               period_start={List.first(@state.history_weeks).start}
               now={@state.history_snapshot_now}
-              show_sessions?={@state.history_show_sessions?}
               gauges={@state.history_gauges}
             />
-            <section
-              id="home-history-sessions-panel"
-              hidden={not @state.history_show_sessions?}
-              inert={not @state.history_show_sessions?}
-              aria-label="Saved sessions"
-              class="home-history-sessions-panel"
+            <%!-- The session a point opened: when, its reps and time, and the bin. --%>
+            <table
+              :if={@state.history_selected_session}
+              id="home-history-opened"
+              class="home-history-table"
             >
-              <h3
-                :if={is_nil(@state.history_error) and @state.history_available?}
-                id="home-history-sessions-heading"
-                tabindex="-1"
-                class="home-history-sessions-heading sr-only"
-              >
-                Sessions
-              </h3>
-              <div
-                :if={not @state.history_empty? and is_nil(@state.history_error)}
-                id="home-history-table-region"
-                phx-remove={removed_target_focus("home-history-table-region")}
-                role="region"
-                aria-label="Saved workout sessions"
-                tabindex="0"
-                class="home-history-table-region"
-              >
-                <table id="home-history-table" class="home-history-table">
-                  <caption class="sr-only">Saved sessions; actual reps and duration</caption>
-                  <thead class="sr-only">
-                    <tr>
-                      <th scope="col">Workout</th>
-                      <th scope="col">Reps</th>
-                      <th scope="col">Duration</th>
-                    </tr>
-                  </thead>
-                  <tbody id="home-history-sessions" phx-update="stream">
-                    <.session_row
-                      :for={{id, session} <- @state.streams.history_sessions}
-                      id={id}
-                      session={session}
-                      timezone={@state.current_scope.user.timezone}
-                      expanded?={@state.history_selected_id == session.id}
-                      confirm?={@state.history_confirm_delete?}
-                    />
-                  </tbody>
-                </table>
-              </div>
-              <button
-                :if={@state.history_has_more?}
-                id="home-history-more"
-                phx-remove={removed_target_focus("home-history-more")}
-                type="button"
-                class="home-history-more home-icon-action"
-                phx-click="history_more"
-                aria-label="Load more sessions"
-                title="More sessions"
-              >
-                <.icon name="hero-chevron-down" class="size-5" />
-              </button>
-            </section>
+              <caption class="sr-only">The session you opened</caption>
+              <tbody>
+                <.session_row
+                  id={"home-history-session-#{@state.history_selected_session.id}"}
+                  session={@state.history_selected_session}
+                  timezone={@state.current_scope.user.timezone}
+                  expanded?={true}
+                  confirm?={@state.history_confirm_delete?}
+                />
+              </tbody>
+            </table>
           </section>
         <% end %>
         <p
@@ -188,13 +100,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           <% else %>
             No workouts yet. Complete a workout to begin tracking your training.
           <% end %>
-        </p>
-        <p
-          :if={not @state.history_empty? and is_nil(@state.history_error)}
-          id="home-history-count"
-          class="sr-only"
-        >
-          {@state.history_loaded_count} sessions shown
         </p>
       </div>
     </section>
@@ -380,20 +285,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           "%-d %b"
         )}
       </p>
-      <button
-        :if={@gauge.kind in [:reached, :best]}
-        id={"progress-set-goal-#{@gauge.burpee_type}"}
-        type="button"
-        class="progress-gauge-set"
-        phx-click="progress_set_goal"
-        phx-value-type={@gauge.burpee_type}
-        aria-label={"Set goal: #{Fmt.goal_title(@gauge.next)} #{Fmt.goal_by(@gauge.next)}"}
-      >
-        <span class="progress-gauge-pill">
-          <.icon name="hero-plus" class="size-4" />
-          <span>Goal {@gauge.next.burpee_count_target} {Fmt.goal_by(@gauge.next)}</span>
-        </span>
-      </button>
     </section>
     """
   end
@@ -435,10 +326,8 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
   attr(:points, :map, required: true)
   attr(:empty?, :boolean, required: true)
-  attr(:period, :string, default: "twelve_weeks")
   attr(:period_start, :any, default: nil)
   attr(:now, :any, default: nil)
-  attr(:show_sessions?, :boolean, default: false)
   attr(:gauges, :list, default: [])
 
   # One chart for both types on one time axis, each on its own scale: six-count reads off the
@@ -485,8 +374,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       id="home-history-trend"
       phx-remove={removed_target_focus("home-history-trend")}
       class="home-history-trend"
-      hidden={@show_sessions?}
-      inert={@show_sessions?}
       aria-labelledby="home-history-reps-heading"
     >
       <%= if @empty? or @plots == [] do %>
@@ -518,13 +405,6 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             <span style={"top: #{@plot_bottom}%"}>{plot.lo}</span>
           </div>
           <div class="home-history-plot-area">
-            <button
-              type="button"
-              aria-label="Show saved sessions"
-              phx-click="history_density_mode"
-              phx-value-mode="sessions"
-              class="home-history-trend-open-sessions"
-            ></button>
             <svg
               viewBox="0 0 100 100"
               preserveAspectRatio="none"

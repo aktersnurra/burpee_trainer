@@ -68,7 +68,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view = history_route(conn, view)
     assert has_element?(view, "#home-history-empty")
     refute has_element?(view, "#home-history-status, #home-history-weekly")
-    refute has_element?(view, "#home-history-period-twelve_weeks, .home-history-sessions-heading")
+    refute has_element?(view, "#home-history-reps")
 
     # The week's progress stays on top; on History it is the way back Home.
     assert has_element?(view, "#history-progress #home-week-track")
@@ -287,8 +287,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-result-actual-seconds[data-duration-sec='4800']", "1:20:00")
     view = history_route(conn, view)
     assert has_element?(view, "#home-history-trend")
-    assert has_element?(view, "#home-history-period-twelve_weeks[aria-pressed=true]")
-    # A point selects its session in the list: the row has the numbers.
+    # A point opens its session under the chart: the row has the numbers.
     view |> element("#home-history-point-#{saved.id}") |> render_click()
     assert has_element?(view, "#home-history-inspect-#{saved.id}[aria-pressed=true]")
 
@@ -307,25 +306,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert Repo.reload!(saved) == saved
   end
 
-  test "History shows the density chart by default and swaps to saved sessions on request", %{
-    conn: conn,
-    user: user
-  } do
-    saved = complete_history(user, DateTime.utc_now(:second), 1_200)
-    {:ok, view, _} = live(conn, ~p"/")
-    view = history_route(conn, view)
-
-    assert has_element?(view, "#home-history-trend:not([hidden])")
-    assert has_element?(view, "#home-history-sessions-panel[hidden]")
-    view |> element("#home-history-density-sessions") |> render_click()
-    assert has_element?(view, "#home-history-trend[hidden]")
-    assert has_element?(view, "#home-history-sessions-panel:not([hidden])")
-    assert has_element?(view, "#home-history-inspect-#{saved.id}")
-    view |> element("#home-history-density-back") |> render_click()
-    assert has_element?(view, "#home-history-trend:not([hidden])")
-    assert has_element?(view, "#home-history-sessions-panel[hidden]")
-  end
-
   test "failed deletion says so in place and the session can still close", %{
     conn: conn,
     user: user
@@ -333,7 +313,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     saved = complete_history(user, DateTime.utc_now(:second), 1_200)
     {:ok, view, _} = live(conn, ~p"/")
     view = history_route(conn, view)
-    view |> element("#home-history-inspect-#{saved.id}") |> render_click()
+    view |> element("#home-history-point-#{saved.id}") |> render_click()
     view |> element("#home-history-delete-#{saved.id}") |> render_click()
     Repo.delete!(saved)
     view |> element("#home-history-delete-#{saved.id}") |> render_click()
@@ -370,8 +350,8 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view = history_route(conn, view)
 
     trash = "#home-history-delete-#{saved.id}"
-    view |> element("#home-history-inspect-#{saved.id}") |> render_click()
-    # The first tap on the trash arms it; tapping the row again lets go of it.
+    view |> element("#home-history-point-#{saved.id}") |> render_click()
+    # The first tap on the trash arms it; closing the session lets go of it.
     view |> element(trash) |> render_click()
 
     assert has_element?(
@@ -380,8 +360,9 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
            )
 
     view |> element("#home-history-inspect-#{saved.id}") |> render_click()
+    refute has_element?(view, trash)
     assert Repo.reload!(saved) == saved
-    view |> element("#home-history-inspect-#{saved.id}") |> render_click()
+    view |> element("#home-history-point-#{saved.id}") |> render_click()
     refute has_element?(view, "#{trash}.home-history-session-delete-armed")
     view |> element(trash) |> render_click()
     view |> element(trash) |> render_click()
@@ -496,34 +477,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert Repo.aggregate(WorkoutSession, :count) == 0
   end
 
-  test "History range changes the chart and its sessions together, not the day grid", %{
-    user: user
-  } do
-    now = ~U[2026-09-23 12:00:00Z]
-    recent = complete_history(user, now, 1200)
-    previous_year = complete_history(user, ~U[2025-08-01 12:00:00Z], 1200)
-    socket = mounted_socket(user) |> Phoenix.Component.assign(home_now: fn -> now end)
-    {:noreply, recent_view} = workspace_screen(socket, :history)
-    # The chart starts at the first week with training: only this week in the last 12.
-    assert length(recent_view.assigns.history_weeks) == 1
-    assert recent.id in Enum.map(recent_view.assigns.history_points.six_count, & &1.id)
-    refute previous_year.id in Enum.map(recent_view.assigns.history_points.six_count, & &1.id)
-
-    {:noreply, year_view} =
-      HomeLive.handle_event("history_period", %{"period" => "year"}, recent_view)
-
-    assert length(year_view.assigns.history_weeks) == 1
-    assert length(year_view.assigns.history_points.six_count) == 1
-
-    {:noreply, all_view} =
-      HomeLive.handle_event("history_period", %{"period" => "all"}, year_view)
-
-    assert length(all_view.assigns.history_weeks) > 52
-    # The day grid holds its recent weeks whatever the window.
-    assert all_view.assigns.history_grid_weeks == recent_view.assigns.history_grid_weeks
-    assert length(all_view.assigns.history_points.six_count) == 2
-  end
-
   test "History opening moves focus to its heading and closing restores Home and focus",
        %{
          conn: conn,
@@ -560,58 +513,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     after_close = :sys.get_state(view.pid).socket
     assert_workspace_unchanged(before, after_close)
     assert after_close.redirected == nil
-  end
-
-  test "older chart inspection and repeated pages retain sorted unique rows and expansion", %{
-    conn: conn,
-    user: user
-  } do
-    now = DateTime.utc_now(:second)
-    sessions = for seconds <- 1..12, do: complete_history(user, DateTime.add(now, -seconds), 1200)
-    newest = hd(sessions)
-    oldest = List.last(sessions)
-    {:ok, view, _} = live(conn, ~p"/")
-    view = history_route(conn, view)
-    view |> element("#home-history-period-all") |> render_click()
-    refute has_element?(view, "#home-history-session-#{oldest.id}")
-    cursor = :sys.get_state(view.pid).socket.assigns.history_cursor
-    view |> element("#home-history-point-#{oldest.id}") |> render_click()
-    assert :sys.get_state(view.pid).socket.assigns.history_cursor == cursor
-    assert has_element?(view, "#home-history-inspect-#{oldest.id}[aria-pressed=true]")
-    view |> element("#home-history-point-#{newest.id}") |> render_click()
-
-    for expected_count <- [11, 12] do
-      assert has_element?(
-               view,
-               "#home-history-more[aria-label='Load more sessions'] .hero-chevron-down"
-             )
-
-      view |> element("#home-history-more") |> render_click()
-
-      ids =
-        render(view)
-        |> LazyHTML.from_fragment()
-        |> LazyHTML.query("#home-history-sessions > tr")
-        |> LazyHTML.attribute("id")
-
-      expected =
-        sessions
-        |> Enum.take(expected_count - 1)
-        |> Kernel.++([oldest])
-        |> Enum.uniq_by(& &1.id)
-        |> Enum.map(&"home-history-session-#{&1.id}")
-
-      assert ids == expected
-      assert length(ids) == expected_count
-      assert has_element?(view, "#home-history-inspect-#{newest.id}[aria-pressed=true]")
-    end
-
-    refute has_element?(view, "#home-history-more")
-    refute has_element?(view, "#home-history-pagination-terminal")
-    view |> element("#home-history-inspect-#{oldest.id}") |> render_click()
-    refute has_element?(view, "#home-history-inspect-#{oldest.id}[aria-pressed=true]")
-    refute has_element?(view, "#home-history-inspect-#{newest.id}[aria-pressed=true]")
-    for saved <- sessions, do: assert(Repo.reload!(saved) == saved)
   end
 
   test "History inspection ignores hostile or hidden IDs and never mutates sessions", %{
@@ -651,12 +552,8 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
         ] do
       render_click(view, "history_session", params)
       after_event = :sys.get_state(view.pid).socket.assigns
-      assert after_event.history_expanded == before.history_expanded
-      assert after_event.history_loaded_ids == before.history_loaded_ids
+      assert after_event.history_selected_session == before.history_selected_session
     end
-
-    render_click(view, "history_period", %{"period" => "unknown"})
-    assert has_element?(view, "#home-history-period-twelve_weeks[aria-pressed=true]")
 
     for rejected <- [foreign, deleted, started, old, future] do
       refute has_element?(view, "#home-history-session-#{rejected.id}")
@@ -666,7 +563,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     for saved <- [owned, foreign, started, old, future], do: assert(Repo.reload!(saved) == saved)
   end
 
-  test "today actual totals and streamed session details use both types without a second Start",
+  test "today actual totals and the chart's points use both types without a second Start",
        %{conn: conn, user: user} do
     now = DateTime.utc_now(:second)
     first = complete_history(user, now, 600)
@@ -702,7 +599,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#home-history-close[phx-click=close_history]")
 
     for row <- [first, second] do
-      assert has_element?(view, "#home-history-inspect-#{row.id}")
+      assert has_element?(view, "#home-history-point-#{row.id}")
     end
 
     view = home_route(conn, view)
@@ -753,7 +650,6 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert has_element?(view, "#resume-recommended-workout[phx-value-session-id='#{started.id}']")
     refute has_element?(view, "#home-done-today, #home-week-complete, #home-action")
     view = history_route(conn, view)
-    view |> element("#home-history-period-all") |> render_click()
     view = home_route(conn, view)
 
     render_click(view, "start_workout", %{"client_session_id" => Ecto.UUID.generate()})
@@ -822,7 +718,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     view
   end
 
-  defp mounted_socket(user, now \\ DateTime.utc_now(:second)) do
+  defp mounted_socket(user, now) do
     socket = %Phoenix.LiveView.Socket{
       endpoint: BurpeeTrainerWeb.Endpoint,
       private: %{lifecycle: %Phoenix.LiveView.Lifecycle{}},
@@ -860,13 +756,13 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     assert Map.take(before.assigns, keys) == Map.take(after_socket.assigns, keys)
   end
 
-  test "a session's row carries its tags", %{conn: conn, user: user} do
+  test "an opened session carries its tags", %{conn: conn, user: user} do
     completed_at = DateTime.utc_now(:second)
     tagged = complete_history(user, completed_at, 1_200, tags: "heat, low_energy")
     plain = complete_history(user, DateTime.add(completed_at, -1, :second), 1_200)
     {:ok, view, _} = live(conn, ~p"/")
     view = history_route(conn, view)
-    view |> element("#home-history-density-sessions") |> render_click()
+    view |> element("#home-history-point-#{tagged.id}") |> render_click()
 
     assert has_element?(
              view,
@@ -880,6 +776,7 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
              "Low energy"
            )
 
+    view |> element("#home-history-point-#{plain.id}") |> render_click()
     refute has_element?(view, "#home-history-inspect-#{plain.id} .home-history-session-tag")
   end
 

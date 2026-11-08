@@ -177,15 +177,15 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
   test "nil-selection Delete reports actual absent-fallback rejection without effects",
        %{view: view, plan: plan, user: user, foreign: foreign, archived: archived} do
     open_swap(view)
-
-    assert has_element?(
-             view,
-             "#home-delete-workout-#{plan.id}[phx-click=delete_workout][data-confirm='Delete this workout? Past sessions will be kept.']"
-           )
-
+    trash = "#home-delete-workout-#{plan.id}"
     before_rows = all_table_rows()
+    # The first tap arms the trash in place, with no browser dialog; nothing changes yet.
+    refute has_element?(view, "#{trash}[data-confirm]")
+    view |> element(trash) |> render_click()
+    assert has_element?(view, "#{trash}.home-delete-workout-armed[aria-label^='Confirm delete']")
+    assert all_table_rows() == before_rows
     before_assigns = stable_assigns(view)
-    view |> element("#home-delete-workout-#{plan.id}") |> render_click()
+    view |> element(trash) |> render_click()
 
     assert has_element?(
              view,
@@ -199,6 +199,7 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
     assert Workouts.current_home_selection(Scope.for_user(user), before_assigns.slot) == nil
 
     for id <- [foreign.id, archived.id] do
+      render_click(view, "delete_workout", %{"id" => to_string(id)})
       render_click(view, "delete_workout", %{"id" => to_string(id)})
 
       assert has_element?(
@@ -237,6 +238,9 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
     before_rows = all_table_rows()
     before_assigns = stable_assigns(view)
 
+    # Armed, each tap tries the deletion again.
+    view |> element("#home-delete-workout-#{plan.id}") |> render_click()
+
     for _ <- 1..2 do
       view |> element("#home-delete-workout-#{plan.id}") |> render_click()
       assert_push_event(view, "home_chooser_rejected", %{})
@@ -259,7 +263,8 @@ defmodule BurpeeTrainerWeb.HomeChooseRecoveryTest do
     |> :sys.get_state()
     |> Map.fetch!(:socket)
     |> Map.fetch!(:assigns)
-    |> Map.drop([:flash, :__changed__])
+    # The armed trash is the tap itself, not an effect of the rejection.
+    |> Map.drop([:flash, :__changed__, :delete_armed_id, :streams])
   end
 
   defp all_table_rows do

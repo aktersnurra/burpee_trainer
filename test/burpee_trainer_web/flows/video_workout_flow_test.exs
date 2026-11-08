@@ -26,6 +26,6 @@ defmodule BurpeeTrainerWeb.Flows.VideoWorkoutFlowTest do
     completed = Repo.get!(WorkoutSession, String.to_integer(id))
     assert completed.state == :completed
     {:ok, history, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/progress")
-    assert has_element?(history, "#home-history-session-#{completed.id}")
+    assert has_element?(history, "#home-history-point-#{completed.id}")
   end
 end

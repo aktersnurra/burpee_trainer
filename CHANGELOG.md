@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-08 — Progress is one chart; deleting asks in place
+
+- **Chart**: "Reps per 20 minutes" reads a session longer than 20 minutes as the 20-minute session it is as good as, fatigue counted, so a good 40-minute session no longer looks weaker.
+- **Progress**: one chart over the last 12 weeks. The window tabs, the chart/sessions switch, the session list and its paging are gone; a point opens its session under the chart, with its trash. The "+ Goal" pill is gone too (goals are set with the coach).
+- **Coach memory**: the sheet is read only; the × on each line is gone. To change a line, tell the coach.
+- **Drawer**: deleting a workout no longer opens a browser dialog. The first tap arms its trash in place, the second deletes.
+
 ## 2026-11-08 — Longer sessions count the fatigue
 
 - **Catch-up reps**: a session longer than 20 minutes is no longer planned as 20-minute sessions back to back. Forty minutes holds one and a half times a good 20-minute session's reps, and the same curve gives an hour about 1.9 times (70 Navy SEAL in 20 minutes: 105 in forty, about 133 in an hour, not 210). The rep ceiling, the progression range, the coach's prompt (which now gets the slot's range as total reps) and New's starting reps all use it.

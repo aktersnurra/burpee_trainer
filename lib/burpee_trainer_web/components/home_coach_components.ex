@@ -484,19 +484,6 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
               data-changed={to_string(entry.text in @updated)}
             >
               <span>{entry.text}</span>
-              <button
-                id={"coach-memory-forget-#{entry.id}"}
-                type="button"
-                class="coach-memory-forget"
-                phx-click={
-                  JS.push("coach_memory_forget", value: %{id: entry.id})
-                  |> JS.focus(to: "#coach-memory-close")
-                }
-                aria-label={"Forget: #{entry.text}"}
-                title="Forget"
-              >
-                <.icon name="hero-x-mark" class="size-4" />
-              </button>
             </li>
           </ul>
         </section>

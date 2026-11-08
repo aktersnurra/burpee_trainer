@@ -128,7 +128,7 @@ defmodule BurpeeTrainerWeb.Flows.NewWorkoutFlowTest do
 
     assert_reply(runner, %{status: "ok"})
     {:ok, history, _} = live(conn, ~p"/progress")
-    assert has_element?(history, "#home-history-session-#{session.id}")
+    assert has_element?(history, "#home-history-point-#{session.id}")
   end
 
   test "New fits recorded fixed pauses exactly before publishing without selecting", %{

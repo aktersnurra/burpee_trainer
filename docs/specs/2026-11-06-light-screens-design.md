@@ -68,19 +68,19 @@ A choice is a soft tint of its colour with a thin ring of it and text in the ful
   deletes, anything else lets go.
 - **Progress.** The week bar; `Level 1A` as the one headline with the streak (amber flame)
   opposite; "Best in 20 minutes" over two columns, each with the type's mark and name, the best
-  (30px), `✓ 1B needs 50`, and the goal pill; the coach's look-back as one paragraph under the
+  (30px), `✓ 1B needs 50`, and the goal when it has one; the coach's look-back as one paragraph under the
   page's only rule, all of it a link to the Coach page; "Days you trained": a GitHub-style grid,
   square cells, a column a week from Monday, as many weeks as fit (18 on a phone), Mon/Wed/Fri
   labels, month labels, each day navy / sky / split diagonally for both, a key with the total
-  minutes; "Reps per 20 minutes": the window tabs (12 weeks, Year, All time) scope only the chart;
-  one chart, close to square, six-count on the left axis as a solid navy line, Navy SEAL on the
+  minutes; "Reps per 20 minutes": the last 12 weeks, no window tabs or session list, a point
+  opening its session (with its trash) under the chart; one chart, close to square, six-count on the left axis as a solid navy line, Navy SEAL on the
   right axis as a dashed sky line, each axis labelled in its colour.
 - **Coach.** A page of its own, reached from Home's coach bookmark and from Progress's look-back.
   Back chevron, "Coach", the memory bookmark on the right. The week as one card, closed to "This
   week" and its minutes against the target, open on its sessions (no week bar under the header),
   then the chat (the same as Home done's), suggestions, the box. From Progress the look-back is
   the first message. The bookmark opens the memory sheet: "About you" and "Coaching notes", each
-  with how full it is, each line with × to forget, "To change a line, tell the coach." at the
+  with how full it is, the lines read only, "To change a line, tell the coach." at the
   foot; a line the coach just changed is highlighted. Back returns where you came from.
 
 ## Runner

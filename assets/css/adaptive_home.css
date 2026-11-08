@@ -404,36 +404,6 @@ button.home-summary:hover .home-workout-name {
   justify-content: space-between;
   gap: 1rem;
 }
-.home-history-more {
-  min-width: 44px;
-  min-height: 44px;
-  border: 1px solid var(--line);
-  border-radius: 0.75rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.5rem 0.75rem;
-}
-.home-history-periods {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.25rem;
-  padding: 0.25rem;
-  border: 1px solid var(--line);
-  border-radius: 0.875rem;
-}
-.home-history-period {
-  min-height: 44px;
-  border-radius: 0.625rem;
-  padding: 0.5rem 0.25rem;
-  color: var(--muted);
-  font-size: var(--text-small);
-  font-weight: 600;
-}
-.home-history-period[aria-pressed="true"] {
-  background: var(--focus);
-  color: white;
-}
 .home-history-trend,
 .home-history-session-card > td {
   border: 1px solid var(--line);
@@ -477,9 +447,6 @@ button.home-summary:hover .home-workout-name {
 .home-history-empty {
   color: var(--muted);
   font-size: var(--text-small);
-}
-.home-history-table-region {
-  max-width: 100%;
 }
 .home-history-table {
   width: 100%;
@@ -525,8 +492,6 @@ button.home-summary:hover .home-workout-name {
   color: var(--muted);
   font-size: var(--text-small);
 }
-.home-history-period:focus-visible,
-.home-history-more:focus-visible,
 .home-history-session-toggle:focus-visible,
 .home-history-point:focus-visible {
   outline: 2px solid var(--focus);
@@ -592,11 +557,8 @@ button.home-summary:hover .home-workout-name {
 
 .home-history-streak-line { white-space: nowrap; }
 .home-history-streak-line strong { font: 600 var(--text-display)/1 var(--font-sans); letter-spacing: -.02em; }
-.home-history-periods { display: flex; gap: 24px; padding: 0; margin-top: 20px; border: 0; border-radius: 0; }
-.home-history-period { border-radius: 0; min-height: 44px; padding: 10px 0; font-weight: 400; font-size: var(--text-body); border-bottom: 1.5px solid transparent; }
-.home-history-period[aria-pressed='true'] { background: transparent; color: var(--ink); border-bottom-color: var(--ink); }
 #home-history-weekly, .home-history-reps { margin-top: 28px; }
-:is(#home-history-weekly, .home-history-reps) h2, .home-history-sessions-heading { font-size: var(--text-body); font-weight: 600; }
+:is(#home-history-weekly, .home-history-reps) h2 { font-size: var(--text-body); font-weight: 600; }
 /* Days you trained, as GitHub draws contributions: a column a week from Monday, Monday on top,
    month names over the weeks that start them, each day in its type's colour (split diagonally
    for both). The cells are square and share the width: 18 weeks on a phone, 34 in the 640px
@@ -637,7 +599,6 @@ button.home-summary:hover .home-workout-name {
 .home-history-svg { color: var(--six); }
 .home-history-point span { width: 8px; height: 8px; border: 1.5px solid var(--six); border-radius: 0; background: var(--color-base-100); }
 .home-history-point-navy-seal span { border-color: var(--seal-line); }
-.home-history-sessions-heading { margin-top: 44px; }
 .home-history-table { table-layout: auto; }
 .home-history-session-card > td { padding: 7px 0; margin-top: 0; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; }
 @media (max-width: 600px) { .adaptive-home { padding-inline: var(--gutter); } }
@@ -647,22 +608,19 @@ button.home-summary:hover .home-workout-name {
 .home-history-point-six-count span { background: var(--color-base-100); border-color: var(--six); }
 .home-history-point-navy-seal span { background: var(--color-base-100); border-color: var(--seal-line); border-radius: 0; }
 #home-history-empty { margin-top: 24px; }
-/* The approved density view swaps its chart and session list in the same place. */
-#home-history-trend, #home-history-sessions-panel { max-width: 640px; }
-#home-history-trend[hidden], #home-history-sessions-panel[hidden] { display: none; }
-.home-history-trend-open-sessions { position: absolute; inset: 0; z-index: 2; width: 100%; height: 100%; cursor: pointer; }
+/* The chart, and under it the session a point opened. */
+#home-history-trend, #home-history-opened { max-width: 640px; }
 .home-history-point { z-index: 3; }
-.home-history-sessions-panel { margin-top: 12px; }
-.home-history-sessions-panel .home-history-sessions-heading { margin: 0; }
-.home-history-session-columns, .home-history-sessions-panel .home-history-session-toggle {
+#home-history-opened { margin-top: 12px; }
+#home-history-opened .home-history-session-toggle {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 44px 55px;
   gap: 9px;
   align-items: center;
 }
-.home-history-session-columns span:nth-child(n+2), .home-history-session-reps, .home-history-session-time { text-align: right; }
-.home-history-sessions-panel .home-history-session-card > td { padding: 0; border-top: 0; }
-.home-history-sessions-panel .home-history-session-toggle { min-height: 44px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.home-history-session-reps, .home-history-session-time { text-align: right; }
+#home-history-opened .home-history-session-card > td { padding: 0; border-top: 0; }
+#home-history-opened .home-history-session-toggle { min-height: 44px; padding: 14px 0; border-bottom: 1px solid var(--line); }
 .home-history-session-summary { min-width: 0; }
 .home-history-session-name { display: block; font-weight: 550; }
 .home-history-session-summary small { display: block; margin-top: 3px; color: var(--muted); font-size: var(--text-small); }
@@ -790,8 +748,6 @@ button.home-summary:hover .home-workout-name {
 :is(.adaptive-home, .studio) #home-inspection:has(.home-changed) { max-width: 648px; margin-inline: -4px; padding-inline: 4px; }
 /* New's title lands exactly where the open workout's title was. */
 #home-ready-recommendation[data-expanded="true"]:has(#home-authoring-heading) { margin-top: 56px; }
-/* The window tabs sit right under the chart's heading, on a line across the column. */
-.home-history-periods { margin-top: 4px; border-bottom: 1px solid var(--line); }
 /* A finished day reads like the workout did: centred in Home's column, at the hero's height. */
 #home-done-today, #home-week-complete { max-width: 354px; margin: clamp(65px, 12vh, 150px) auto 0; padding: 0; border: 0; text-align: center; }
 #home-done-today .home-result-meta, #home-week-complete .home-result-meta { margin-top: 12px; color: var(--muted); font-size: var(--text-body); }
@@ -820,11 +776,6 @@ a.history-look-back:focus-visible { outline: 2px solid var(--focus); outline-off
 .progress-course-caption { margin-top: 8px; color: var(--muted); font-size: var(--text-small); }
 .progress-course-caption.progress-course-on { color: var(--ink); }
 /* The next goal is a quiet pill in a 44px target. */
-.adaptive-home .progress-gauge-set { align-self: flex-start; min-height: 44px; margin-top: 4px; padding: 0; color: var(--ink); font-size: var(--text-small); }
-.progress-gauge-pill { display: inline-flex; align-items: center; gap: 4px; padding: 8px 12px; border-radius: 999px; background: var(--fill); transition: background var(--motion-quick) ease; }
-.progress-gauge-set:hover .progress-gauge-pill { background: var(--fill-hover); }
-.progress-gauge-set:focus-visible { outline: none; }
-.progress-gauge-set:focus-visible .progress-gauge-pill { outline: 2px solid var(--focus); outline-offset: 2px; }
 .progress-gauge-needs { display: flex; align-items: center; gap: 4px; margin-top: 8px; color: var(--ink); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .progress-gauge-meter span { transition: none; } }
 .home-result-status { color: var(--muted); }
@@ -852,9 +803,9 @@ a.history-look-back:focus-visible { outline: 2px solid var(--focus); outline-off
 /* Actions are icons: a 44px target, the icon centred, the label for screen readers. */
 .adaptive-home .home-icon-action { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; padding: 0; }
 .adaptive-home .home-primary-action.home-icon-action { width: var(--pill-h); }
-/* Sessions: one row each, the type in its chart colour; a tapped row shows its trash. */
+/* The opened session: one row, the type in its chart colour, and its trash. */
 .home-history-session-line { display: flex; align-items: center; border-bottom: 1px solid var(--line); }
-.adaptive-home .home-history-sessions-panel .home-history-session-toggle { flex: 1; min-width: 0; border-bottom: 0; text-align: left; }
+.adaptive-home #home-history-opened .home-history-session-toggle { flex: 1; min-width: 0; border-bottom: 0; text-align: left; }
 .adaptive-home .home-history-session-name { display: flex; align-items: center; gap: 8px; font-weight: 400; }
 .home-history-session-name::before { content: ""; flex: none; width: 14px; border-top: 2px solid currentColor; }
 .home-history-session-name.progress-key-navy-seal::before { border-top-style: dashed; }
@@ -865,9 +816,8 @@ a.history-look-back:focus-visible { outline: 2px solid var(--focus); outline-off
 .home-history-session-tag::before { content: " · "; }
 .home-history-session-selected .home-history-session-toggle { color: var(--ink); }
 .home-history-session-delete { margin-left: 4px; color: var(--muted); background: transparent; border: 0; animation: home-fade-in var(--motion-quick) ease; }
-.home-history-session-delete-armed { color: #a55643; }
+.home-history-session-delete-armed, .home-alternative-row .home-delete-workout-armed { color: #a55643; }
 @keyframes home-fade-in { from { opacity: 0; } to { opacity: 1; } }
-.adaptive-home .home-history-more { display: flex; width: 100%; margin-top: 4px; border: 0; color: var(--muted); background: transparent; }
 @media (prefers-reduced-motion: reduce) { .home-history-session-delete { animation: none; } }
 
 /* The streak sits opposite the level: a flame and the weeks in a row at the target. */
@@ -876,8 +826,6 @@ a.history-look-back:focus-visible { outline: 2px solid var(--focus); outline-off
 /* What the coach noted or forgot: a quiet line between exchanges. */
 .coach-memory { display: flex; align-items: flex-start; gap: 8px; color: var(--muted); font-size: var(--text-small); line-height: 1.5; }
 .coach-memory .size-4 { flex: none; margin-top: 2px; }
-/* A view switch is one icon showing the view it leads to; it sits at the heading's end. */
-.adaptive-home .home-history-switch { margin-right: -10px; }
 /* A workout in progress sits where the workout and the result do, centred like them. */
 #home-ready-recommendation.home-resume { max-width: 354px; margin: clamp(65px, 12vh, 150px) auto 0; padding: 0; border: 0; text-align: center; }
 .home-resume .home-state-heading { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
@@ -981,10 +929,10 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .home-corner .home-corner-action:hover { background: var(--color-base-300); }
 
 /* One icon button everywhere: 44px, plain and muted, filled on hover, pressed in on a tap. */
-.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch, .coach-page-action { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--muted); cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
-:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch, .coach-page-action):hover { background: var(--color-base-300); color: var(--ink); }
-:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch, .coach-page-action):active { transform: scale(.94); }
-:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch, .coach-page-action):focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .coach-page-action { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--muted); cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
+:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .coach-page-action):hover { background: var(--color-base-300); color: var(--ink); }
+:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .coach-page-action):active { transform: scale(.94); }
+:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .coach-page-action):focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
 /* A sheet rises from the bottom edge over a fading backdrop; its grip sits at its top edge. */
 @keyframes sheet-up { from { transform: translateY(100%); } }
@@ -1146,9 +1094,6 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .coach-memory-entries li > span { flex: 1; padding: 8px 0; }
 /* A line the coach changed this week wears the diff's cobalt highlight. */
 .coach-memory-entries li[data-changed="true"] > span { flex: 0 1 auto; margin-right: auto; padding: 0 4px; margin-left: -4px; border-radius: 3px; background: color-mix(in srgb, var(--cobalt) 16%, transparent); }
-.coach-memory-forget { flex: none; display: grid; place-items: center; width: 44px; height: 44px; margin-right: -12px; border: 0; border-radius: 12px; background: transparent; color: var(--muted); cursor: pointer; }
-.coach-memory-forget:hover { background: var(--color-base-300); color: var(--ink); }
-.coach-memory-forget:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .coach-memory-foot { margin: 16px 0 0; color: var(--muted); font-size: var(--text-small); }
 
 /* ---- Moving between views (Home, Progress, New, Edit): the week bar holds still while the page
@@ -1190,7 +1135,7 @@ html[data-vt] :is(.studio, .studio-form, .studio-msg, .home-enter) { animation: 
 /* Buttons that start or change something press in under the finger. */
 :is(.home-primary-action, .studio-number-button, .home-start-choice) { transition: background var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
 :is(.home-primary-action, .studio-number-button, .home-start-choice):active:not(:disabled) { transform: scale(.96); }
-@media (prefers-reduced-motion: reduce) { :is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-history-switch, .home-primary-action, .studio-number-button, .home-start-choice):active { transform: none; } }
+@media (prefers-reduced-motion: reduce) { :is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-primary-action, .studio-number-button, .home-start-choice):active { transform: none; } }
 
 /* ---- New as big numbers: the burpee as two pills, duration and reps large and centred with a
    plain step either side, the structure they make as a sentence, then quiet rows labelled like

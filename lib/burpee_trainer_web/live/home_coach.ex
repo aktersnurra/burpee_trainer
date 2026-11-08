@@ -21,8 +21,8 @@ defmodule BurpeeTrainerWeb.HomeCoach do
       coach_streaming: nil,
       coach_status: nil,
       coach_memory_open?: false,
-      # Whether this page changed the memory (a forget, or the coach writing as it talked),
-      # so leaving the Coach page rewrites the summary that reads from it.
+      # Whether the coach wrote to its memory as it talked on this page, so leaving the Coach
+      # page rewrites the summary that reads from it.
       coach_memory_changed?: false
     )
     |> stream_configure(:coach_goals, dom_id: &"home-coach-goal-#{&1.id}")
@@ -45,21 +45,12 @@ defmodule BurpeeTrainerWeb.HomeCoach do
     |> stream(:coach_goals, Enum.filter(goals, &(&1.status == :proposed)), reset: true)
   end
 
-  # What the coach remembers, opened on asking; an entry the owner removes is forgotten.
+  # What the coach remembers, opened on asking; to change a line, the owner tells the coach.
   def handle_event("coach_memory_toggle", _, socket),
     do: {:noreply, assign(socket, coach_memory_open?: not socket.assigns.coach_memory_open?)}
 
   def handle_event("coach_memory_close", _, socket),
     do: {:noreply, assign(socket, coach_memory_open?: false)}
-
-  def handle_event("coach_memory_forget", %{"id" => raw}, socket) do
-    with {id, ""} <- Integer.parse(to_string(raw)),
-         :ok <- Memory.forget(socket.assigns.current_scope, id) do
-      {:noreply, socket |> refresh() |> assign(coach_memory_changed?: true)}
-    else
-      _ -> {:noreply, socket}
-    end
-  end
 
   def handle_event("coach_message_change", %{"coach_message" => %{"text" => text}}, socket)
       when is_binary(text),

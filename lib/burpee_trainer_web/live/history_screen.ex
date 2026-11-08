@@ -1,5 +1,5 @@
 defmodule BurpeeTrainerWeb.HistoryScreen do
-  @moduledoc "Saved workout history, its period controls, inspection, and deletion flows."
+  @moduledoc "Progress: twelve weeks on one chart, a session opened from its point, and deleting it."
 
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
@@ -7,335 +7,157 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
   alias BurpeeTrainer.{Goals, History, Workouts}
   alias BurpeeTrainerWeb.{HomeHistoryComponents, HomeWorkoutComponents}
 
+  # The chart, and what can be opened from it, reads the last twelve weeks.
+  @period "twelve_weeks"
+
   def initialize(socket) do
     socket
     |> assign_new(:home_now, fn -> fn -> DateTime.utc_now(:second) end end)
     |> assign(
       history_open?: true,
-      history_period: "twelve_weeks",
-      history_show_sessions?: false,
       history_weeks: [],
       history_grid_weeks: [],
       history_streak: 0,
-      history_session_return_to: "#home-history-heading",
-      history_selected_id: nil,
       history_selected_session: nil,
       history_confirm_delete?: false,
       history_error: nil,
-      history_cursor: nil,
-      history_has_more?: false,
       history_empty?: true,
-      history_expanded: MapSet.new(),
       history_points: %{six_count: [], navy_seal: []},
-      history_loaded_ids: [],
-      history_loaded_count: 0,
       history_available?: false,
       history_gauges: gauges_none()
     )
-    |> stream_configure(:history_sessions, dom_id: &"home-history-session-#{&1.id}")
-    |> stream(:history_sessions, [])
   end
 
-  def open(socket) do
+  def open(socket), do: socket |> assign(history_open?: true) |> load_history()
+
+  # At a day boundary an opened session stays open while it is still in the twelve weeks.
+  def refresh(socket, now) do
+    selected =
+      with %{id: id} <- socket.assigns.history_selected_session, do: in_period(socket, id, now)
+
     socket
-    |> assign(history_open?: true, history_show_sessions?: false)
-    |> load_history(true)
+    |> assign(
+      history_selected_session: selected,
+      history_confirm_delete?: socket.assigns.history_confirm_delete? and not is_nil(selected)
+    )
+    |> load_history(now)
   end
-
-  def refresh(socket, now), do: load_history(socket, true, now, true)
 
   def handle_event("close_history", _, socket) do
     {:noreply,
      socket
-     |> assign(
-       history_show_sessions?: false,
-       history_selected_id: nil,
-       history_selected_session: nil,
-       history_confirm_delete?: false,
-       history_expanded: MapSet.new()
-     )
+     |> assign(history_selected_session: nil, history_confirm_delete?: false)
      |> push_patch(to: ~p"/")}
   end
 
-  def handle_event("history_period", %{"period" => period}, socket)
-      when period in ["twelve_weeks", "year", "all"] do
-    {:noreply,
-     socket
-     |> assign(
-       history_period: period,
-       history_expanded: MapSet.new(),
-       history_selected_id: nil,
-       history_selected_session: nil
-     )
-     |> load_history(true)}
-  end
-
-  def handle_event("history_density_mode", %{"mode" => mode}, socket)
-      when mode in ["chart", "sessions"] do
-    {:noreply, assign(socket, :history_show_sessions?, mode == "sessions")}
-  end
-
-  def handle_event("history_more", _, socket) do
-    if socket.assigns.history_has_more?,
-      do: {:noreply, load_history(socket, false)},
-      else: {:noreply, socket}
-  end
-
-  def handle_event("history_session", %{"id" => raw} = params, socket) when is_binary(raw) do
-    a = socket.assigns
-
+  # A point opens its session under the chart; the same point, or the session, closes it.
+  def handle_event("history_session", %{"id" => raw}, socket) when is_binary(raw) do
     with {id, ""} when id > 0 <- Integer.parse(raw),
-         %{state: :completed} = session <- Workouts.get_session(a.current_scope, id),
-         {:ok, [_]} <-
-           History.filter_sessions(
-             [session],
-             a.current_scope.user,
-             a.home_now.(),
-             a.history_period
-           ) do
-      expanded =
-        if MapSet.member?(a.history_expanded, id),
-          do: MapSet.delete(a.history_expanded, id),
-          else: MapSet.put(a.history_expanded, id)
-
-      ids = Enum.uniq(a.history_loaded_ids ++ [id])
-      selected? = MapSet.member?(expanded, id)
+         %{state: :completed} = session <- in_period(socket, id, socket.assigns.home_now.()) do
+      selected =
+        if match?(%{id: ^id}, socket.assigns.history_selected_session), do: nil, else: session
 
       {:noreply,
-       socket
-       |> assign(
-         history_expanded: expanded,
-         history_loaded_ids: ids,
-         history_selected_id: if(selected?, do: id),
-         history_selected_session: if(selected?, do: session),
-         history_session_return_to:
-           if(params["source"] == "point",
-             do: "#home-history-point-#{id}",
-             else: "#home-history-inspect-#{id}"
-           ),
-         history_confirm_delete?: false,
-         # A point on the chart opens its session in place, in the list.
-         history_show_sessions?: a.history_show_sessions? or params["source"] == "point"
-       )
-       |> restream_history_rows(nil, a.history_loaded_ids)}
+       assign(socket, history_selected_session: selected, history_confirm_delete?: false)}
     else
       _ -> {:noreply, socket}
     end
   end
 
-  def handle_event("history_close_session", _, socket) do
-    a = socket.assigns
+  def handle_event("history_close_session", _, socket),
+    do: {:noreply, assign(socket, history_selected_session: nil, history_confirm_delete?: false)}
 
-    {:noreply,
-     socket
-     |> assign(
-       history_selected_id: nil,
-       history_selected_session: nil,
-       history_confirm_delete?: false,
-       history_expanded: MapSet.delete(a.history_expanded, a.history_selected_id)
-     )
-     |> restream_history_rows(nil, a.history_loaded_ids)}
-  end
-
-  # The detail lives in a stream row, so a change to it re-inserts the rows.
-  def handle_event("history_confirm_delete", _, socket) do
-    if socket.assigns.history_selected_id,
-      do:
-        {:noreply,
-         socket
-         |> assign(history_confirm_delete?: true)
-         |> restream_history_rows(nil, socket.assigns.history_loaded_ids)},
-      else: {:noreply, socket}
-  end
-
-  def handle_event("history_cancel_delete", _, socket),
+  def handle_event("history_confirm_delete", _, socket),
     do:
       {:noreply,
-       socket
-       |> assign(history_confirm_delete?: false)
-       |> restream_history_rows(nil, socket.assigns.history_loaded_ids)}
+       assign(socket,
+         history_confirm_delete?: not is_nil(socket.assigns.history_selected_session)
+       )}
+
+  def handle_event("history_cancel_delete", _, socket),
+    do: {:noreply, assign(socket, history_confirm_delete?: false)}
 
   def handle_event("history_delete_session", _, socket) do
     a = socket.assigns
 
     with true <- a.history_confirm_delete?,
-         id when is_integer(id) <- a.history_selected_id,
-         %{state: :completed} = session <- Workouts.get_session(a.current_scope, id),
-         {:ok, [_]} <-
-           History.filter_sessions(
-             [session],
-             a.current_scope.user,
-             a.home_now.(),
-             a.history_period
-           ),
+         %{id: id} <- a.history_selected_session,
+         %{state: :completed} = session <- in_period(socket, id, a.home_now.()),
          {:ok, _} <- Workouts.delete_session(a.current_scope, session) do
       {:noreply,
        socket
-       |> assign(
-         history_selected_id: nil,
-         history_selected_session: nil,
-         history_confirm_delete?: false,
-         history_expanded: MapSet.new()
-       )
-       |> load_history(true)}
+       |> assign(history_selected_session: nil, history_confirm_delete?: false)
+       |> load_history()}
     else
       _ ->
         {:noreply,
          assign(socket,
-           history_error: "Couldn’t delete this session. Reload Home to try again.",
-           history_session_return_to: "#home-history-heading"
-         )
-         |> restream_history_rows(nil, socket.assigns.history_loaded_ids)}
-    end
-  end
-
-  # Sets the next goal a gauge suggests for its burpee type.
-  def handle_event("progress_set_goal", %{"type" => type}, socket) do
-    a = socket.assigns
-
-    with %{next: next} <- Enum.find(a.history_gauges, &(Atom.to_string(&1.burpee_type) == type)),
-         {:ok, %{"goal_id" => id}} <-
-           BurpeeTrainer.Coach.Tools.ProposeGoal.call(
-             a.current_scope,
-             %{
-               "burpee_type" => Atom.to_string(next.burpee_type),
-               "burpee_count_target" => next.burpee_count_target,
-               "date_target" => Date.to_iso8601(next.date_target)
-             },
-             %{}
-           ),
-         {:ok, _goal} <- Goals.confirm(a.current_scope, id) do
-      {:noreply, load_history(socket, false)}
-    else
-      _ -> {:noreply, assign(socket, history_error: "Couldn’t set this goal. Try again.")}
+           history_error: "Couldn’t delete this session. Reload Home to try again."
+         )}
     end
   end
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
-  defp load_history(socket, reset?, now \\ nil, retain_loaded? \\ false) do
+  # The owner's completed session `id`, when it falls in the chart's twelve weeks at `now`.
+  defp in_period(socket, id, now) do
+    scope = socket.assigns.current_scope
+
+    with %{state: :completed} = session <- Workouts.get_session(scope, id),
+         {:ok, [_]} <- History.filter_sessions([session], scope.user, now, @period) do
+      session
+    else
+      _ -> nil
+    end
+  end
+
+  defp load_history(socket, now \\ nil) do
     a = socket.assigns
     now = now || a.home_now.()
     socket = assign(socket, :history_snapshot_now, now)
-    cursor = if reset?, do: nil, else: a.history_cursor
+    user = a.current_scope.user
 
-    with {:ok, rows, next, more?} <-
-           History.page(a.current_scope, now, a.history_period, cursor) do
+    with {:ok, _} <- History.filter_sessions([], user, now, @period) do
       points =
-        if reset? do
-          history_sessions =
-            Map.new([:six_count, :navy_seal], fn type ->
-              {:ok, sessions} =
-                History.filter_sessions(
-                  Workouts.list_sessions_for_chart(a.current_scope, type),
-                  a.current_scope.user,
-                  now,
-                  a.history_period
-                )
+        Map.new([:six_count, :navy_seal], fn type ->
+          {:ok, sessions} =
+            History.filter_sessions(
+              Workouts.list_sessions_for_chart(a.current_scope, type),
+              user,
+              now,
+              @period
+            )
 
-              {type, sessions}
-            end)
-
-          Map.new(history_sessions, fn {type, sessions} ->
-            {type, History.points(sessions)}
-          end)
-        else
-          a.history_points
-        end
-
-      ids =
-        Enum.uniq(
-          if(reset? and not retain_loaded?, do: [], else: a.history_loaded_ids) ++
-            Enum.map(rows, & &1.id)
-        )
+          {type, History.points(sessions)}
+        end)
 
       all_sessions = Workouts.list_sessions(a.current_scope)
+      {:ok, available_sessions} = History.filter_sessions(all_sessions, user, now, "all")
+      {:ok, in_period} = History.filter_sessions(all_sessions, user, now, @period)
+      {:ok, weeks} = History.weeks(all_sessions, user, now, @period)
+      {:ok, all_weeks} = History.weeks(all_sessions, user, now, "all")
+      {:ok, year_weeks} = History.weeks(all_sessions, user, now, "year")
 
-      {:ok, available_sessions} =
-        History.filter_sessions(all_sessions, a.current_scope.user, now, "all")
-
-      history_available? = available_sessions != []
-      {:ok, weeks} = History.weeks(all_sessions, a.current_scope.user, now, a.history_period)
-      weeks = from_first_trained_week(weeks)
-      {:ok, all_weeks} = History.weeks(all_sessions, a.current_scope.user, now, "all")
-      {:ok, year_weeks} = History.weeks(all_sessions, a.current_scope.user, now, "year")
-
-      socket
-      |> assign(
-        history_available?: history_available?,
+      assign(socket,
+        history_available?: available_sessions != [],
         history_gauges: gauges(a.current_scope, all_sessions, now),
-        history_weeks: weeks,
+        history_weeks: from_first_trained_week(weeks),
         history_grid_weeks: Enum.take(year_weeks, -HomeHistoryComponents.grid_weeks()),
         history_streak: History.streak(all_weeks),
         history_error: nil,
-        history_cursor: next,
-        history_has_more?: more?,
-        history_empty?: ids == [],
-        history_points: points,
-        history_loaded_ids: ids,
-        history_loaded_count: length(ids)
+        history_empty?: in_period == [],
+        history_points: points
       )
-      |> restream_history_rows(now, if(retain_loaded?, do: a.history_loaded_ids))
     else
       {:error, _} ->
-        socket
-        |> assign(
+        assign(socket,
           history_error: "Progress is unavailable. Reload Home to try again.",
-          history_session_return_to: "#home-history-heading",
-          history_cursor: nil,
-          history_has_more?: false,
           history_empty?: true,
-          history_loaded_ids: [],
-          history_loaded_count: 0,
           history_weeks: [],
           history_grid_weeks: [],
           history_streak: 0,
           history_points: %{six_count: [], navy_seal: []}
         )
-        |> stream(:history_sessions, [], reset: true)
-    end
-  end
-
-  # Retain only explicitly displayed IDs. Scoped re-reads keep inspected older points
-  # in compound-key order as intervening pages arrive, without changing the cursor.
-  defp restream_history_rows(socket, now, previous_ids) do
-    a = socket.assigns
-    now = now || a.home_now.()
-
-    rows =
-      a.history_loaded_ids
-      |> Enum.map(&Workouts.get_session(a.current_scope, &1))
-      |> Enum.filter(&match?(%{state: :completed}, &1))
-
-    {:ok, rows} =
-      History.filter_sessions(rows, a.current_scope.user, now, a.history_period)
-
-    rows = Enum.sort_by(rows, &{DateTime.to_unix(&1.completed_at, :microsecond), &1.id}, :desc)
-
-    ids = Enum.map(rows, & &1.id)
-
-    socket =
-      assign(socket,
-        history_loaded_ids: ids,
-        history_loaded_count: length(rows),
-        history_empty?: rows == []
-      )
-
-    if is_list(previous_ids) do
-      # A stream reset detaches even retained buttons. Incremental reconciliation
-      # deletes only expired rows and inserts new rows at their compound-key rank.
-      socket =
-        Enum.reduce(previous_ids -- ids, socket, fn id, acc ->
-          stream_delete_by_dom_id(acc, :history_sessions, "home-history-session-#{id}")
-        end)
-
-      rows
-      |> Enum.with_index()
-      |> Enum.reduce(socket, fn {row, index}, acc ->
-        stream_insert(acc, :history_sessions, row, at: index)
-      end)
-    else
-      stream(socket, :history_sessions, rows, reset: true)
     end
   end
 

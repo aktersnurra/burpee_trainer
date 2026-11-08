@@ -13,18 +13,21 @@ defmodule BurpeeTrainerWeb.HomeChooser do
       do:
         {:noreply,
          socket
-         |> assign(chooser_open?: true)
+         |> assign(chooser_open?: true, delete_armed_id: nil)
          |> refresh_alternatives()},
       else: {:noreply, socket}
   end
 
   def handle_event("close_chooser", _, socket),
-    do: {:noreply, assign(socket, chooser_open?: false)}
+    do: {:noreply, assign(socket, chooser_open?: false, delete_armed_id: nil)}
 
   def handle_event("tab", %{"tab" => tab}, socket) when tab in ["workouts", "videos"] do
     {:noreply,
      socket
-     |> assign(active_tab: if(tab == "workouts", do: :workouts, else: :videos))
+     |> assign(
+       active_tab: if(tab == "workouts", do: :workouts, else: :videos),
+       delete_armed_id: nil
+     )
      |> refresh_alternatives()}
   end
 
@@ -43,44 +46,14 @@ defmodule BurpeeTrainerWeb.HomeChooser do
     end
   end
 
-  def handle_event("delete_workout", %{"id" => id}, socket) when is_binary(id) do
-    with false <- socket.assigns.busy?,
-         nil <- socket.assigns.pending_request,
-         :idle <- socket.assigns.authoring_stage,
-         {id, ""} <- Integer.parse(id),
-         {:ok, _archived} <- Workouts.archive_plan(socket.assigns.current_scope, id) do
-      a = socket.assigns
+  # The first tap on a workout's trash arms it, in place; the second deletes it.
+  def handle_event("delete_workout", %{"id" => raw} = params, socket) when is_binary(raw) do
+    case Integer.parse(raw) do
+      {id, ""} when id != socket.assigns.delete_armed_id ->
+        {:noreply, socket |> assign(delete_armed_id: id) |> refresh_alternatives()}
 
-      {:noreply,
-       socket
-       |> HomeLive.assign_home()
-       |> HomeWorkspace.refresh_projection()
-       |> assign(
-         chooser_open?: true,
-         expanded?: a.expanded?,
-         active_tab: a.active_tab
-       )
-       |> refresh_alternatives()}
-    else
       _ ->
-        socket =
-          put_flash(
-            socket,
-            :error,
-            "That workout could not be deleted. Your history is unchanged."
-          )
-
-        a = socket.assigns
-
-        socket =
-          if a.live_action == :home and a.chooser_open? and not a.busy? and
-               is_nil(a.pending_request) and a.authoring_stage == :idle do
-            push_event(socket, "home_chooser_rejected", %{})
-          else
-            socket
-          end
-
-        {:noreply, socket}
+        delete_armed_workout(params, socket)
     end
   end
 
@@ -140,6 +113,48 @@ defmodule BurpeeTrainerWeb.HomeChooser do
 
   def handle_event(_event, _params, socket), do: {:noreply, socket}
 
+  defp delete_armed_workout(%{"id" => id}, socket) do
+    with false <- socket.assigns.busy?,
+         nil <- socket.assigns.pending_request,
+         :idle <- socket.assigns.authoring_stage,
+         {id, ""} <- Integer.parse(id),
+         {:ok, _archived} <- Workouts.archive_plan(socket.assigns.current_scope, id) do
+      a = socket.assigns
+
+      {:noreply,
+       socket
+       |> HomeLive.assign_home()
+       |> HomeWorkspace.refresh_projection()
+       |> assign(
+         chooser_open?: true,
+         delete_armed_id: nil,
+         expanded?: a.expanded?,
+         active_tab: a.active_tab
+       )
+       |> refresh_alternatives()}
+    else
+      _ ->
+        socket =
+          put_flash(
+            socket,
+            :error,
+            "That workout could not be deleted. Your history is unchanged."
+          )
+
+        a = socket.assigns
+
+        socket =
+          if a.live_action == :home and a.chooser_open? and not a.busy? and
+               is_nil(a.pending_request) and a.authoring_stage == :idle do
+            push_event(socket, "home_chooser_rejected", %{})
+          else
+            socket
+          end
+
+        {:noreply, socket}
+    end
+  end
+
   def refresh_alternatives(%{assigns: %{slot: nil}} = socket), do: socket
 
   def refresh_alternatives(%{assigns: %{home_selection: nil, home_state: :choose}} = socket) do
@@ -158,9 +173,7 @@ defmodule BurpeeTrainerWeb.HomeChooser do
           |> Enum.map(&alternative_item/1)
       end
 
-    socket
-    |> assign(alternatives_empty?: items == [])
-    |> stream(:alternatives, items, reset: true)
+    put_alternatives(socket, items)
   end
 
   def refresh_alternatives(socket) do
@@ -210,6 +223,13 @@ defmodule BurpeeTrainerWeb.HomeChooser do
             }
           )
       end
+
+    put_alternatives(socket, items)
+  end
+
+  defp put_alternatives(socket, items) do
+    armed = socket.assigns.delete_armed_id
+    items = Enum.map(items, &Map.put(&1, :armed?, &1.kind == :plan and &1.source_id == armed))
 
     socket
     |> assign(alternatives_empty?: items == [])

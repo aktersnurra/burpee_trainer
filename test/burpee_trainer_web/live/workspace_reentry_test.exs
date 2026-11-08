@@ -223,7 +223,7 @@ defmodule BurpeeTrainerWeb.WorkspaceReentryTest do
   defp delete_completion(view, saved) do
     pid = view.pid
     render_patch(view, "/progress")
-    view |> element("#home-history-inspect-#{saved.id}") |> render_click()
+    view |> element("#home-history-point-#{saved.id}") |> render_click()
     # The first tap on the trash arms it; the second deletes.
     view |> element("#home-history-delete-#{saved.id}") |> render_click()
     view |> element("#home-history-delete-#{saved.id}") |> render_click()

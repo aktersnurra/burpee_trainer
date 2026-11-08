@@ -66,6 +66,9 @@ defmodule BurpeeTrainerWeb.HomeFirstUseTest do
     {:ok, _} = BurpeeTrainer.Workouts.archive_plan(Scope.for_user(user), plan.id)
 
     view |> element("#home-delete-workout-#{plan.id}") |> render_click()
+    # Arming reads the list again, so the stale row is gone; a tap already sent still fails.
+    refute has_element?(view, "#home-delete-workout-#{plan.id}")
+    render_click(view, "delete_workout", %{"id" => to_string(plan.id)})
 
     assert has_element?(
              view,

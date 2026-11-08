@@ -97,7 +97,7 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(view, "#progress-gauge-six_count .progress-course-on", "On course for")
   end
 
-  test "with no goal, the best shows and the next goal is one tap away", %{conn: conn, user: user} do
+  test "with no goal, the best shows, not the latest", %{conn: conn, user: user} do
     for reps <- [110, 130, 120],
         do:
           free_form_session_fixture(user, %{duration_sec_actual: 1_200, burpee_count_actual: reps})
@@ -110,13 +110,8 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
              "130"
            )
 
-    assert has_element?(view, "#progress-set-goal-six_count .hero-plus")
-    assert has_element?(view, "#progress-set-goal-six_count", "150 by")
-    view |> element("#progress-set-goal-six_count") |> render_click()
-    assert has_element?(view, "#progress-gauge-six_count[data-kind=goal]", "Goal 150 by")
-
-    assert [%{status: :active, burpee_count_target: 150}] =
-             BurpeeTrainer.Goals.list(Scope.for_user(user))
+    # Goals come from the coach, confirmed on the Coach page; Progress only reads them.
+    refute has_element?(view, "#progress-gauge-six_count button")
   end
 
   test "after the first workout, its result is the best, measured against the next level",

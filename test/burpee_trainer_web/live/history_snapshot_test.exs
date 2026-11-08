@@ -16,6 +16,8 @@ defmodule BurpeeTrainerWeb.HistorySnapshotTest do
     conn: conn,
     user: user
   } do
+    completed_at = DateTime.add(DateTime.utc_now(:second), -1, :day)
+
     session =
       insert_history(user, %{
         source_kind: :plan,
@@ -35,11 +37,11 @@ defmodule BurpeeTrainerWeb.HistorySnapshotTest do
         pace_delta_sec: 1.25,
         fatigue_decline: 0.15,
         kept_up: false,
-        completed_at: ~U[2025-01-02 03:04:05Z]
+        completed_at: completed_at
       })
 
     {:ok, view, _html} = live(conn, ~p"/progress")
-    view |> element("#home-history-period-all") |> render_click()
+    view |> element("#home-history-point-#{session.id}") |> render_click()
 
     assert has_element?(
              view,
@@ -47,9 +49,6 @@ defmodule BurpeeTrainerWeb.HistorySnapshotTest do
              "Legacy ladder snapshot"
            )
 
-    view |> element("#home-history-inspect-#{session.id}") |> render_click()
-    # The app's date style: day before month, the year only when it is not this one.
-    assert has_element?(view, "#home-history-inspect-#{session.id}", "Thu 2 Jan 2025")
     # The row carries the actual reps; sessions no longer open onto the plan.
     assert has_element?(
              view,
@@ -58,7 +57,7 @@ defmodule BurpeeTrainerWeb.HistorySnapshotTest do
            )
 
     [persisted] = Workouts.list_sessions(BurpeeTrainer.Accounts.Scope.for_user(user))
-    assert persisted.completed_at == ~U[2025-01-02 03:04:05Z]
+    assert persisted.completed_at == completed_at
     assert persisted.display_name_snapshot == "Legacy ladder snapshot"
     assert is_nil(persisted.program_snapshot)
   end
@@ -86,11 +85,11 @@ defmodule BurpeeTrainerWeb.HistorySnapshotTest do
         duration_sec_planned: 900,
         burpee_count_actual: 27,
         duration_sec_actual: 912,
-        completed_at: ~U[2025-02-03 04:05:06Z]
+        completed_at: DateTime.add(DateTime.utc_now(:second), -2, :day)
       })
 
     {:ok, view, _html} = live(conn, ~p"/progress")
-    view |> element("#home-history-period-all") |> render_click()
+    view |> element("#home-history-point-#{session.id}") |> render_click()
 
     assert has_element?(
              view,

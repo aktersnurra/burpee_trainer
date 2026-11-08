@@ -225,7 +225,7 @@ Verify real implementation with focused ExUnit/LiveView tests, JavaScript tests 
 
 Today’s completed result remains primary even when it completes the weekly target. On subsequent days, show weekly completion until Monday. Completed states have no primary action or push to do another workout.
 
-Clicking the result expands History inline on Home, with `This week | 4 weeks | All time`, separate six-count/Navy Seal line plots, an optional line/bar toggle, and an expandable spreadsheet-style session list. Default comparison metric is reps per 20 minutes: `actual reps × 1,200 / actual duration seconds`. This is training density, not a predicted 20-minute personal best. Tapping a point reveals actual reps and duration.
+Clicking the result expands History inline on Home, with `This week | 4 weeks | All time`, separate six-count/Navy Seal line plots, an optional line/bar toggle, and an expandable spreadsheet-style session list. Default comparison metric is reps per 20 minutes: `actual reps × 1,200 / actual duration seconds` up to 20 minutes; a longer session counts its fatigue, `actual reps / Endurance.factor(duration)` (40 minutes holds 1.5 times the reps). This is training density, not a predicted 20-minute personal best. Tapping a point reveals actual reps and duration.
 
 Pace means active movement time per rep; cadence includes rest between reps within a set, excluding inter-set rest. Do not present prescribed timing as measured timing. Navy Seal push-up count is three per rep, but multiplying by three does not make overall effort equivalent to six-counts.
 

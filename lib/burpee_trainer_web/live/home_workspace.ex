@@ -13,6 +13,7 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
         home_selection: nil,
         expanded?: false,
         chooser_open?: false,
+        delete_armed_id: nil,
         active_tab: :workouts,
         instruction: "",
         authoring_stage: :idle,
@@ -85,6 +86,7 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
       local_error: nil,
       expanded_groups: MapSet.new(),
       chooser_open?: false,
+      delete_armed_id: nil,
       inspection_rows: Inspection.rows(selected.plan),
       start_client_session_id: Ecto.UUID.generate()
     )

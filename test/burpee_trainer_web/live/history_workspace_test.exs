@@ -4,7 +4,7 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
   import Phoenix.LiveViewTest
   import BurpeeTrainer.Fixtures
 
-  test "route, period and busy boundary chart geometry use History's distinct genuine clock", %{
+  test "route and busy boundary chart geometry use History's distinct genuine clock", %{
     conn: conn
   } do
     user = user_fixture()
@@ -26,11 +26,6 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
     set_clock(view, route_clock)
     render_patch(view, ~p"/progress")
     assert_history_geometry(view, saved, route_clock, home_clock)
-
-    period_clock = DateTime.add(now, 14 * 86_400)
-    set_clock(view, period_clock)
-    view |> element("#home-history-period-all") |> render_click()
-    assert_history_geometry(view, saved, period_clock, home_clock)
 
     boundary_clock = DateTime.add(now, 21 * 86_400)
     set_clock(view, boundary_clock)
@@ -99,8 +94,7 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
       |> BurpeeTrainer.Repo.insert!()
 
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/progress")
-    view |> element("#home-history-density-sessions") |> render_click()
-    view |> element("#home-history-inspect-#{saved.id}") |> render_click()
+    view |> element("#home-history-point-#{saved.id}") |> render_click()
     trash = "#home-history-delete-#{saved.id}"
     # Its trash shows in its row; nothing covers or locks the page.
     assert has_element?(view, trash)
@@ -127,8 +121,8 @@ defmodule BurpeeTrainerWeb.HistoryWorkspaceTest do
     {:ok, view, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/progress")
 
     for {event, params} <- [
-          {"history_period", %{}},
-          {"history_period", %{"period" => "bogus"}},
+          {"history_session", %{}},
+          {"history_session", %{"id" => "bogus"}},
           {"history_session", %{"id" => %{}}}
         ] do
       render_click(view, event, params)

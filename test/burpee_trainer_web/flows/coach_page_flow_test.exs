@@ -63,7 +63,7 @@ defmodule BurpeeTrainerWeb.Flows.CoachPageFlowTest do
     assert has_element?(view, "#history-look-back")
   end
 
-  test "the bookmark opens what the coach remembers by part, a line can be forgotten, and Escape closes it",
+  test "the bookmark opens what the coach remembers by part, read-only, and Escape closes it",
        %{conn: conn, scope: scope} do
     {:ok, _} = Memory.write(scope, "user", [%{"action" => "add", "content" => "Trains at 7:00"}])
     {:ok, _} = Memory.write(scope, "user", [%{"action" => "add", "content" => "Left knee sore"}])
@@ -91,39 +91,96 @@ defmodule BurpeeTrainerWeb.Flows.CoachPageFlowTest do
     assert has_element?(view, "#coach-memory-entry-#{patched.id}[data-changed=true]")
     assert has_element?(view, "#coach-memory-entry-#{kept.id}[data-changed=false]")
 
-    view
-    |> element("#coach-memory-forget-#{kept.id}[aria-label='Forget: Trains at 7:00']")
-    |> render_click()
-
-    assert Enum.map(Memory.list(scope), & &1.id) == [patched.id]
-    refute has_element?(view, "#coach-memory-entry-#{kept.id}")
-    assert has_element?(view, "#coach-memory")
+    # A line changes by telling the coach; there is nothing to remove by hand.
+    refute has_element?(view, "#coach-memory button[id^=coach-memory-forget]")
 
     view |> element("#coach-memory") |> render_keydown(%{"key" => "Escape"})
     refute has_element?(view, "#coach-memory")
     assert has_element?(view, "#coach-memory-open[aria-expanded=false]")
   end
 
-  test "leaving the Coach page after the memory changed writes the summary again", %{
-    conn: conn,
-    scope: scope
+  test "leaving the Coach page after the coach wrote to its memory writes the summary again", %{
+    conn: conn
   } do
-    {:ok, _} = Memory.write(scope, "user", [%{"action" => "add", "content" => "Trains at 7:00"}])
+    previous_provider = Application.get_env(:burpee_trainer, :llm_provider)
+    previous_req = Req.default_options()
+
+    on_exit(fn ->
+      Application.put_env(:burpee_trainer, :llm_provider, previous_provider)
+      Req.default_options(previous_req)
+    end)
+
+    Application.put_env(:burpee_trainer, :llm_provider,
+      enabled: true,
+      url: "https://provider.test/v1",
+      api_key: "k",
+      model: "m"
+    )
+
+    remember = %{
+      "target" => "user",
+      "operations" => [%{"action" => "add", "content" => "Trains at 7:00"}]
+    }
+
+    replies =
+      start_supervised!(
+        {Agent,
+         fn ->
+           [
+             %{
+               "choices" => [
+                 %{
+                   "message" => %{
+                     "tool_calls" => [
+                       %{
+                         "id" => "m",
+                         "function" => %{
+                           "name" => "memory",
+                           "arguments" => Jason.encode!(remember)
+                         }
+                       }
+                     ]
+                   }
+                 }
+               ]
+             },
+             %{
+               "choices" => [
+                 %{"message" => %{"content" => Jason.encode!(%{"reply" => "Mornings it is."})}}
+               ]
+             }
+           ]
+         end}
+      )
+
+    Req.Test.stub(__MODULE__, fn conn ->
+      BurpeeTrainer.ProviderStream.reply(
+        conn,
+        Agent.get_and_update(replies, fn [head | tail] -> {head, tail} end)
+      )
+    end)
+
+    Req.default_options(plug: {Req.Test, __MODULE__})
     {:ok, view, _} = live(conn, ~p"/coach?from=progress")
+    Req.Test.allow(__MODULE__, self(), view.pid)
 
     # Nothing changed: leaving writes nothing.
     view |> element("#coach-back") |> render_click()
     refute_enqueued(worker: SummaryJob)
 
     view |> element("#history-look-back") |> render_click()
-    view |> element("#coach-memory-open") |> render_click()
-    [entry] = Memory.list(scope)
-    view |> element("#coach-memory-forget-#{entry.id}") |> render_click()
-    refute_enqueued(worker: SummaryJob)
+
+    view
+    |> form("#home-coach-message-form", coach_message: %{text: "I train at 7 now"})
+    |> render_submit()
+
+    render_async(view)
+    assert has_element?(view, "#home-coach-thread", "Mornings it is.")
+    Repo.delete_all(Oban.Job)
 
     view |> element("#coach-back") |> render_click()
     assert_patch(view, ~p"/progress")
-    assert_enqueued(worker: SummaryJob, args: %{"user_id" => scope.user.id})
+    assert_enqueued(worker: SummaryJob)
     assert has_element?(view, "#history-coach-summary [role=status]", "Updating your summary")
   end
 end

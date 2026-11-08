@@ -70,7 +70,9 @@ entries.
   the parts first appear. A rejection goes back once with its reason, a fresh snapshot (so a
   part already written reads as written) and an ask for the rejected part only.
 - **Claude**, through `update_memory`.
-- **The owner** removes an entry from the memory sheet on Coach.
+
+The owner reads the memory sheet on Coach but does not edit it; to change a line, they tell the
+coach.
 
 ## What the athlete sees
 

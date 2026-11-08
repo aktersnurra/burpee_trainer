@@ -183,8 +183,8 @@ Home's content does (`--gutter`), and a docked box is as wide as the column, not
   centred, in Home's 354px column.
 - One row: a one-line row (a set, a session of the week) is 52px; a two-line row (a workout in
   the drawer, a session in Progress) has 14px above and below. Every row ends in a `--line`.
-- One tab: body size, muted, the chosen one in ink over a 1.5px ink line, 24px apart (Progress's
-  periods, the drawer's Workouts and Videos).
+- One tab: body size, muted, the chosen one in ink over a 1.5px ink line, 24px apart (the
+  drawer's Workouts and Videos).
 - A line marks an input (the underlined field row), a chosen tab, or data (the progress
   track, chart grid). Spacing separates everything else.
 
@@ -294,8 +294,8 @@ the screen, a grip, the x-mark and "What I remember" on its top row, under the s
 screen (601px and up) it is a popup instead: centred, 480px wide, as tall as its lines (at most
 80% of the screen), no grip, settling in place. The ✕, the scrim, Escape or a pull down
 (`SheetDrag`, on a phone) close it, and focus returns to the bookmark. Its two parts,
-"About you" and "Coaching notes", each have a short cobalt track for how full they are; each line
-has × to forget it; a line the coach rewrote this week wears the diff's cobalt highlight (2); "To
+"About you" and "Coaching notes", each have a short cobalt track for how full they are; the lines
+are read only; a line the coach rewrote this week wears the diff's cobalt highlight (2); "To
 change a line, tell the coach." closes it.
 
 Everything rises in with `home-enter` or `studio-in`, both `--motion-settle`; reduced motion removes
@@ -314,14 +314,14 @@ every animation here.
   keeps or dismisses, check confirms, arrow-path resets, retries or reloads, chevron-down loads
   more.
 - Words stay only where they are the content or an icon would be ambiguous: picks (types,
-  levels, styles), tabs (period, Workouts and Videos), the coach's predicted replies, and
+  levels, styles), tabs (Workouts and Videos), the coach's predicted replies, and
   "Sign in with Pocket ID". The studio (4a1a) is the one place actions are words, since it is a
   conversation; Home's play is still a play mark, and means the same as the studio's Run.
-- A view switch is one icon at the end of its heading showing the view it leads to, and
-  it turns into the other when tapped: list-bullet shows the sessions, chart-bar the
-  chart.
-- Deleting a session: tap its row and its trash shows; the first tap on the trash arms it
-  (error colour), the second deletes. Tapping the row again or Escape lets go.
+- Deleting asks in place, never in a browser dialog: the first tap on the trash arms it (error
+  colour, "Confirm delete …"), the second deletes. A session opens from its point on Progress's
+  chart, its trash at the row's end; tapping the point or the row again, or Escape, lets go. A
+  workout in the drawer arms the same way; switching tab or closing the drawer lets go, and its
+  past sessions stay.
 - Finish (the light screen after a session): `Ended early` or the plan's name, the count between
   quiet − and +, `of 15 reps · 10:20 of 20:00`, `3 of 5 sets` (the plan's whole sets the
   schedule reached), who counted, the mood pills (Rough `--clay`, OK `--cobalt`, Good `--good`,
@@ -389,25 +389,25 @@ screen leads to the next in context:
   back Home, then your level as its one headline with the streak (an amber flame and the weeks
   in a row at the target) opposite. "Best in 20 minutes" sits over two columns, one per type:
   its mark and name, the best at 30px, what the next level needs (`✓ 1B needs 50` once the
-  best is past it; the next level is said only here), then its goal (or the next goal as a
-  quiet pill). The coach's look back follows as one paragraph under the page's only rule, all
+  best is past it; the next level is said only here), then its goal when it has one. The coach's look back follows as one paragraph under the page's only rule, all
   of it a link to the Coach page (`Coach ›` over it), which opens on it.
   **Days you trained** is drawn as GitHub draws contributions: square cells, a column a week
   from Monday, Mon/Wed/Fri on the left, month names over the weeks that start them, each day
   navy for six-count, sky for Navy SEAL, split diagonally for both, a quiet fill for none; a
   phone shows the latest 18 weeks and the 640px column 34, and a key gives their minutes. The
-  grid never changes with the window. **Reps per 20 minutes** has the window tabs (12 weeks,
-  Year, All time) right under its heading, scoping only the chart and the sessions behind its
-  list icon: one chart, six-count off the left axis as a solid navy line, Navy SEAL off the
-  right as a dashed sky one, each axis's numbers in its line's colour, a small legend above
-  and months below. Design: `docs/specs/2026-11-06-light-screens-design.md`.
+  grid never changes. **Reps per 20 minutes** covers the last 12 weeks, with no window tabs or
+  list: one chart, six-count off the left axis as a solid navy line, Navy SEAL off the right as
+  a dashed sky one, each axis's numbers in its line's colour, a small legend above and months
+  below. A session longer than 20 minutes is drawn as the 20-minute session it is as good as,
+  fatigue counted (`Coach.Endurance`): 105 reps in 40 minutes reads 70. A point opens its
+  session under the chart: name, date, reps, time, tags and its trash. Design: `docs/specs/2026-11-06-light-screens-design.md`.
 - **Coach** (`/coach`, with the app's coach; without it, Home) is the coach's own page. Its top
   row: Back (a chevron, to where you came from: `/coach?from=progress` back to Progress, else
   Home), "Coach", and the memory bookmark (4a1a). Then this week's sessions as on Home done (no
   week bar: the header is enough), then the same chat, the box docked at the foot. Its first message is the coach's
   word on the week, or, arriving from Progress, the look back. The coach has no suggestions of its
-  own, so there is no suggestions row. Leaving after the memory changed here (a line forgotten,
-  or the coach writing as it talked) writes the summary again. Design:
+  own, so there is no suggestions row. Leaving after the coach wrote to its memory as it talked
+  here writes the summary again. Design:
   `docs/specs/2026-11-06-light-screens-design.md`.
 - **Session** (`/session/:session_id`, `/videos/:video_id/session/:session_id`) runs a
   workout at night: the inverted palette above, a fill per rep that follows the camera, and a

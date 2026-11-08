@@ -1,5 +1,5 @@
 defmodule BurpeeTrainer.History do
-  @moduledoc "Read-only local periods, session pages and actual density for Home."
+  @moduledoc "Read-only local periods, results and actual density for Home and Progress."
 
   alias BurpeeTrainer.{UserTime, Workouts}
   alias BurpeeTrainer.Coach.AuthoritativeSession
@@ -8,7 +8,6 @@ defmodule BurpeeTrainer.History do
   alias BurpeeTrainer.Workouts.WorkoutSession
 
   @type period :: String.t()
-  @type cursor :: {DateTime.t(), pos_integer()} | nil
   @type point :: %{
           id: pos_integer(),
           completed_at: DateTime.t(),
@@ -183,48 +182,6 @@ defmodule BurpeeTrainer.History do
         ),
       latest_density: measured |> List.last() |> then(&if(&1, do: &1.density))
     }
-  end
-
-  @spec page(BurpeeTrainer.Accounts.Scope.t(), DateTime.t(), period(), cursor()) ::
-          {:ok, [WorkoutSession.t()], cursor(), boolean()} | {:error, term()}
-  def page(%BurpeeTrainer.Accounts.Scope{user: user} = scope, now, period, cursor \\ nil) do
-    with {:ok, _} <- filter_sessions([], user, now, period) do
-      scan(scope, now, period, cursor, 5, [])
-    end
-  end
-
-  defp scan(
-         %BurpeeTrainer.Accounts.Scope{user: user} = scope,
-         now,
-         period,
-         cursor,
-         remaining,
-         accumulated
-       ) do
-    opts = if cursor, do: [before: cursor], else: []
-
-    case Workouts.list_sessions_page(scope, remaining, opts) do
-      {rows, more?} when is_list(rows) ->
-        {:ok, matching} = filter_sessions(rows, user, now, period)
-
-        next =
-          case List.last(rows) do
-            nil -> cursor
-            last -> {last.completed_at, last.id}
-          end
-
-        accumulated = accumulated ++ matching
-        remaining = remaining - length(matching)
-
-        if more? and remaining > 0 do
-          scan(scope, now, period, next, remaining, accumulated)
-        else
-          {:ok, accumulated, next, more?}
-        end
-
-      {:error, reason} ->
-        {:error, reason}
-    end
   end
 
   @spec results(BurpeeTrainer.Accounts.Scope.t(), DateTime.t()) ::

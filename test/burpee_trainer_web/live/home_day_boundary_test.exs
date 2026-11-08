@@ -49,7 +49,6 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     {:noreply, socket} =
       workspace_screen(socket, :history)
 
-    {:noreply, socket} = HomeLive.handle_event("history_period", %{"period" => "all"}, socket)
     socket = assign(socket, instruction: "Keep this text", expanded?: true)
     before = Map.take(socket.assigns, @workspace_keys -- [:home_selection])
     socket = refresh(socket, @wednesday)
@@ -67,7 +66,6 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     assert socket.assigns.home_selection.plan.id
     assert socket.assigns.inspection_rows != []
     assert socket.assigns.history_open?
-    assert socket.assigns.history_period == "all"
     assert present?(socket, "#home-history-close[phx-click=close_history]")
     assert Map.take(socket.assigns, @workspace_keys -- [:home_selection]) == before
     refute present?(socket, "#home-action")
@@ -347,17 +345,16 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
     refute_received :unexpected_provider
   end
 
-  test "boundary retains inspected older rows in period, removes expired rows and captures time once",
+  test "an opened session stays open across a boundary until it leaves the twelve weeks",
        %{user: user} do
-    rows = for _ <- 1..8, do: complete(user, @tuesday, 600)
-    oldest = hd(rows)
+    saved = complete(user, @tuesday, 4800)
     socket = mount_home(user, @tuesday)
     {:noreply, socket} = workspace_screen(socket, :history)
 
     {:noreply, socket} =
-      HomeLive.handle_event("history_session", %{"id" => to_string(oldest.id)}, socket)
+      HomeLive.handle_event("history_session", %{"id" => to_string(saved.id)}, socket)
 
-    assert length(socket.assigns.history_loaded_ids) == 6
+    {:noreply, socket} = HomeLive.handle_event("history_confirm_delete", %{}, socket)
     parent = self()
 
     clock = fn ->
@@ -373,32 +370,15 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
 
     assert_received :clock_read
     refute_received :clock_read
-    assert oldest.id in socket.assigns.history_loaded_ids
-    assert MapSet.member?(socket.assigns.history_expanded, oldest.id)
-    assert length(socket.assigns.history_loaded_ids) == 6
-    new = complete(user, @wednesday, 60)
-    socket = socket |> prune_history_stream() |> refresh(@wednesday)
-    refute socket.assigns.streams.history_sessions.reset?
-    assert hd(socket.assigns.history_loaded_ids) == new.id
-    assert oldest.id in socket.assigns.history_loaded_ids
-    assert length(socket.assigns.history_loaded_ids) == 7
-    repeated = socket |> prune_history_stream() |> refresh(@wednesday)
-    refute repeated.assigns.streams.history_sessions.reset?
-    assert repeated.assigns.streams.history_sessions.deletes == []
-    assert repeated.assigns.history_loaded_ids == socket.assigns.history_loaded_ids
-    {:noreply, socket} = HomeLive.handle_event("history_more", %{}, repeated)
-    assert socket.assigns.history_loaded_ids == [new.id | Enum.map(Enum.reverse(rows), & &1.id)]
-    refute socket.assigns.history_has_more?
-    expired_at = DateTime.add(@monday, 12 * 7 * 86_400)
-    socket = socket |> prune_history_stream() |> refresh(expired_at)
-    refute socket.assigns.streams.history_sessions.reset?
-    assert length(socket.assigns.streams.history_sessions.deletes) == 9
-    assert socket.assigns.history_loaded_ids == []
+    assert socket.assigns.history_selected_session.id == saved.id
+    assert socket.assigns.history_confirm_delete?
+
+    socket = refresh(socket, DateTime.add(@monday, 12 * 7 * 86_400))
+    assert socket.assigns.history_selected_session == nil
+    refute socket.assigns.history_confirm_delete?
     assert socket.assigns.history_empty?
     assert socket.assigns.history_open?
-    {:noreply, socket} = HomeLive.handle_event("history_period", %{"period" => "all"}, socket)
-    assert length(socket.assigns.history_loaded_ids) == 5
-    refute oldest.id in socket.assigns.history_loaded_ids
+    assert Repo.reload!(saved) == saved
   end
 
   test "stale generation and mismatched async identity leave the socket unchanged", %{user: user} do
@@ -478,13 +458,6 @@ defmodule BurpeeTrainerWeb.HomeLiveDayBoundaryTest do
   end
 
   # Direct callbacks do not execute LiveView's after-render pruning lifecycle.
-  defp prune_history_stream(socket) do
-    streams =
-      Map.update!(socket.assigns.streams, :history_sessions, &Phoenix.LiveView.LiveStream.prune/1)
-
-    %{socket | assigns: Map.put(socket.assigns, :streams, streams)}
-  end
-
   defp card_name(socket) do
     render_component(&HomeLive.render/1, socket.assigns)
     |> LazyHTML.from_fragment()

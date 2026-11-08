@@ -362,16 +362,22 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             else: "#{@item.reps} reps"}
         </span>
       </button>
+      <%!-- The first tap arms the trash in place; the second deletes. Past sessions stay. --%>
       <button
         :if={Map.get(@item, :owned?, false)}
         id={"home-delete-workout-#{@item.source_id}"}
         type="button"
-        class="home-text-action home-icon-action"
-        aria-label={"Delete #{@item.name}"}
-        data-confirm="Delete this workout? Past sessions will be kept."
+        class={[
+          "home-text-action home-icon-action home-delete-workout",
+          @item.armed? && "home-delete-workout-armed"
+        ]}
+        aria-label={
+          if(@item.armed?, do: "Confirm delete #{@item.name}", else: "Delete #{@item.name}")
+        }
+        aria-pressed={to_string(@item.armed?)}
         phx-click="delete_workout"
         phx-value-id={@item.source_id}
-        title="Delete workout"
+        title={if(@item.armed?, do: "Tap again to delete", else: "Delete workout")}
       >
         <.icon name="hero-trash" class="size-5" />
       </button>

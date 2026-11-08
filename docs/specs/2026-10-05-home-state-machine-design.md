@@ -50,7 +50,7 @@ mechanism. Screen responsibilities are extracted into cohesive ordinary web modu
 
 - `/`, action `:home`, renders `Home.State` and owns Start/Resume, Switch (chooser),
   New/Edit authoring, and the day-boundary timer.
-- `/history`, action `:history`, owns the period, week, session detail and delete flows
+- `/history`, action `:history`, owns the week, session detail and delete flows
   (`home_history_components.ex`). Weekly progress on Home patches here.
 - `/coach`, action `:coach`, owns the Coach summary, details and new-info box
   (`home_coach_components.ex`). It is reached from History and from the done-today and

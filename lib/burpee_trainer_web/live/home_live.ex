@@ -321,12 +321,8 @@ defmodule BurpeeTrainerWeb.HomeLive do
   def handle_event(event, params, socket)
       when event in [
              "close_history",
-             "history_period",
-             "history_density_mode",
-             "history_more",
              "history_session",
              "history_close_session",
-             "progress_set_goal",
              "history_confirm_delete",
              "history_cancel_delete",
              "history_delete_session"
@@ -355,8 +351,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
              "coach_goal_confirm",
              "coach_goal_dismiss",
              "coach_memory_toggle",
-             "coach_memory_close",
-             "coach_memory_forget"
+             "coach_memory_close"
            ] do
     if socket.assigns.workspace_screen in [:home, :coach],
       do: HomeCoach.handle_event(event, params, socket),

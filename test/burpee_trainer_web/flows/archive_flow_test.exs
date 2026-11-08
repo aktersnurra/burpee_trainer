@@ -80,7 +80,9 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     view |> element("#home-summary") |> render_click()
     open_swap(view)
 
-    assert has_element?(view, "#home-delete-workout-#{original.id}[data-confirm]")
+    # The first tap arms the trash; only the second deletes.
+    view |> element("#home-delete-workout-#{original.id}") |> render_click()
+    assert Repo.get!(WorkoutPlan, original.id).state == :published
     view |> element("#home-delete-workout-#{original.id}") |> render_click()
     archived = Repo.get!(WorkoutPlan, original.id)
     assert archived.state == :archived
@@ -104,9 +106,12 @@ defmodule BurpeeTrainerWeb.Flows.ArchiveFlowTest do
     refute fallback.plan.id == original.id
     refute has_element?(view, "#home-delete-workout-#{fallback.plan.id}")
     foreign = plan_fixture(user_fixture(), %{"definition" => definition, "state" => "published"})
-    render_click(view, "delete_workout", %{"id" => to_string(foreign.id)})
+    for _ <- 1..2, do: render_click(view, "delete_workout", %{"id" => to_string(foreign.id)})
     assert Repo.get!(WorkoutPlan, foreign.id).state == :published
-    render_click(view, "delete_workout", %{"id" => to_string(fallback.plan.id)})
+
+    for _ <- 1..2,
+        do: render_click(view, "delete_workout", %{"id" => to_string(fallback.plan.id)})
+
     assert Repo.get!(WorkoutPlan, fallback.plan.id).state == :published
     {:ok, reloaded, _} = live(init_test_session(conn, %{user_id: user.id}), ~p"/")
     reloaded |> element("#home-summary") |> render_click()

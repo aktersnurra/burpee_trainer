@@ -3,6 +3,8 @@ defmodule BurpeeTrainer.Stats.Series do
   Pure chart data shaping for stats screens.
   """
 
+  alias BurpeeTrainer.Coach.Endurance
+
   @type progress_session :: %{
           completed_at: DateTime.t(),
           burpee_count_actual: pos_integer(),
@@ -35,7 +37,7 @@ defmodule BurpeeTrainer.Stats.Series do
         {_year, iso_week} =
           :calendar.iso_week_number(Date.to_erl(DateTime.to_date(session.completed_at)))
 
-        normalized_reps = if duration > 0, do: round(count / duration * 1200.0), else: 0
+        normalized_reps = normalized_reps(count, duration)
 
         %{
           completed_at: session.completed_at,
@@ -55,4 +57,13 @@ defmodule BurpeeTrainer.Stats.Series do
       max_pace: if(paces == [], do: nil, else: Enum.max(paces))
     }
   end
+
+  # Reps per 20 minutes. A shorter session scales up in proportion; a longer one reads as the
+  # 20-minute session it is as good as, fatigue counted (forty minutes holds 1.5 times).
+  defp normalized_reps(_count, duration) when duration <= 0, do: 0
+
+  defp normalized_reps(count, duration) when duration <= 1200,
+    do: round(count / duration * 1200.0)
+
+  defp normalized_reps(count, duration), do: round(count / Endurance.factor(duration))
 end

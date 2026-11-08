@@ -41,7 +41,7 @@ defmodule BurpeeTrainerWeb.Flows.OwnershipFlowTest do
     {:ok, view, _} = live(init_test_session(conn, %{user_id: attacker.id}), ~p"/")
     render_click(view, "select_alternative", %{"id" => "#{foreign.id}", "kind" => "plan"})
     assert Workouts.ensure_home_selection(Scope.for_user(attacker), slot) == selected_before
-    render_click(view, "delete_workout", %{"id" => "#{foreign.id}"})
+    for _ <- 1..2, do: render_click(view, "delete_workout", %{"id" => "#{foreign.id}"})
     assert Repo.get!(WorkoutPlan, foreign.id).state == :published
 
     owner_scope = Scope.for_user(owner)

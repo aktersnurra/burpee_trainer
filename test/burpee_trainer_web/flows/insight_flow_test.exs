@@ -95,8 +95,8 @@ defmodule BurpeeTrainerWeb.Flows.InsightFlowTest do
       pid = home.pid
       home |> element("#home-history-toggle") |> render_click()
       assert_patch(home, "/progress")
-      # Sessions are single rows on Progress; the insight reads on Home.
-      assert has_element?(home, "#home-history-inspect-#{started.id}")
+      # A session is a point on Progress; the insight reads on Home.
+      assert has_element?(home, "#home-history-point-#{started.id}")
       assert home.pid == pid
     end
   end
