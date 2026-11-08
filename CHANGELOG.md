@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-08 — The coach keeps how a session felt
+
+- **Memory**: a note on how a hard session went (where you fade, what you push through) is kept. Before, the review could file it as "only true today" and keep nothing.
+
 ## 2026-11-07 — Streaming chats
 
 - **Replies stream**: the Coach page's reply and, in Edit and New, the coach's reason for a proposal appear word by word as the coach writes them, with a soft dot after the last word. The app's loader shows until the first word; the model's thinking is never shown.

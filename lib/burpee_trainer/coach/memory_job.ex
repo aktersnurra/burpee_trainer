@@ -44,7 +44,8 @@ defmodule BurpeeTrainer.Coach.MemoryJob do
   Review what just happened with the athlete and keep the coach's memory of them up to \
   date. Return operations, each with its target part: add {content}; patch {old_text, \
   content}; remove {old_text}; leave unused fields null. Most events change nothing; then \
-  return no operations. The athlete sees every change.
+  return no operations. A note the athlete wrote about a session is the one place they say \
+  how it felt: read it for what will still matter next time. The athlete sees every change.
   """
 
   @doc "Admits a job for an exchange the owner just had with the coach."

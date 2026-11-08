@@ -52,7 +52,8 @@ entries.
   lands at once and shows in the tool's answer, and in the prompt from the next turn.
 - **Guidance.** `Memory.guidance/0` says what to keep (preferences, corrections, schedule
   and body changes, agreements) and what to skip (results, what is only true today, what is
-  vague), to patch rather than add a second entry, to merge past 80% full, and never to
+  vague; how a hard session felt, where they fade or what they push through, is not only
+  true today and is kept), to patch rather than add a second entry, to merge past 80% full, and never to
   mention the memory to the athlete.
 - **Claude** reads the same snapshot as `memory` in `get_coach_context`, and the parts with
   their entries and usage through `list_memory`.

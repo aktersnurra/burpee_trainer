@@ -151,6 +151,42 @@ defmodule BurpeeTrainer.Coach.MemoryJobTest do
     assert Memory.list(scope) == []
   end
 
+  test "a session's review hands the model what the athlete wrote about it" do
+    previous = Application.get_env(:burpee_trainer, :llm_provider)
+    previous_req = Req.default_options()
+
+    on_exit(fn ->
+      Application.put_env(:burpee_trainer, :llm_provider, previous)
+      Req.default_options(previous_req)
+    end)
+
+    Application.put_env(:burpee_trainer, :llm_provider, @config)
+    Req.default_options(plug: {Req.Test, __MODULE__})
+
+    scope = scope_fixture()
+
+    session =
+      scope.user
+      |> free_form_session_fixture()
+      |> Ecto.Changeset.change(note_post: "Heavy after rep 8 of the late sets")
+      |> Repo.update!()
+
+    reply(%{"operations" => []})
+
+    assert :ok =
+             perform_job(MemoryJob, %{"user_id" => scope.user.id, "session_id" => session.id})
+
+    assert_received {:request, %{"messages" => [_task, _snapshot, %{"content" => input}]}}
+
+    assert %{
+             "event" => %{
+               "kind" => "session",
+               "note_after" => "Heavy after rep 8 of the late sets"
+             }
+           } =
+             Jason.decode!(input)
+  end
+
   test "an exchange always admits a job; a session only when it carries feedback" do
     scope = scope_fixture()
     {:ok, exchange} = Exchange.record(scope, "Mornings?", "Yes.")
