@@ -63,6 +63,19 @@ defmodule BurpeeTrainerWeb.Flows.CoachPageFlowTest do
     assert has_element?(view, "#history-look-back")
   end
 
+  test "with nothing to look back on, Progress still leads to the coach", %{
+    conn: conn,
+    user: user
+  } do
+    summary_fixture(user, "Two sessions left; keep Thursday easy.", nil)
+    {:ok, view, _} = live(conn, ~p"/progress")
+
+    refute has_element?(view, "#history-coach-summary")
+    view |> element("#history-look-back") |> render_click()
+    assert_patch(view, ~p"/coach?from=progress")
+    assert has_element?(view, "#coach-page")
+  end
+
   test "the bookmark opens what the coach remembers by part, read-only, and Escape closes it",
        %{conn: conn, scope: scope} do
     {:ok, _} = Memory.write(scope, "user", [%{"action" => "add", "content" => "Trains at 7:00"}])

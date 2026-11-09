@@ -69,7 +69,7 @@ A choice is a soft tint of its colour with a thin ring of it and text in the ful
 - **Progress.** The week bar; `Level 1A` as the one headline with the streak (amber flame)
   opposite; "Best in 20 minutes" over two columns, each with the type's mark and name, the best
   (30px), `✓ 1B needs 50`, and the goal when it has one; the coach's look-back as one paragraph under the
-  page's only rule, all of it a link to the Coach page; "Days you trained": a GitHub-style grid,
+  page's only rule, all of it a link to the Coach page (`Coach ›` alone when there is no look back); "Days you trained": a GitHub-style grid,
   square cells, a column a week from Monday, as many weeks as fit (18 on a phone), Mon/Wed/Fri
   labels, month labels, each day navy / sky / split diagonally for both, a key with the total
   minutes; "Reps per 20 minutes": the last 12 weeks, no window tabs or session list, a point

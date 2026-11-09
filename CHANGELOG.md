@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-09 — Progress always leads to the coach
+
+- **Coach ›** stays on Progress when the coach has nothing to look back on (it leaves that empty when nothing stands out), so the way into the coach no longer disappears with it.
+
 ## 2026-11-08 — The drawer filters again
 
 - **Filters**: the filter icon beside Workouts and Videos opens type and level picks, starting on both types and your level and every one above; reset puts them back. A long workout's level is read as the 20-minute session it is as good as, so a 40-minute catch-up is no longer graded a level or two too hard.

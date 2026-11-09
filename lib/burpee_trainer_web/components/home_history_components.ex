@@ -207,10 +207,10 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
           next={BurpeeTrainer.Levels.next(@state.current_level)}
         />
       </div>
-      <%!-- The look back is the way into the coach, which opens on it; without the app's
-           coach it is Claude's and only reads here. --%>
+      <%!-- The way into the coach, under its look back when there is one; without the app's
+           coach the look back is Claude's and only reads here. --%>
       <.link
-        :if={summary_line?(@state) and BurpeeTrainer.Coach.enabled?(@state.current_scope)}
+        :if={BurpeeTrainer.Coach.enabled?(@state.current_scope)}
         id="history-look-back"
         patch={~p"/coach?from=progress"}
         data-vt="forward"
@@ -236,7 +236,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
     <p class="history-look-back-label">
       Coach<.icon :if={@chevron?} name="hero-chevron-right-mini" class="size-4" />
     </p>
-    <p id="history-coach-summary" class="history-coach-summary">
+    <p :if={summary_line?(@state)} id="history-coach-summary" class="history-coach-summary">
       <BurpeeTrainerWeb.HomeCoachComponents.summary_body
         summary={@state.progress_summary}
         loading?={@state.progress_summary_loading?}

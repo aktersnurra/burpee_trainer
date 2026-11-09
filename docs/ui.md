@@ -414,7 +414,8 @@ screen leads to the next in context:
   in a row at the target) opposite. "Best in 20 minutes" sits over two columns, one per type:
   its mark and name, the best at 30px, what the next level needs (`✓ 1B needs 50` once the
   best is past it; the next level is said only here), then its goal when it has one. The coach's look back follows as one paragraph under the page's only rule, all
-  of it a link to the Coach page (`Coach ›` over it), which opens on it.
+  of it a link to the Coach page (`Coach ›` over it), which opens on it. With the app's coach,
+  `Coach ›` stays when there is no look back, so Progress always leads to the coach.
   **Days you trained** is drawn as GitHub draws contributions: square cells, a column a week
   from Monday, Mon/Wed/Fri on the left, month names over the weeks that start them, each day
   navy for six-count, sky for Navy SEAL, split diagonally for both, a quiet fill for none; a

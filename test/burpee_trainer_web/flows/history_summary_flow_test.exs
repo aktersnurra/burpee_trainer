@@ -165,11 +165,16 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     assert has_element?(view, "#home-history-heading[aria-label^='Progress, Level']", "Level")
   end
 
-  test "with nothing to summarize, neither Progress nor Home shows the coach", %{conn: conn} do
+  test "with nothing to summarize, Home shows no coach and Progress only the way in", %{
+    conn: conn
+  } do
     {:ok, home, _} = live(conn, ~p"/")
     refute has_element?(home, "#home-coach-panel")
     {:ok, view, _} = live(conn, ~p"/progress")
     refute has_element?(view, "#history-coach-summary")
+    view |> element("#history-look-back") |> render_click()
+    assert_patch(view, ~p"/coach?from=progress")
+    assert has_element?(view, "#coach-page #home-coach-message-form")
   end
 
   test "a refreshing summary shows the loader in the coach's line until the new one arrives", %{
