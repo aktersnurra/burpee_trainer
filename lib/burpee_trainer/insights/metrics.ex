@@ -14,6 +14,7 @@ defmodule BurpeeTrainer.Insights.Metrics do
           %{value: number(), unit: numeric_unit(), label: String.t()}
           | %{value: String.t(), unit: :level | :status, label: String.t()}
   @types [:six_count, :navy_seal]
+  @history_weeks 12
   # Facts about one session: the latest, or the one being narrated.
   @session_prefixes ["session.", "same_workout."]
 
@@ -172,6 +173,51 @@ defmodule BurpeeTrainer.Insights.Metrics do
     |> Map.merge(latest_metrics(latest))
     |> Map.merge(goal_metrics)
     |> Map.merge(last_week)
+    |> Map.merge(
+      history_metrics(between(credited, Date.add(start, -7 * (@history_weeks - 1)), today))
+    )
+  end
+
+  # The weeks Progress shows (its days and its reps chart): how many sessions, in how many
+  # weeks, and where each type's 20-minute sessions started and stand.
+  defp history_metrics(rows) do
+    weeks_trained = rows |> Enum.map(&Date.beginning_of_week(&1.completed_on)) |> Enum.uniq()
+
+    base = %{
+      "history.weeks" => metric(@history_weeks, :weeks, "weeks Progress looks back over"),
+      "history.sessions" => metric(length(rows), :sessions, "sessions in those weeks"),
+      "history.weeks_trained" =>
+        metric(length(weeks_trained), :weeks, "of those weeks with at least one session")
+    }
+
+    for type <- @types,
+        timed =
+          rows
+          |> Enum.filter(
+            &(&1.burpee_type == type and &1.duration_sec_actual in Goal.session_duration_sec())
+          )
+          |> Enum.sort_by(&sort_key/1),
+        length(timed) >= 2,
+        reduce: base do
+      acc ->
+        acc
+        |> Map.put(
+          "history.first_reps.#{type}",
+          metric(
+            hd(timed).burpee_count_actual,
+            :reps,
+            "#{type} reps in the first 20-minute session of those weeks"
+          )
+        )
+        |> Map.put(
+          "history.latest_reps.#{type}",
+          metric(
+            List.last(timed).burpee_count_actual,
+            :reps,
+            "#{type} reps in the latest 20-minute session"
+          )
+        )
+    end
   end
 
   @doc "Best reps toward a goal of `burpee_type`: the most in one 20-minute session, warmups excluded."

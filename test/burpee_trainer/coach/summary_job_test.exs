@@ -43,7 +43,7 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
     assert call.purpose == "summary"
   end
 
-  test "the look back is stored with the note; one with an unsupported number is left out" do
+  test "the look back is stored with the note; one with an unsupported number reads the history instead" do
     scope = scope_fixture()
     free_form_session_fixture(scope.user)
 
@@ -62,8 +62,39 @@ defmodule BurpeeTrainer.Coach.SummaryJobTest do
       "metric_ids" => ["session.reps"]
     })
 
-    assert {:ok, %Summary{text: "Keep Thursday.", review: nil}} =
+    assert {:ok,
+            %Summary{text: "Keep Thursday.", review: "1 session over 1 of the last 12 weeks."}} =
              SummaryJob.summarize(scope, opts())
+  end
+
+  test "the history's look back: how often, then where each type's 20 minutes went" do
+    metrics = %{
+      "history.weeks" => %{value: 12, unit: :weeks, label: "w"},
+      "history.sessions" => %{value: 9, unit: :sessions, label: "s"},
+      "history.weeks_trained" => %{value: 5, unit: :weeks, label: "t"},
+      "history.first_reps.six_count" => %{value: 90, unit: :reps, label: "f"},
+      "history.latest_reps.six_count" => %{value: 104, unit: :reps, label: "l"},
+      "history.first_reps.navy_seal" => %{value: 45, unit: :reps, label: "f"},
+      "history.latest_reps.navy_seal" => %{value: 45, unit: :reps, label: "l"}
+    }
+
+    review = SummaryJob.history_review(metrics)
+
+    assert review ==
+             "9 sessions over 5 of the last 12 weeks. Six-count went from 90 to 104 reps, " <>
+               "Navy SEAL held at 45."
+
+    assert {:ok, _} =
+             Validator.validate_summary(
+               %{"text" => review, "metric_ids" => Map.keys(metrics)},
+               metrics
+             )
+
+    assert SummaryJob.history_review(%{
+             metrics
+             | "history.sessions" => %{value: 0, unit: :sessions, label: "s"}
+           }) ==
+             nil
   end
 
   test "the note starts from what the athlete has told the coach" do

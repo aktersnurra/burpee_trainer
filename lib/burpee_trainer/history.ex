@@ -128,7 +128,7 @@ defmodule BurpeeTrainer.History do
           }
         end
 
-      {:ok, weeks}
+      {:ok, place_in_streak(weeks)}
     end
   end
 
@@ -143,10 +143,22 @@ defmodule BurpeeTrainer.History do
   Weeks in a row at their target, back from the latest closed week. The week in progress
   counts once it is met and never breaks the run while it is not.
   """
-  def streak(weeks) do
+  def streak(weeks), do: Enum.count(weeks, & &1.streak_week)
+
+  # Each week's place in the current streak (1 for its first week), nil outside it.
+  defp place_in_streak(weeks) do
     {open, closed} = Enum.split_with(weeks, & &1.open?)
     run = closed |> Enum.reverse() |> Enum.take_while(& &1.target?) |> length()
-    run + Enum.count(open, & &1.target?)
+    first = length(closed) - run
+
+    closed =
+      closed
+      |> Enum.with_index()
+      |> Enum.map(fn {week, i} ->
+        Map.put(week, :streak_week, if(i >= first, do: i - first + 1))
+      end)
+
+    closed ++ Enum.map(open, &Map.put(&1, :streak_week, if(&1.target?, do: run + 1)))
   end
 
   @spec points([WorkoutSession.t()]) :: [point()]

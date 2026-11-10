@@ -60,10 +60,8 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             title={"#{@history_streak} #{if(@history_streak == 1, do: "week", else: "weeks")} in a row at the weekly target"}
             aria-label={"#{@history_streak} #{if(@history_streak == 1, do: "week", else: "weeks")} in a row at the weekly target"}
           >
+            <span aria-hidden="true">{@history_streak}</span>
             <.icon name="hero-fire" class="size-5" />
-            <span aria-hidden="true">
-              {@history_streak} {if(@history_streak == 1, do: "week", else: "weeks")}
-            </span>
           </span>
         </div>
         <.history_header
@@ -150,7 +148,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       <h2 id="home-history-weekly-heading">Days you trained</h2>
       <div id="home-history-week-grid" class="home-history-days">
         <span
-          :for={label <- ["", "Mon", "", "Wed", "", "Fri", "", ""]}
+          :for={label <- ["", "Mon", "", "Wed", "", "Fri", "", "", ""]}
           class="home-history-dayname"
           aria-hidden="true"
         >{label}</span>
@@ -173,6 +171,16 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             aria-hidden={day.future? && "true"}
             title={!day.future? && day_title(day)}
           ></span>
+          <%!-- Under a week at target, a flame: the current streak's deepen week by week in the
+               streak's amber, those of an earlier streak are grey. --%>
+          <span
+            id={week.target? && "home-history-flame-#{Date.to_iso8601(week.start)}"}
+            class={["home-history-flame", older? && "home-history-days-older"]}
+            data-step={week.streak_week && min(week.streak_week, 4)}
+            role={week.target? && "img"}
+            aria-label={week.target? && flame_label(week)}
+            aria-hidden={!week.target? && "true"}
+          ><.icon :if={week.target?} name="hero-fire" class="home-history-flame-icon" /></span>
         <% end %>
       </div>
       <div class="home-history-days-key">
@@ -184,6 +192,11 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       </div>
     </section>
     """
+  end
+
+  defp flame_label(week) do
+    "Week of #{Calendar.strftime(week.start, "%-d %b")} at target" <>
+      if(week.streak_week, do: ", in your streak", else: "")
   end
 
   defp grid_minutes(weeks), do: weeks |> Enum.sum_by(& &1.seconds) |> div(60)
@@ -218,23 +231,21 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   attr(:progress_summary, :any, required: true)
   attr(:progress_summary_loading?, :boolean, required: true)
 
-  # Each burpee type's best in 20 minutes side by side, then the coach's look back as a section
-  # of its own, headed like the page's others.
+  # The coach's look back at the history first, as the level's caption, then each burpee
+  # type's best in 20 minutes side by side. With the app's coach the look back opens the
+  # Coach page on it; without it, it is Claude's and only reads here. No look back, no line.
   defp history_header(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :look_back?,
+        summary_line?(assigns.progress_summary, assigns.progress_summary_loading?)
+      )
+
     ~H"""
     <header id="history-header" class="history-header">
-      <p class="history-best-label">Best in 20 minutes</p>
-      <div id="progress-gauges" class="progress-gauges">
-        <.gauge
-          :for={gauge <- @history_gauges}
-          gauge={gauge}
-          next={BurpeeTrainer.Levels.next(@current_level)}
-        />
-      </div>
-      <%!-- The way into the coach, under its look back when there is one; without the app's
-           coach the look back is Claude's and only reads here. --%>
       <.link
-        :if={BurpeeTrainer.Coach.enabled?(@current_scope)}
+        :if={@look_back? and BurpeeTrainer.Coach.enabled?(@current_scope)}
         id="history-look-back"
         patch={~p"/coach?from=progress"}
         data-vt="forward"
@@ -243,20 +254,23 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         <.look_back
           progress_summary={@progress_summary}
           progress_summary_loading?={@progress_summary_loading?}
-          chevron?={true}
         />
       </.link>
       <div
-        :if={
-          summary_line?(@progress_summary, @progress_summary_loading?) and
-            not BurpeeTrainer.Coach.enabled?(@current_scope)
-        }
+        :if={@look_back? and not BurpeeTrainer.Coach.enabled?(@current_scope)}
         class="history-look-back"
       >
         <.look_back
           progress_summary={@progress_summary}
           progress_summary_loading?={@progress_summary_loading?}
-          chevron?={false}
+        />
+      </div>
+      <p class="history-best-label">Best in 20 minutes</p>
+      <div id="progress-gauges" class="progress-gauges">
+        <.gauge
+          :for={gauge <- @history_gauges}
+          gauge={gauge}
+          next={BurpeeTrainer.Levels.next(@current_level)}
         />
       </div>
     </header>
@@ -265,18 +279,10 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
   attr(:progress_summary, :any, required: true)
   attr(:progress_summary_loading?, :boolean, required: true)
-  attr(:chevron?, :boolean, required: true)
 
   defp look_back(assigns) do
     ~H"""
-    <h2 class="history-look-back-label">
-      Coach<.icon :if={@chevron?} name="hero-chevron-right-mini" class="size-5" />
-    </h2>
-    <p
-      :if={summary_line?(@progress_summary, @progress_summary_loading?)}
-      id="history-coach-summary"
-      class="history-coach-summary"
-    >
+    <p id="history-coach-summary" class="history-coach-summary">
       <BurpeeTrainerWeb.HomeCoachComponents.summary_body
         summary={@progress_summary}
         loading?={@progress_summary_loading?}

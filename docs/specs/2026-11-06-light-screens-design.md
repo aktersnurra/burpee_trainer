@@ -66,10 +66,10 @@ A choice is a soft tint of its colour with a thin ring of it and text in the ful
   trash left and ✓ right. Trash asks in place as Abort does in the runner: the page steps back, ✓
   shrinks away, trash slides to the middle in clay with "Delete this session?" above; a second tap
   deletes, anything else lets go.
-- **Progress.** The week bar; `Level 1A` as the one headline with the streak (amber flame)
-  opposite; "Best in 20 minutes" over two columns, each with the type's mark and name, the best
-  (30px), `✓ 1B needs 50`, and the goal when it has one; the coach's look-back as one paragraph under a
-  "Coach ›" heading like the page's others, all of it a link to the Coach page (`Coach ›` alone when there is no look back); "Days you trained": a GitHub-style grid,
+- **Progress.** The week bar; `Level 1A` as the one headline with the streak (`3 🔥`)
+  opposite, the coach's look-back at the training history as its caption (a link to the Coach
+  page; nothing when there is none); "Best in 20 minutes" over two columns, each with the type's mark and name, the best
+  (30px), `✓ 1B needs 50`, and the goal when it has one; "Days you trained": a GitHub-style grid,
   square cells, a column a week from Monday, as many weeks as fit (18 on a phone), Mon/Wed/Fri
   labels, month labels, each day navy / sky / split diagonally for both, a key with the total
   minutes; "Reps per 20 minutes": the last 12 weeks, no window tabs or session list, a point

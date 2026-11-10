@@ -147,7 +147,7 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
         content:
           Voice.text() <>
             "\n" <>
-            "Write the note a coach would leave for this athlete, at most two sentences, plain and personal, about what the rest of this week should aim for, given what is left of the weekly training window (week.minutes of week.target_minutes) and their active goal, or the next level when they have none. When what they have told you (below) matters now, such as a sore knee, a busy week or how a session felt, start from that in your own words, and do not repeat a number from it. It sits under a list of this week's sessions done and left, and their goals are shown elsewhere, so do not restate their best or their target; use a number only when it says something the page does not. In review, write at most two sentences on how the last weeks have actually gone, as you would say it to them across the gym floor: name something specific, never list what is rising, flat and missed in turn, and leave it empty when nothing stands out. It leads their Progress page, above each goal's best and target, so do not restate those either. Every number must be a value from the metrics below, and list each metric id you used in metric_ids. Metrics: " <>
+            "Write the note a coach would leave for this athlete, at most two sentences, plain and personal, about what the rest of this week should aim for, given what is left of the weekly training window (week.minutes of week.target_minutes) and their active goal, or the next level when they have none. When what they have told you (below) matters now, such as a sore knee, a busy week or how a session felt, start from that in your own words, and do not repeat a number from it. It sits under a list of this week's sessions done and left, and their goals are shown elsewhere, so do not restate their best or their target; use a number only when it says something the page does not. In review, write at most two sentences on their training history over the last history.weeks weeks, as you would say it to them across the gym floor: how regularly they have trained (history.sessions sessions in history.weeks_trained of those weeks) and how each type's timed sessions have moved since the first of those weeks (history.first_reps and history.latest_reps); say what stands out in that history, never list every figure in turn. It sits under their level on Progress, above their bests, the days they trained and their reps chart. Every number must be a value from the metrics below, and list each metric id you used in metric_ids. Metrics: " <>
             Jason.encode!(metrics) <>
             " What they have told you: " <> Jason.encode!(told(scope))
       }
@@ -185,16 +185,46 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
     }
   end
 
-  # The look back is checked like the note; one that fails is left out, not the note.
+  # The look back is checked like the note; one that is missing or fails reads the history
+  # plainly instead, never taking the note with it.
   defp review(%{"review" => review, "metric_ids" => ids}, metrics)
        when is_binary(review) and review != "" do
     case Validator.validate_summary(%{"text" => review, "metric_ids" => ids}, metrics) do
       {:ok, _} -> review
-      {:error, _} -> nil
+      {:error, _} -> history_review(metrics)
     end
   end
 
-  defp review(_content, _metrics), do: nil
+  defp review(_content, metrics), do: history_review(metrics)
+
+  @doc """
+  The history Progress shows, read plainly: how many sessions in how many of its weeks, then
+  where each type's 20-minute sessions went. `nil` with no session in those weeks.
+  """
+  @spec history_review(map()) :: String.t() | nil
+  def history_review(%{"history.sessions" => %{value: sessions}} = metrics) when sessions > 0 do
+    often =
+      "#{sessions} #{if(sessions == 1, do: "session", else: "sessions")} over " <>
+        "#{Metrics.format(metrics["history.weeks_trained"])} of the last " <>
+        "#{Metrics.format(metrics["history.weeks"])} weeks."
+
+    moved =
+      for {type, name} <- [six_count: "Six-count", navy_seal: "Navy SEAL"],
+          %{value: first} <- [metrics["history.first_reps.#{type}"]],
+          %{value: latest} <- [metrics["history.latest_reps.#{type}"]],
+          do:
+            if(first == latest,
+              do: "#{name} held at #{latest}",
+              else: "#{name} went from #{first} to #{latest}"
+            )
+
+    case moved do
+      [] -> often
+      [one | rest] -> often <> " " <> Enum.join([one <> " reps" | rest], ", ") <> "."
+    end
+  end
+
+  def history_review(_metrics), do: nil
 
   defp store(scope, summary, source),
     do:
@@ -214,7 +244,7 @@ defmodule BurpeeTrainer.Coach.SummaryJob do
   def fallback(metrics) do
     case shortfall(metrics) do
       nil -> nil
-      {text, ids} -> %{"text" => text, "metric_ids" => ids}
+      {text, ids} -> %{"text" => text, "metric_ids" => ids, "review" => history_review(metrics)}
     end
   end
 

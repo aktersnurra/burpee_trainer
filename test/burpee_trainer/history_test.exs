@@ -233,9 +233,28 @@ defmodule BurpeeTrainer.HistoryTest do
     assert length(weeks) == 12
     assert Enum.map(Enum.take(weeks, -3), & &1.minutes) == [80, 80, 83]
     assert History.streak(weeks) == 3
+    assert Enum.map(Enum.take(weeks, -4), & &1.streak_week) == [nil, 1, 2, 3]
     assert List.last(weeks).open?
     assert {:ok, year} = History.weeks(sessions, user, now, "year")
     assert length(year) >= 52
+  end
+
+  test "a missed week ends a streak: the weeks at target before it are not in the current one" do
+    user = user_fixture()
+    {:ok, user} = BurpeeTrainer.Accounts.update_timezone(user, "Etc/UTC")
+    now = ~U[2026-09-23 12:00:00Z]
+
+    sessions = [
+      session(user, ~U[2026-08-31 12:00:00Z], duration_sec_actual: 4_800),
+      session(user, ~U[2026-09-14 12:00:00Z], duration_sec_actual: 4_800)
+    ]
+
+    assert {:ok, weeks} = History.weeks(sessions, user, now, "twelve_weeks")
+    # 31 Aug met, 7 Sep missed, 14 Sep met, this week (21 Sep) not yet met.
+    assert Enum.map(Enum.take(weeks, -4), &{&1.target?, &1.streak_week}) ==
+             [{true, nil}, {false, nil}, {true, 1}, {false, nil}]
+
+    assert History.streak(weeks) == 1
   end
 
   test "a sign-up week counts as met at its pro-rated target and starts the streak" do

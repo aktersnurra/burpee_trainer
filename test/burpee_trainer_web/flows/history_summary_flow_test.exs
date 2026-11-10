@@ -158,22 +158,44 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
            )
   end
 
+  test "under Days you trained, a week at target has a flame, lit only in the current streak", %{
+    conn: conn,
+    user: user
+  } do
+    today = Date.utc_today()
+    two_weeks_ago = DateTime.add(DateTime.utc_now(:second), -14 * 86_400, :second)
+    free_form_session_fixture(user, %{duration_sec_actual: 4_800, completed_at: two_weeks_ago})
+    free_form_session_fixture(user, %{duration_sec_actual: 4_800})
+    {:ok, view, _} = live(conn, ~p"/progress")
+
+    this_week = Date.beginning_of_week(today)
+    earlier = Date.add(this_week, -14)
+    # This week is met: the first week of the current streak.
+    assert has_element?(
+             view,
+             "#home-history-flame-#{this_week}[data-step='1'][role=img][aria-label$='in your streak']"
+           )
+
+    # Two weeks ago was met, then a week missed: its flame is not in the streak.
+    assert has_element?(view, "#home-history-flame-#{earlier}[role=img]")
+    refute has_element?(view, "#home-history-flame-#{earlier}[data-step]")
+    refute has_element?(view, "#home-history-flame-#{Date.add(this_week, -7)}")
+  end
+
   test "the page is Progress", %{conn: conn} do
     {:ok, view, _} = live(conn, ~p"/progress")
     # Progress is titled by your level; it is still named Progress for screen readers.
     assert has_element?(view, "#home-history-heading[aria-label^='Progress, Level']", "Level")
   end
 
-  test "with nothing to summarize, Home shows no coach and Progress only the way in", %{
+  test "with nothing to summarize, neither Home nor Progress shows the coach", %{
     conn: conn
   } do
     {:ok, home, _} = live(conn, ~p"/")
     refute has_element?(home, "#home-coach-panel")
     {:ok, view, _} = live(conn, ~p"/progress")
     refute has_element?(view, "#history-coach-summary")
-    view |> element("#history-look-back") |> render_click()
-    assert_patch(view, ~p"/coach?from=progress")
-    assert has_element?(view, "#coach-page #home-coach-message-form")
+    refute has_element?(view, "#history-look-back")
   end
 
   test "a refreshing summary shows the loader in the coach's line until the new one arrives", %{

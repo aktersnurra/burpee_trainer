@@ -119,7 +119,7 @@ One palette across every view. A colour means one thing.
 | `--cobalt` | `#2f63ad` | as a tint: what the coach changed; an OK session |
 | `--good` | `#3f9161` | a Good session |
 | `--clay` | `#b46958` | at stake: abort, delete, where you stopped; a Rough session |
-| `--amber` | `#c48a24` | Finish's tags; the streak's flame |
+| `--amber` | `#c48a24` | Finish's tags; the streak's flame and the flames under its weeks |
 
 A choice is a soft tint of its colour with a thin ring of it and its text in the full colour
 (`rgba(c, .16–.32)` fill, `inset 0 0 0 1px rgba(c, .45–.6)`), never a solid fill.
@@ -413,17 +413,20 @@ screen leads to the next in context:
   `docs/specs/2026-10-14-coach-on-home-design.md` and
   `docs/specs/2026-10-14-coach-card-design.md`.
 - **Progress** (`/progress`; `/history` redirects) keeps the week strip on top, which leads
-  back Home, then your level as its one headline with the streak (an amber flame and the weeks
-  in a row at the target) opposite. "Best in 20 minutes" sits over two columns, one per type:
-  its mark and name, the best at 30px, what the next level needs (`✓ 1B needs 50` once the
-  best is past it; the next level is said only here), then its goal when it has one. The coach's look back follows as a section of its own, headed "Coach" like
-  the page's other sections with a chevron at the heading's end, then one paragraph; all of it
-  is a link to the Coach page, which opens on it. With the app's coach, the heading stays when
-  there is no look back, so Progress always leads to the coach.
+  back Home, then your level as its one headline with the streak (the weeks in a row at the
+  target, then an amber flame: `3 🔥`, no word) opposite. Under it, as its caption, the coach's look back at the
+  history: one paragraph, at most two sentences, on how regularly you trained over the last 12
+  weeks and where each type's 20-minute sessions went (the model's words, or the same read
+  plainly from the numbers when it has none), with no heading; with the app's coach it is a
+  link to the Coach page, which opens on it. No look back, no line. "Best in 20 minutes" sits
+  over two columns, one per type: its mark and name, the best at 30px, what the next level
+  needs (`✓ 1B needs 50` once the best is past it; the next level is said only here), then its
+  goal when it has one.
   **Days you trained** is drawn as GitHub draws contributions: square cells, a column a week
   from Monday, Mon/Wed/Fri on the left, month names over the weeks that start them, each day
-  navy for six-count, sky for Navy SEAL, split diagonally for both, a quiet fill for none; a
-  phone shows the latest 18 weeks and the 640px column 34, and a key gives their minutes. The
+  navy for six-count, sky for Navy SEAL, split diagonally for both, a quiet fill for none; under
+  each week that reached its target, a small flame: the current streak's deepen week by week in
+  the streak's amber (full by the fourth), an earlier streak's are grey; a phone shows the latest 18 weeks and the 640px column 34, and a key gives their minutes. The
   grid never changes. **Reps per 20 minutes** covers the last 12 weeks, with no window tabs or
   list: one chart, six-count off the left axis as a solid navy line, Navy SEAL off the right as
   a dashed sky one, each axis's numbers in its line's colour, a small legend above and months

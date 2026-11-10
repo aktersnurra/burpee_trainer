@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-10 — Progress reads your history
+
+- **Look back**: the coach's look back is the caption under your level, with no "Coach" heading, and it comments on your training history: how many sessions in how many of the last 12 weeks, and where each type's 20-minute sessions went. When the model writes none, or one that fails the number check, the same is read plainly from the numbers. It still opens the Coach page on it; with no look back there is no line.
+- **Streak**: the weeks in a row at the target read as the number and the flame (`3 🔥`), without the word.
+- **Days you trained**: a small flame under each week that reached its target; the current streak's deepen to full amber by its fourth week, an earlier streak's are grey.
+- **History metrics**: the coach now sees the weeks Progress shows: sessions, weeks trained, and each type's first and latest 20-minute reps in the last 12 weeks.
+
 ## 2026-11-10 — The week card is back; no whistle
 
 - **Coach page week**: the split session bar is gone; the week is the card again, closed to "This week" and its minutes, open on its sessions.

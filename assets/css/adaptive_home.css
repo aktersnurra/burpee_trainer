@@ -563,7 +563,7 @@ button.home-summary:hover .home-workout-name {
    month names over the weeks that start them, each day in its type's colour (split diagonally
    for both). The cells are square and share the width: 18 weeks on a phone, 34 in the 640px
    column, the older ones hidden below it. */
-.home-history-days { display: grid; grid-auto-flow: column; grid-template-rows: auto repeat(7, auto); grid-template-columns: auto repeat(18, minmax(0, 1fr)); gap: 3px; margin-top: 10px; color: var(--muted); font-size: 10px; line-height: 1; }
+.home-history-days { display: grid; grid-auto-flow: column; grid-template-rows: auto repeat(7, auto) auto; grid-template-columns: auto repeat(18, minmax(0, 1fr)); gap: 3px; margin-top: 10px; color: var(--muted); font-size: 10px; line-height: 1; }
 @media (min-width: 601px) { .home-history-days { grid-template-columns: auto repeat(34, minmax(0, 1fr)); } }
 @media (max-width: 600px) { .home-history-days-older, .home-history-days-wide { display: none; } }
 @media (min-width: 601px) { .home-history-days-phone { display: none; } }
@@ -574,6 +574,16 @@ button.home-summary:hover .home-workout-name {
 :is(.home-history-day, .home-history-days-scale i).home-history-day-seal { background: var(--seal); }
 :is(.home-history-day, .home-history-days-scale i).home-history-day-both { background: linear-gradient(135deg, var(--six) 0 50%, var(--seal) 50% 100%); }
 .home-history-day.home-history-day-future { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+/* No display here: older weeks' flames must stay hidden on a phone with their days. */
+.home-history-flame { padding-top: 3px; text-align: center; line-height: 0; }
+/* A week at target: grey for an earlier streak; in the current one, a step deeper amber each
+   week up to the fourth. */
+.home-history-flame-icon { width: 11px; height: 11px; color: var(--muted); opacity: 0.55; }
+.home-history-flame[data-step] .home-history-flame-icon { opacity: 1; color: color-mix(in srgb, var(--amber) var(--heat), var(--fill)); }
+.home-history-flame[data-step="1"] { --heat: 45%; }
+.home-history-flame[data-step="2"] { --heat: 65%; }
+.home-history-flame[data-step="3"] { --heat: 85%; }
+.home-history-flame[data-step="4"] { --heat: 100%; }
 .home-history-days-key { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 12px; margin-top: 10px; color: var(--muted); font-size: 11px; }
 .home-history-days-scale { display: inline-flex; align-items: center; gap: 5px; }
 .home-history-days-scale i { width: 11px; height: 11px; border-radius: 2px; }
@@ -756,19 +766,14 @@ button.home-summary:hover .home-workout-name {
 #home-done-today, #home-week-complete { max-width: 354px; margin: clamp(65px, 12vh, 150px) auto 0; padding: 0; border: 0; text-align: center; }
 #home-done-today .home-result-meta, #home-week-complete .home-result-meta { margin-top: 12px; color: var(--muted); font-size: var(--text-body); }
 .home-result-insight { max-width: 354px; margin: 20px auto 0; color: var(--ink); font-size: var(--text-body); line-height: 1.5; text-align: center; }
-/* Progress: each type's best in 20 minutes side by side, then the coach's look back, headed
-   like the page's other sections, the chevron at the heading's end. */
+/* Progress: the coach's look back at the history as the level's caption, then each type's
+   best in 20 minutes side by side. */
 .history-best-label { margin: 18px 0 0; color: var(--muted); font-size: var(--text-small); }
 .progress-gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
-.history-look-back { display: block; margin-top: 28px; color: inherit; text-decoration: none; }
-.history-look-back-label { display: flex; align-items: center; justify-content: space-between; margin: 0; color: var(--ink); font-size: var(--text-body); font-weight: 600; }
-.history-look-back-label .size-5 { margin-right: -4px; color: var(--muted); transition: transform var(--motion-quick) var(--ease-out), color var(--motion-quick) ease; }
-a.history-look-back:hover .history-look-back-label .size-5 { color: var(--ink); transform: translateX(2px); }
-@media (prefers-reduced-motion: reduce) { .history-look-back-label .size-5 { transition: none; } }
-/* Without a look back, `Coach ›` alone is still a full tap target. */
-a.history-look-back { min-height: 44px; }
+.history-look-back { display: block; margin-top: 10px; color: inherit; text-decoration: none; }
+a.history-look-back:hover .history-coach-summary { color: var(--ink-soft); }
 a.history-look-back:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: 4px; }
-.history-header .history-coach-summary { display: block; margin-top: 10px; padding: 0; color: var(--ink); font-size: var(--text-body); line-height: 1.5; }
+.history-header .history-coach-summary { display: block; margin: 0; padding: 0; color: var(--ink); font-size: var(--text-body); line-height: 1.5; }
 .progress-gauge { display: flex; flex-direction: column; min-width: 0; }
 .progress-gauge p { margin: 0; }
 .progress-gauge-type, .progress-gauge-label { color: var(--muted); font-size: var(--text-small); }

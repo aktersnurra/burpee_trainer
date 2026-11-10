@@ -63,7 +63,7 @@ defmodule BurpeeTrainerWeb.Flows.CoachPageFlowTest do
     assert has_element?(view, "#history-look-back")
   end
 
-  test "with nothing to look back on, Progress still leads to the coach", %{
+  test "with nothing to look back on, Progress has no coach line", %{
     conn: conn,
     user: user
   } do
@@ -71,9 +71,7 @@ defmodule BurpeeTrainerWeb.Flows.CoachPageFlowTest do
     {:ok, view, _} = live(conn, ~p"/progress")
 
     refute has_element?(view, "#history-coach-summary")
-    view |> element("#history-look-back") |> render_click()
-    assert_patch(view, ~p"/coach?from=progress")
-    assert has_element?(view, "#coach-page")
+    refute has_element?(view, "#history-look-back")
   end
 
   test "the bookmark opens what the coach remembers by part, read-only, and Escape closes it",

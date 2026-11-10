@@ -246,6 +246,27 @@ defmodule BurpeeTrainer.Insights.MetricsTest do
     assert m["last_week.target_minutes"].value == 40
   end
 
+  test "the history Progress shows: sessions and weeks trained in the last 12, and each type's first and latest 20 minutes" do
+    rows = [
+      session(1, ~U[2026-07-13 12:00:00Z], 80, 1_200),
+      session(2, ~U[2026-07-21 12:00:00Z], 90, 1_200),
+      session(3, ~U[2026-08-10 12:00:00Z], 40, 1_200, :navy_seal),
+      session(4, ~U[2026-09-01 12:00:00Z], 120, 1_500),
+      %{session(5, ~U[2026-09-02 12:00:00Z], 10, 300) | tags: "warmup"},
+      session(6, ~U[2026-10-06 12:00:00Z], 104, 1_200)
+    ]
+
+    m = Metrics.compute(rows, [], ~D[2026-10-07], "Etc/UTC", ~D[2024-01-01])
+    assert m["history.weeks"].value == 12
+    # The week of 13 July is the thirteenth back; the warmup earns nothing.
+    assert m["history.sessions"].value == 4
+    assert m["history.weeks_trained"].value == 4
+    # Only 20-minute sessions compare; one Navy SEAL session has nothing to compare with.
+    assert m["history.first_reps.six_count"].value == 90
+    assert m["history.latest_reps.six_count"].value == 104
+    refute Map.has_key?(m, "history.first_reps.navy_seal")
+  end
+
   test "a user in their sign-up week has no last week" do
     m = Metrics.compute([], [], ~D[2026-10-10], "Etc/UTC", ~D[2026-10-07])
     refute Map.has_key?(m, "last_week.minutes")
