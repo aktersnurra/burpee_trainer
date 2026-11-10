@@ -400,10 +400,13 @@ screen leads to the next in context:
 - **Home** (`/`) shows today's state: the ready workout with Start (a starter workout on
   first use, never an empty prompt), or once trained, the day's result. Done is one order,
   never a card: the result, this week's sessions done and left in Progress's rows, then the
-  chat under a small "Coach" with its bookmark (which opens the Coach page): the coach's word
+  chat under a small "Coach" with its whistle (which opens the Coach page; the bookmark
+  means only the coach's memory): the coach's word
   on the rest of the week is its first message, then the conversation (you on the right in a
   soft bubble, the coach plain on the left), "Message the coach" and waiting goals. The coach
-  keeps its own memory; what it noted or forgot reads as a quiet line in the conversation. The
+  keeps its own memory; what it noted, updated or forgot reads as a quiet note in the
+  conversation, changes of one kind in a row together: the verb once, then their lines, the
+  bookmark in cobalt (what the coach changed). The
   coach speaks on Home only once the day is done. The week strip opens Progress. Design:
   `docs/specs/2026-09-09-adaptive-home-pre-workout-design.md`, revised by
   `docs/specs/2026-10-10-frictionless-home-design.md` and
@@ -413,9 +416,10 @@ screen leads to the next in context:
   back Home, then your level as its one headline with the streak (an amber flame and the weeks
   in a row at the target) opposite. "Best in 20 minutes" sits over two columns, one per type:
   its mark and name, the best at 30px, what the next level needs (`✓ 1B needs 50` once the
-  best is past it; the next level is said only here), then its goal when it has one. The coach's look back follows as one paragraph under the page's only rule, all
-  of it a link to the Coach page (`Coach ›` over it), which opens on it. With the app's coach,
-  `Coach ›` stays when there is no look back, so Progress always leads to the coach.
+  best is past it; the next level is said only here), then its goal when it has one. The coach's look back follows as a section of its own, headed "Coach" like
+  the page's other sections with a chevron at the heading's end, then one paragraph; all of it
+  is a link to the Coach page, which opens on it. With the app's coach, the heading stays when
+  there is no look back, so Progress always leads to the coach.
   **Days you trained** is drawn as GitHub draws contributions: square cells, a column a week
   from Monday, Mon/Wed/Fri on the left, month names over the weeks that start them, each day
   navy for six-count, sky for Navy SEAL, split diagonally for both, a quiet fill for none; a
@@ -428,8 +432,10 @@ screen leads to the next in context:
   session under the chart: name, date, reps, time, tags and its trash. Design: `docs/specs/2026-11-06-light-screens-design.md`.
 - **Coach** (`/coach`, with the app's coach; without it, Home) is the coach's own page. Its top
   row: Back (a chevron, to where you came from: `/coach?from=progress` back to Progress, else
-  Home), "Coach", and the memory bookmark (4a1a). Then this week's sessions as on Home done (no
-  week bar: the header is enough), then the same chat, the box docked at the foot. Its first message is the coach's
+  Home), "Coach", and the memory bookmark (4a1a). Then "This week" with its minutes against the
+  target over the week as a bar of its sessions, each as wide as its minutes: done ones filled
+  in their type's colour with the day under them, the ones to go outlined in their chart line
+  (six-count solid, Navy SEAL dashed), always open. Then the same chat, the box docked at the foot. Its first message is the coach's
   word on the week, or, arriving from Progress, the look back. The coach has no suggestions of its
   own, so there is no suggestions row. Leaving after the coach wrote to its memory as it talked
   here writes the summary again. Design:

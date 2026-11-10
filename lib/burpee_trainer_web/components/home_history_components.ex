@@ -218,8 +218,8 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   attr(:progress_summary, :any, required: true)
   attr(:progress_summary_loading?, :boolean, required: true)
 
-  # Each burpee type's best in 20 minutes side by side, then the coach's look back under the
-  # page's only rule.
+  # Each burpee type's best in 20 minutes side by side, then the coach's look back as a section
+  # of its own, headed like the page's others.
   defp history_header(assigns) do
     ~H"""
     <header id="history-header" class="history-header">
@@ -269,9 +269,9 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
 
   defp look_back(assigns) do
     ~H"""
-    <p class="history-look-back-label">
-      Coach<.icon :if={@chevron?} name="hero-chevron-right-mini" class="size-4" />
-    </p>
+    <h2 class="history-look-back-label">
+      Coach<.icon :if={@chevron?} name="hero-chevron-right-mini" class="size-5" />
+    </h2>
     <p
       :if={summary_line?(@progress_summary, @progress_summary_loading?)}
       id="history-coach-summary"

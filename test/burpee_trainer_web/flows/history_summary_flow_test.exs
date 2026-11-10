@@ -271,10 +271,17 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     {:ok, view, _} = live(conn, ~p"/")
     html = render(view)
     {said, _} = :binary.match(html, "I train evenings now")
-    {updated, _} = :binary.match(html, "Updated: Trains at 18:00")
+    {updated, _} = :binary.match(html, ~s(data-kind="updated"))
     assert said < updated
+
+    assert has_element?(
+             view,
+             "#home-coach-thread .coach-memory[data-kind=updated]",
+             "Trains at 18:00"
+           )
+
     # A patch reads once, as updated, not as a forget and a note.
-    refute html =~ "Forgot: Trains at 7:00"
+    refute has_element?(view, "#home-coach-thread .coach-memory[data-kind=forgot]")
     assert has_element?(view, "#home-coach-thread .coach-memory[data-kind=noted] .hero-bookmark")
   end
 

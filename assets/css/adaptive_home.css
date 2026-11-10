@@ -752,16 +752,19 @@ button.home-summary:hover .home-workout-name {
 #home-done-today, #home-week-complete { max-width: 354px; margin: clamp(65px, 12vh, 150px) auto 0; padding: 0; border: 0; text-align: center; }
 #home-done-today .home-result-meta, #home-week-complete .home-result-meta { margin-top: 12px; color: var(--muted); font-size: var(--text-body); }
 .home-result-insight { max-width: 354px; margin: 20px auto 0; color: var(--ink); font-size: var(--text-body); line-height: 1.5; text-align: center; }
-/* Progress: each type's best in 20 minutes side by side, then the coach's look back under the
-   page's only rule. */
+/* Progress: each type's best in 20 minutes side by side, then the coach's look back, headed
+   like the page's other sections, the chevron at the heading's end. */
 .history-best-label { margin: 18px 0 0; color: var(--muted); font-size: var(--text-small); }
 .progress-gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
-.history-look-back { display: block; margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); color: inherit; text-decoration: none; }
-.history-look-back-label { display: flex; align-items: center; gap: 2px; margin: 0; color: var(--muted); font-size: var(--text-small); }
+.history-look-back { display: block; margin-top: 28px; color: inherit; text-decoration: none; }
+.history-look-back-label { display: flex; align-items: center; justify-content: space-between; margin: 0; color: var(--ink); font-size: var(--text-body); font-weight: 600; }
+.history-look-back-label .size-5 { margin-right: -4px; color: var(--muted); transition: transform var(--motion-quick) var(--ease-out), color var(--motion-quick) ease; }
+a.history-look-back:hover .history-look-back-label .size-5 { color: var(--ink); transform: translateX(2px); }
+@media (prefers-reduced-motion: reduce) { .history-look-back-label .size-5 { transition: none; } }
 /* Without a look back, `Coach ›` alone is still a full tap target. */
 a.history-look-back { min-height: 44px; }
 a.history-look-back:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: 4px; }
-.history-header .history-coach-summary { display: block; margin-top: 6px; padding: 0; color: var(--ink); font-size: var(--text-body); line-height: 1.5; }
+.history-header .history-coach-summary { display: block; margin-top: 10px; padding: 0; color: var(--ink); font-size: var(--text-body); line-height: 1.5; }
 .progress-gauge { display: flex; flex-direction: column; min-width: 0; }
 .progress-gauge p { margin: 0; }
 .progress-gauge-type, .progress-gauge-label { color: var(--muted); font-size: var(--text-small); }
@@ -825,9 +828,13 @@ a.history-look-back:focus-visible { outline: 2px solid var(--focus); outline-off
 /* The streak sits opposite the level: a flame and the weeks in a row at the target. */
 .history-streak { display: inline-flex; align-items: center; gap: 4px; color: var(--ink); font-size: 14px; font-variant-numeric: tabular-nums; }
 .history-streak .hero-fire { color: var(--amber); }
-/* What the coach noted or forgot: a quiet line between exchanges. */
-.coach-memory { display: flex; align-items: flex-start; gap: 8px; color: var(--muted); font-size: var(--text-small); line-height: 1.5; }
-.coach-memory .size-4 { flex: none; margin-top: 2px; }
+/* What the coach noted or forgot: a quiet note between exchanges, the verb once over its lines,
+   its mark in cobalt, the palette's colour for what the coach changed. */
+.coach-memory { display: flex; align-items: flex-start; gap: 8px; color: var(--muted); font-size: var(--text-small); line-height: 1.45; }
+.coach-memory .size-4 { flex: none; margin-top: 2px; color: var(--cobalt); }
+.coach-memory p { margin: 0; }
+.coach-memory p + p { margin-top: 2px; }
+.coach-memory .coach-memory-verb { color: var(--ink-soft); font-weight: 500; }
 /* A workout in progress sits where the workout and the result do, centred like them. */
 #home-ready-recommendation.home-resume { max-width: 354px; margin: clamp(65px, 12vh, 150px) auto 0; padding: 0; border: 0; text-align: center; }
 .home-resume .home-state-heading { font: 600 var(--text-title)/1.2 var(--font-sans); letter-spacing: -.9px; }
@@ -850,11 +857,11 @@ a.history-look-back:focus-visible { outline: 2px solid var(--focus); outline-off
 .adaptive-home .coach-week-left .coach-week-type { color: var(--muted); }
 .coach-week-left .coach-week-type::before { opacity: .5; }
 /* The coach's opener is the chat's first message, plain from the left like its replies. */
-.coach-chat { display: grid; gap: 16px; }
+.coach-chat { display: grid; gap: 24px; }
 .coach-opener { font-size: var(--text-body); line-height: 1.5; }
 .coach-opener .coach-summary-text { font-size: inherit; }
-.coach-thread { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
-.coach-exchange { display: grid; gap: 8px; font-size: var(--text-body); line-height: 1.5; }
+.coach-thread { display: grid; gap: 24px; margin: 0; padding: 0; list-style: none; }
+.coach-exchange { display: grid; gap: 12px; font-size: var(--text-body); line-height: 1.5; }
 .coach-exchange-you { justify-self: end; max-width: 88%; margin: 0; padding: 9px 15px; border-radius: 20px 20px 6px 20px; background: var(--bubble); color: var(--ink); }
 .coach-exchange-coach { margin: 0; color: var(--ink); }
 
@@ -1050,17 +1057,22 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .coach-page-title { margin: 0; text-align: center; font: 600 var(--text-heading)/1.2 var(--font-sans); }
 .coach-page-title:focus { outline: none; }
 .coach-page #home-week-progress { margin-top: 14px; }
-/* The week on the Coach page: one card, closed to its minutes, open on its sessions. */
-.coach-week-card { margin: 16px 0 24px; border: 1px solid var(--line); border-radius: var(--radius-surface); background: var(--color-base-200); }
-.coach-week-summary { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 0 16px; border-radius: var(--radius-surface); color: var(--ink); font-size: var(--text-body); list-style: none; cursor: pointer; }
-.coach-week-summary::-webkit-details-marker { display: none; }
-.coach-week-summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
-.coach-week-total { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; }
-.coach-week-chevron { flex: none; color: var(--muted); transition: transform var(--motion-quick) var(--ease-out); }
-.coach-week-card[open] .coach-week-chevron { transform: rotate(180deg); }
-.coach-page .coach-week-card .coach-week { margin: 0; padding: 0 16px; }
-.coach-week-card .coach-week-item:last-child { border-bottom: 0; }
-@media (prefers-reduced-motion: reduce) { .coach-week-chevron { transition: none; } }
+/* The week on the Coach page as its sessions side by side, each as wide as its minutes: done
+   ones filled in their type's colour with the day under them, the ones to go outlined in their
+   chart line (six-count solid, Navy SEAL dashed). */
+.coach-week-bar { margin: 20px 0 28px; }
+.coach-week-bar-head { display: flex; align-items: baseline; justify-content: space-between; margin: 0 0 10px; color: var(--ink); font-size: var(--text-body); }
+.coach-week-total { color: var(--muted); font-variant-numeric: tabular-nums; }
+.coach-week-segments { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.coach-week-segment { flex: 1 1 0; min-width: 0; }
+.coach-week-segment-mark { display: block; height: 12px; border-radius: 3px; }
+.coach-week-segment.progress-key-six-count .coach-week-segment-mark { --mark: var(--six); }
+.coach-week-segment.progress-key-navy-seal .coach-week-segment-mark { --mark: var(--seal-line); }
+.coach-week-segment[data-status="done"] .coach-week-segment-mark { background: var(--mark); }
+.coach-week-segment.progress-key-navy-seal[data-status="done"] .coach-week-segment-mark { background: var(--seal); }
+.coach-week-segment[data-status="left"] .coach-week-segment-mark { border: 1.5px solid var(--mark); opacity: .55; }
+.coach-week-segment.progress-key-navy-seal[data-status="left"] .coach-week-segment-mark { border-style: dashed; }
+.coach-week-segment-day { display: block; margin-top: 6px; color: var(--muted); font-size: var(--text-small); }
 .coach-page-action { color: var(--muted); text-decoration: none; }
 @media (min-width: 601px) {
   .coach-page #coach-page-body { max-width: 640px; margin-inline: auto; }

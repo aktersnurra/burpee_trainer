@@ -52,8 +52,8 @@ A choice is a soft tint of its colour with a thin ring of it and text in the ful
   numerals.
 - **Home, done.** The result (type, `104 reps · 20:00`, `4 sets of 26, all done`, the week line),
   the week's sessions as rows with the type's mark, then the chat: the coach plain from the left,
-  you in a bubble on the right. The coach's opener is the chat's first message. The bookmark sits
-  with the coach and opens the Coach page's memory.
+  you in a bubble on the right. The coach's opener is the chat's first message. A whistle sits
+  with the coach and opens the Coach page; the bookmark is only ever the coach's memory.
 - **Edit.** Your request as a bubble, then one workout block with the diff (`20 min · ~~15~~ 150
   reps`, why, `2 sets of 75 · 7:30 rest ~~was 5 sets of 3~~`), the set table with changed cells
   highlighted, Run as the play pill, suggestions and the box at the foot. X in the corner.
@@ -68,17 +68,17 @@ A choice is a soft tint of its colour with a thin ring of it and text in the ful
   deletes, anything else lets go.
 - **Progress.** The week bar; `Level 1A` as the one headline with the streak (amber flame)
   opposite; "Best in 20 minutes" over two columns, each with the type's mark and name, the best
-  (30px), `✓ 1B needs 50`, and the goal when it has one; the coach's look-back as one paragraph under the
-  page's only rule, all of it a link to the Coach page (`Coach ›` alone when there is no look back); "Days you trained": a GitHub-style grid,
+  (30px), `✓ 1B needs 50`, and the goal when it has one; the coach's look-back as one paragraph under a
+  "Coach ›" heading like the page's others, all of it a link to the Coach page (`Coach ›` alone when there is no look back); "Days you trained": a GitHub-style grid,
   square cells, a column a week from Monday, as many weeks as fit (18 on a phone), Mon/Wed/Fri
   labels, month labels, each day navy / sky / split diagonally for both, a key with the total
   minutes; "Reps per 20 minutes": the last 12 weeks, no window tabs or session list, a point
   opening its session (with its trash) under the chart; one chart, close to square, six-count on the left axis as a solid navy line, Navy SEAL on the
   right axis as a dashed sky line, each axis labelled in its colour.
-- **Coach.** A page of its own, reached from Home's coach bookmark and from Progress's look-back.
-  Back chevron, "Coach", the memory bookmark on the right. The week as one card, closed to "This
-  week" and its minutes against the target, open on its sessions (no week bar under the header),
-  then the chat (the same as Home done's), suggestions, the box. From Progress the look-back is
+- **Coach.** A page of its own, reached from Home's coach whistle and from Progress's look-back.
+  Back chevron, "Coach", the memory bookmark on the right. "This week" and its minutes against the
+  target over a bar of the week's sessions, each as wide as its minutes (done filled in its
+  type's colour with its day, to go outlined in its chart line), always open, then the chat (the same as Home done's), suggestions, the box. From Progress the look-back is
   the first message. The bookmark opens the memory sheet: "About you" and "Coaching notes", each
   with how full it is, the lines read only, "To change a line, tell the coach." at the
   foot; a line the coach just changed is highlighted. Back returns where you came from.

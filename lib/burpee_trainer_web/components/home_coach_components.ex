@@ -41,7 +41,8 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
 
   # The coach is a section of Home, not a card: this week's window in Progress's rows, then
   # the conversation as a chat, its opener first, with what it noted or forgot about you as
-  # quiet lines between exchanges. The bookmark leads to the Coach page.
+  # quiet lines between exchanges. The whistle leads to the Coach page; the bookmark is only
+  # ever the coach's memory.
   # See docs/specs/2026-11-06-light-screens-design.md.
   def panel(assigns) do
     ~H"""
@@ -59,7 +60,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           title="Coach"
           phx-mounted={@home_focus_from == :coach && JS.focus(to: "#home-coach-open")}
         >
-          <.icon name="hero-bookmark" class="size-5" />
+          <span class="icon-whistle size-5" aria-hidden="true"></span>
         </.link>
       </div>
       <.conversation
@@ -89,8 +90,8 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   end
 
   @doc """
-  The Coach page: Back, "Coach" and the memory bookmark on top, then the week as a card that
-  opens on its sessions, the chat, and the box pinned to the foot. Arriving from Progress, the look back is the chat's first message.
+  The Coach page: Back, "Coach" and the memory bookmark on top, then the week as a bar of its
+  sessions, the chat, and the box pinned to the foot. Arriving from Progress, the look back is the chat's first message.
 
   A screen: `HomeLive` calls it with its own assigns (see docs/ui.md).
   """
@@ -133,7 +134,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           </button>
         </header>
         <section id="coach-page-body" aria-labelledby="coach-page-heading">
-          <.week_card
+          <.week_bar
             coach_week={@coach_week}
             slot={@slot}
             timezone={@current_scope.user.timezone}
@@ -174,19 +175,44 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   attr(:slot, :any, required: true, doc: "nil without a week, when there are no rows either")
   attr(:timezone, :string, required: true)
 
-  # The week, closed to its minutes against the target; open, its sessions as rows.
-  defp week_card(assigns) do
+  # The week as its sessions, side by side, each as wide as its minutes: done ones filled in
+  # their type's colour with the day under them, the ones to go outlined in their line on the
+  # chart (six-count solid, Navy SEAL dashed).
+  defp week_bar(assigns) do
     ~H"""
-    <details :if={@coach_week != []} id="coach-week-card" class="coach-week-card">
-      <summary class="coach-week-summary">
-        <span>This week</span>
+    <section
+      :if={@coach_week != []}
+      id="coach-week-bar"
+      class="coach-week-bar"
+      aria-labelledby="coach-week-heading"
+    >
+      <p class="coach-week-bar-head">
+        <span id="coach-week-heading">This week</span>
         <span class="coach-week-total">
-          {div(@slot.completed_sec, 60)} / {div(@slot.weekly_target_sec, 60)} min
+          {div(@slot.completed_sec, 60)} of {div(@slot.weekly_target_sec, 60)} min
         </span>
-        <.icon name="hero-chevron-down" class="size-4 coach-week-chevron" />
-      </summary>
-      <.week_rows coach_week={@coach_week} timezone={@timezone} />
-    </details>
+      </p>
+      <ol id="home-coach-week" class="coach-week-segments" aria-labelledby="coach-week-heading">
+        <li
+          :for={{item, index} <- Enum.with_index(@coach_week)}
+          id={"home-coach-week-#{index}"}
+          class={["coach-week-segment", "progress-key-#{series_class(item.burpee_type)}"]}
+          data-status={item.status}
+          style={"flex-grow: #{item.duration_sec}"}
+        >
+          <span class="coach-week-segment-mark" aria-hidden="true"></span>
+          <span :if={item.status == :done} class="coach-week-segment-day" aria-hidden="true">
+            {week_day(item.completed_at, @timezone)}
+          </span>
+          <span class="sr-only">
+            {BurpeeTrainerWeb.Fmt.burpee_type(item.burpee_type)}, {week_when(item, @timezone)}{if(
+              item.status == :done,
+              do: ", done"
+            )}
+          </span>
+        </li>
+      </ol>
+    </section>
     """
   end
 
@@ -273,14 +299,16 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
             <p class="coach-exchange-you">{elem(item, 1).message}</p>
             <p class="coach-exchange-coach">{elem(item, 1).reply}</p>
           </li>
-          <li :if={match?({:memory, _}, item)} class="coach-memory" data-kind={elem(item, 1).kind}>
+          <%!-- Changes of one kind in a row read as one quiet note: the verb once, then the lines. --%>
+          <li :if={match?({:memory, _, _}, item)} class="coach-memory" data-kind={elem(item, 1)}>
             <.icon
-              name={
-                if(elem(item, 1).kind == :forgot, do: "hero-bookmark-slash", else: "hero-bookmark")
-              }
+              name={if(elem(item, 1) == :forgot, do: "hero-bookmark-slash", else: "hero-bookmark")}
               class="size-4"
             />
-            <span>{memory_verb(elem(item, 1).kind)}{elem(item, 1).text}</span>
+            <div>
+              <p class="coach-memory-verb">{memory_verb(elem(item, 1))}</p>
+              <p :for={text <- elem(item, 2)}>{text}</p>
+            </div>
           </li>
         <% end %>
         <li
@@ -441,33 +469,44 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
 
   defp series_class(type), do: type |> Atom.to_string() |> String.replace("_", "-")
 
-  # Exchanges and memory changes, in the order they happened.
+  # Exchanges and memory changes, in the order they happened; changes of one kind in a row
+  # come together as `{:memory, kind, texts}`.
   defp thread_items(coach_thread, coach_memory_changes) do
     exchanges = Enum.map(coach_thread, &{:exchange, &1})
     changes = Enum.map(coach_memory_changes, &{:memory, &1})
 
-    Enum.sort_by(exchanges ++ changes, &item_at/1, DateTime)
+    (exchanges ++ changes)
+    |> Enum.sort_by(&item_at/1, DateTime)
+    |> Enum.chunk_by(fn
+      {:exchange, exchange} -> {:exchange, exchange.id}
+      {:memory, change} -> {:memory, change.kind}
+    end)
+    |> Enum.map(fn
+      [{:exchange, _} = exchange] -> exchange
+      [{:memory, %{kind: kind}} | _] = run -> {:memory, kind, Enum.map(run, &elem(&1, 1).text)}
+    end)
   end
 
   defp item_at({:exchange, exchange}), do: exchange.inserted_at
   defp item_at({:memory, change}), do: change.at
 
   # Done: the day it was done and its minutes. Left: its minutes.
-  defp week_when(%{status: :done, completed_at: at, duration_sec: sec}, timezone) do
-    day =
-      case DateTime.shift_zone(at, timezone) do
-        {:ok, local} -> Calendar.strftime(local, "%a")
-        {:error, _} -> Calendar.strftime(at, "%a")
-      end
-
-    "#{day} · #{div(sec, 60)} min"
-  end
+  defp week_when(%{status: :done, completed_at: at, duration_sec: sec}, timezone),
+    do: "#{week_day(at, timezone)} · #{div(sec, 60)} min"
 
   defp week_when(%{status: :left, duration_sec: sec}, _timezone), do: "#{div(sec, 60)} min to go"
 
-  defp memory_verb(:noted), do: "Noted: "
-  defp memory_verb(:updated), do: "Updated: "
-  defp memory_verb(:forgot), do: "Forgot: "
+  # The weekday a session was done, in the athlete's time zone.
+  defp week_day(at, timezone) do
+    case DateTime.shift_zone(at, timezone) do
+      {:ok, local} -> Calendar.strftime(local, "%a")
+      {:error, _} -> Calendar.strftime(at, "%a")
+    end
+  end
+
+  defp memory_verb(:noted), do: "Noted"
+  defp memory_verb(:updated), do: "Updated"
+  defp memory_verb(:forgot), do: "Forgot"
 
   # Closing returns focus to the bookmark that opened the sheet, however it closes.
   defp close_memory,

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-10 — The coach reads cleaner
+
+- **Coach page week**: the closed "This week" card is gone. The week is a bar of its sessions, always open, each as wide as its minutes: done ones filled in their type's colour with the day under them, the ones to go outlined in their chart line (six-count solid, Navy SEAL dashed), and "20 of 80 min" above.
+- **What the coach noted**: memory changes of one kind in a row read as one note, the verb once over its lines, the bookmark in cobalt (the colour for what the coach changed); exchanges have more room between them.
+- **Progress**: the coach's look back sits under a "Coach" heading like the page's other sections, its chevron at the end, with no rule above it.
+- **Coach icon**: Home's way into the Coach page is a whistle (Material Symbols "sports"); the bookmark now means only the coach's memory.
+
 ## 2026-11-10 — Pages open faster as history grows
 
 - **Home**: opening Home no longer reads the whole session history. The week, the level and the next slot each read only the weeks they need, so Home takes the same time with a thousand sessions as with ten.
