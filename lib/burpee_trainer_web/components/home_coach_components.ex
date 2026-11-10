@@ -41,28 +41,24 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
 
   # The coach is a section of Home, not a card: this week's window in Progress's rows, then
   # the conversation as a chat, its opener first, with what it noted or forgot about you as
-  # quiet lines between exchanges. The whistle leads to the Coach page; the bookmark is only
-  # ever the coach's memory.
+  # quiet lines between exchanges. "Coach ›" leads to the Coach page, as on Progress.
   # See docs/specs/2026-11-06-light-screens-design.md.
   def panel(assigns) do
     ~H"""
     <section id="home-coach-panel" class="home-coach-panel" aria-label="Coach">
       <.week_rows coach_week={@coach_week} timezone={@current_scope.user.timezone} />
-      <div class="coach-chat-head">
+      <.link
+        :if={coach?(@current_scope)}
+        id="home-coach-open"
+        patch={~p"/coach"}
+        data-vt="forward"
+        class="coach-chat-head coach-chat-head-link"
+        phx-mounted={@home_focus_from == :coach && JS.focus(to: "#home-coach-open")}
+      >
         <span>Coach</span>
-        <.link
-          :if={coach?(@current_scope)}
-          id="home-coach-open"
-          patch={~p"/coach"}
-          data-vt="forward"
-          class="coach-page-action"
-          aria-label="Open the coach"
-          title="Coach"
-          phx-mounted={@home_focus_from == :coach && JS.focus(to: "#home-coach-open")}
-        >
-          <span class="icon-whistle size-5" aria-hidden="true"></span>
-        </.link>
-      </div>
+        <.icon name="hero-chevron-right-mini" class="size-5" />
+      </.link>
+      <p :if={not coach?(@current_scope)} class="coach-chat-head"><span>Coach</span></p>
       <.conversation
         field={:text}
         coach?={coach?(@current_scope)}
@@ -90,8 +86,8 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   end
 
   @doc """
-  The Coach page: Back, "Coach" and the memory bookmark on top, then the week as a bar of its
-  sessions, the chat, and the box pinned to the foot. Arriving from Progress, the look back is the chat's first message.
+  The Coach page: Back, "Coach" and the memory bookmark on top, then the week as a card that
+  opens on its sessions, the chat, and the box pinned to the foot. Arriving from Progress, the look back is the chat's first message.
 
   A screen: `HomeLive` calls it with its own assigns (see docs/ui.md).
   """
@@ -134,7 +130,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           </button>
         </header>
         <section id="coach-page-body" aria-labelledby="coach-page-heading">
-          <.week_bar
+          <.week_card
             coach_week={@coach_week}
             slot={@slot}
             timezone={@current_scope.user.timezone}
@@ -175,44 +171,19 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   attr(:slot, :any, required: true, doc: "nil without a week, when there are no rows either")
   attr(:timezone, :string, required: true)
 
-  # The week as its sessions, side by side, each as wide as its minutes: done ones filled in
-  # their type's colour with the day under them, the ones to go outlined in their line on the
-  # chart (six-count solid, Navy SEAL dashed).
-  defp week_bar(assigns) do
+  # The week, closed to its minutes against the target; open, its sessions as rows.
+  defp week_card(assigns) do
     ~H"""
-    <section
-      :if={@coach_week != []}
-      id="coach-week-bar"
-      class="coach-week-bar"
-      aria-labelledby="coach-week-heading"
-    >
-      <p class="coach-week-bar-head">
-        <span id="coach-week-heading">This week</span>
+    <details :if={@coach_week != []} id="coach-week-card" class="coach-week-card">
+      <summary class="coach-week-summary">
+        <span>This week</span>
         <span class="coach-week-total">
-          {div(@slot.completed_sec, 60)} of {div(@slot.weekly_target_sec, 60)} min
+          {div(@slot.completed_sec, 60)} / {div(@slot.weekly_target_sec, 60)} min
         </span>
-      </p>
-      <ol id="home-coach-week" class="coach-week-segments" aria-labelledby="coach-week-heading">
-        <li
-          :for={{item, index} <- Enum.with_index(@coach_week)}
-          id={"home-coach-week-#{index}"}
-          class={["coach-week-segment", "progress-key-#{series_class(item.burpee_type)}"]}
-          data-status={item.status}
-          style={"flex-grow: #{item.duration_sec}"}
-        >
-          <span class="coach-week-segment-mark" aria-hidden="true"></span>
-          <span :if={item.status == :done} class="coach-week-segment-day" aria-hidden="true">
-            {week_day(item.completed_at, @timezone)}
-          </span>
-          <span class="sr-only">
-            {BurpeeTrainerWeb.Fmt.burpee_type(item.burpee_type)}, {week_when(item, @timezone)}{if(
-              item.status == :done,
-              do: ", done"
-            )}
-          </span>
-        </li>
-      </ol>
-    </section>
+        <.icon name="hero-chevron-down" class="size-4 coach-week-chevron" />
+      </summary>
+      <.week_rows coach_week={@coach_week} timezone={@timezone} />
+    </details>
     """
   end
 
@@ -491,18 +462,17 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   defp item_at({:memory, change}), do: change.at
 
   # Done: the day it was done and its minutes. Left: its minutes.
-  defp week_when(%{status: :done, completed_at: at, duration_sec: sec}, timezone),
-    do: "#{week_day(at, timezone)} · #{div(sec, 60)} min"
+  defp week_when(%{status: :done, completed_at: at, duration_sec: sec}, timezone) do
+    day =
+      case DateTime.shift_zone(at, timezone) do
+        {:ok, local} -> Calendar.strftime(local, "%a")
+        {:error, _} -> Calendar.strftime(at, "%a")
+      end
+
+    "#{day} · #{div(sec, 60)} min"
+  end
 
   defp week_when(%{status: :left, duration_sec: sec}, _timezone), do: "#{div(sec, 60)} min to go"
-
-  # The weekday a session was done, in the athlete's time zone.
-  defp week_day(at, timezone) do
-    case DateTime.shift_zone(at, timezone) do
-      {:ok, local} -> Calendar.strftime(local, "%a")
-      {:error, _} -> Calendar.strftime(at, "%a")
-    end
-  end
 
   defp memory_verb(:noted), do: "Noted"
   defp memory_verb(:updated), do: "Updated"

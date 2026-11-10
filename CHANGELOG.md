@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-11-10 — The week card is back; no whistle
+
+- **Coach page week**: the split session bar is gone; the week is the card again, closed to "This week" and its minutes, open on its sessions.
+- **Home**: the whistle is gone. The small "Coach ›" over the chat is the way into the Coach page, as on Progress; the bookmark means only the coach's memory.
+
 ## 2026-11-10 — The coach reads cleaner
 
 - **Coach page week**: the closed "This week" card is gone. The week is a bar of its sessions, always open, each as wide as its minutes: done ones filled in their type's colour with the day under them, the ones to go outlined in their chart line (six-count solid, Navy SEAL dashed), and "20 of 80 min" above.

@@ -483,20 +483,6 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
   height: 1.5rem;
 }
 
-/* The coach's whistle: no heroicon says "coach", so it is Material Symbols' "sports" (outlined,
-   weight 400; Google, Apache-2.0), masked like a heroicon. The bookmark stays the coach's memory. */
-.icon-whistle {
-  --icon-whistle: url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%20-960%20960%20960%22%3E%3Cpath%20d%3D%22M440-200q-101%200-170.5-69.5T200-440q0-11%201-23t3-21q-5%202-12%203t-12%201q-44%200-72-28t-28-72q0-44%2028-72t72-28q31%200%2057%2018.5t37%2046.5q31-28%2074.5-46.5T441-680h439v120H680v120q0%20101-69.5%20170.5T440-200ZM180-540q18%200%2029-11t11-29q0-18-11-29t-29-11q-18%200-29%2011t-11%2029q0%2018%2011%2029t29%2011Zm260%20240q60%200%20100-40t40-100q0-60-40-100t-100-40q-60%200-100%2040t-40%20100q0%2060%2040%20100t100%2040Zm0-60q33%200%2056.5-23.5T520-440q0-33-23.5-56.5T440-520q-33%200-56.5%2023.5T360-440q0%2033%2023.5%2056.5T440-360Zm0-80Z%22%2F%3E%3C%2Fsvg%3E');
-  -webkit-mask: var(--icon-whistle);
-  mask: var(--icon-whistle);
-  mask-repeat: no-repeat;
-  background-color: currentColor;
-  vertical-align: middle;
-  display: inline-block;
-  width: 1.5rem;
-  height: 1.5rem;
-}
-
 /* Idle/review panels are editorial; the runner's timing colors and layers remain untouched.
    A video's finish screen is the same screen, over its page. */
 #burpee-session,

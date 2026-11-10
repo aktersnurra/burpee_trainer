@@ -400,8 +400,8 @@ screen leads to the next in context:
 - **Home** (`/`) shows today's state: the ready workout with Start (a starter workout on
   first use, never an empty prompt), or once trained, the day's result. Done is one order,
   never a card: the result, this week's sessions done and left in Progress's rows, then the
-  chat under a small "Coach" with its whistle (which opens the Coach page; the bookmark
-  means only the coach's memory): the coach's word
+  chat under a small "Coach ›", all of it a link to the Coach page (the bookmark means only
+  the coach's memory): the coach's word
   on the rest of the week is its first message, then the conversation (you on the right in a
   soft bubble, the coach plain on the left), "Message the coach" and waiting goals. The coach
   keeps its own memory; what it noted, updated or forgot reads as a quiet note in the
@@ -432,10 +432,8 @@ screen leads to the next in context:
   session under the chart: name, date, reps, time, tags and its trash. Design: `docs/specs/2026-11-06-light-screens-design.md`.
 - **Coach** (`/coach`, with the app's coach; without it, Home) is the coach's own page. Its top
   row: Back (a chevron, to where you came from: `/coach?from=progress` back to Progress, else
-  Home), "Coach", and the memory bookmark (4a1a). Then "This week" with its minutes against the
-  target over the week as a bar of its sessions, each as wide as its minutes: done ones filled
-  in their type's colour with the day under them, the ones to go outlined in their chart line
-  (six-count solid, Navy SEAL dashed), always open. Then the same chat, the box docked at the foot. Its first message is the coach's
+  Home), "Coach", and the memory bookmark (4a1a). Then this week's sessions as on Home done (no
+  week bar: the header is enough), then the same chat, the box docked at the foot. Its first message is the coach's
   word on the week, or, arriving from Progress, the look back. The coach has no suggestions of its
   own, so there is no suggestions row. Leaving after the coach wrote to its memory as it talked
   here writes the summary again. Design:
