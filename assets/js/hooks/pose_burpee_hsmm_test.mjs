@@ -5,6 +5,7 @@ import {
 	flushBurpeeHsmm,
 	initialBurpeeHsmmState,
 	stepBurpeeHsmm,
+	burpeeHsmmFrameRejection,
 	usableBurpeeHsmmFrame,
 } from "./pose_burpee_hsmm.mjs";
 import { featureFrameFromPose } from "./pose_features.mjs";
@@ -100,7 +101,7 @@ test("a rep is decided after the lag and dated when it happened", () => {
 
 	assert.equal(emitted.length, 1);
 	const lagMs = emitted[0].atMs - emitted[0].repMs;
-	assert.ok(lagMs >= 600 && lagMs <= 800, `lag ${lagMs}`);
+	assert.ok(lagMs >= 400 && lagMs <= 600, `lag ${lagMs}`);
 	assert.deepEqual(flushBurpeeHsmm(state).reps, []);
 });
 
@@ -285,6 +286,26 @@ test("raw low-front frames with full world landmarks are usable once they have a
 
 	assert.equal(usableBurpeeHsmmFrame(first), false);
 	assert.ok(rest.every(usableBurpeeHsmmFrame));
+});
+
+test("an unusable frame says which check it failed", () => {
+	const [first, second] = lowFrontFeatureFrames(lowFrontCycle());
+	const [uncovered] = lowFrontFeatureFrames([
+		["floor", 300, { missingWorldNames: ["left_knee"] }],
+	]);
+
+	assert.equal(burpeeHsmmFrameRejection(second), null);
+	assert.equal(burpeeHsmmFrameRejection(first), "features");
+	assert.equal(burpeeHsmmFrameRejection(uncovered), "world_coverage");
+	assert.equal(burpeeHsmmFrameRejection({ ...second, poseConfidence: 0.2 }), "confidence");
+	assert.equal(
+		burpeeHsmmFrameRejection({ ...second, macroLandmarkConfidence: 0.2 }),
+		"landmark_confidence",
+	);
+	assert.equal(
+		burpeeHsmmFrameRejection({ ...second, visibleFraction: 0.1 }),
+		"visible_fraction",
+	);
 });
 
 test("a missing knee or foot world landmark makes a frame unusable", () => {

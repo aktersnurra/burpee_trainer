@@ -23,7 +23,21 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
     """
   end
 
-  attr(:state, :map, required: true)
+  attr(:current_scope, :map, required: true)
+  attr(:home_focus_from, :atom, required: true)
+  attr(:coach_week, :list, required: true)
+  attr(:progress_summary, :any, required: true)
+  attr(:progress_summary_loading?, :boolean, required: true)
+  attr(:coach_thread, :list, required: true)
+  attr(:coach_memory_changes, :list, required: true)
+  attr(:coach_pending_message, :any, required: true)
+  attr(:coach_busy?, :boolean, required: true)
+  attr(:coach_streaming?, :boolean, required: true)
+  attr(:coach_reply_pieces, :any, required: true)
+  attr(:coach_message_form, :any, required: true)
+  attr(:coach_reply, :any, required: true)
+  attr(:coach_status, :any, required: true)
+  attr(:coach_goals, :any, required: true, doc: "the stream of proposed goals")
 
   # The coach is a section of Home, not a card: this week's window in Progress's rows, then
   # the conversation as a chat, its opener first, with what it noted or forgot about you as
@@ -32,37 +46,53 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   def panel(assigns) do
     ~H"""
     <section id="home-coach-panel" class="home-coach-panel" aria-label="Coach">
-      <.week_rows state={@state} />
+      <.week_rows coach_week={@coach_week} timezone={@current_scope.user.timezone} />
       <div class="coach-chat-head">
         <span>Coach</span>
         <.link
-          :if={coach?(@state)}
+          :if={coach?(@current_scope)}
           id="home-coach-open"
           patch={~p"/coach"}
           data-vt="forward"
           class="coach-page-action"
           aria-label="Open the coach"
           title="Coach"
-          phx-mounted={
-            Map.get(@state, :home_focus_from) == :coach && JS.focus(to: "#home-coach-open")
-          }
+          phx-mounted={@home_focus_from == :coach && JS.focus(to: "#home-coach-open")}
         >
           <.icon name="hero-bookmark" class="size-5" />
         </.link>
       </div>
-      <.conversation state={@state} field={:text} />
-      <.composer :if={coach?(@state)} state={@state} />
-      <.goals state={@state} />
-      <div :if={coach?(@state)} class="chat-dock-spacer" aria-hidden="true"></div>
+      <.conversation
+        field={:text}
+        coach?={coach?(@current_scope)}
+        progress_summary={@progress_summary}
+        progress_summary_loading?={@progress_summary_loading?}
+        coach_thread={@coach_thread}
+        coach_memory_changes={@coach_memory_changes}
+        coach_pending_message={@coach_pending_message}
+        coach_busy?={@coach_busy?}
+        coach_streaming?={@coach_streaming?}
+        coach_reply_pieces={@coach_reply_pieces}
+      />
+      <.composer
+        :if={coach?(@current_scope)}
+        coach_message_form={@coach_message_form}
+        coach_busy?={@coach_busy?}
+        coach_thread={@coach_thread}
+        coach_reply={@coach_reply}
+        coach_status={@coach_status}
+      />
+      <.goals coach_goals={@coach_goals} />
+      <div :if={coach?(@current_scope)} class="chat-dock-spacer" aria-hidden="true"></div>
     </section>
     """
   end
 
-  attr(:state, :map, required: true)
-
   @doc """
   The Coach page: Back, "Coach" and the memory bookmark on top, then the week as a card that
   opens on its sessions, the chat, and the box pinned to the foot. Arriving from Progress, the look back is the chat's first message.
+
+  A screen: `HomeLive` calls it with its own assigns (see docs/ui.md).
   """
   def page(assigns) do
     ~H"""
@@ -71,7 +101,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
         <header class="coach-page-top">
           <.link
             id="coach-back"
-            patch={if(@state.coach_from == :progress, do: ~p"/progress", else: ~p"/")}
+            patch={if(@coach_from == :progress, do: ~p"/progress", else: ~p"/")}
             data-vt="back"
             class="coach-page-action"
             aria-label="Back"
@@ -94,7 +124,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
             class="coach-page-action"
             phx-click="coach_memory_toggle"
             aria-haspopup="dialog"
-            aria-expanded={to_string(Map.get(@state, :coach_memory_open?, false))}
+            aria-expanded={to_string(@coach_memory_open?)}
             aria-controls="coach-memory"
             aria-label="What the coach remembers"
             title="What the coach remembers"
@@ -103,52 +133,77 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           </button>
         </header>
         <section id="coach-page-body" aria-labelledby="coach-page-heading">
-          <.week_card state={@state} />
-          <.conversation
-            state={@state}
-            field={if(@state.coach_from == :progress, do: :review, else: :text)}
+          <.week_card
+            coach_week={@coach_week}
+            slot={@slot}
+            timezone={@current_scope.user.timezone}
           />
-          <.composer state={@state} />
-          <.goals state={@state} />
+          <.conversation
+            field={if(@coach_from == :progress, do: :review, else: :text)}
+            coach?={coach?(@current_scope)}
+            progress_summary={@progress_summary}
+            progress_summary_loading?={@progress_summary_loading?}
+            coach_thread={@coach_thread}
+            coach_memory_changes={@coach_memory_changes}
+            coach_pending_message={@coach_pending_message}
+            coach_busy?={@coach_busy?}
+            coach_streaming?={@coach_streaming?}
+            coach_reply_pieces={@streams.coach_reply_pieces}
+          />
+          <.composer
+            coach_message_form={@coach_message_form}
+            coach_busy?={@coach_busy?}
+            coach_thread={@coach_thread}
+            coach_reply={@coach_reply}
+            coach_status={@coach_status}
+          />
+          <.goals coach_goals={@streams.coach_goals} />
           <div class="chat-dock-spacer" aria-hidden="true"></div>
         </section>
       </div>
-      <.memory_sheet :if={Map.get(@state, :coach_memory_open?, false)} state={@state} />
+      <.memory_sheet
+        :if={@coach_memory_open?}
+        coach_memory={@coach_memory}
+        coach_memory_changes={@coach_memory_changes}
+      />
     </main>
     """
   end
 
-  attr(:state, :map, required: true)
+  attr(:coach_week, :list, required: true)
+  attr(:slot, :any, required: true, doc: "nil without a week, when there are no rows either")
+  attr(:timezone, :string, required: true)
 
   # The week, closed to its minutes against the target; open, its sessions as rows.
   defp week_card(assigns) do
     ~H"""
-    <details :if={@state.coach_week != []} id="coach-week-card" class="coach-week-card">
+    <details :if={@coach_week != []} id="coach-week-card" class="coach-week-card">
       <summary class="coach-week-summary">
         <span>This week</span>
         <span class="coach-week-total">
-          {div(@state.slot.completed_sec, 60)} / {div(@state.slot.weekly_target_sec, 60)} min
+          {div(@slot.completed_sec, 60)} / {div(@slot.weekly_target_sec, 60)} min
         </span>
         <.icon name="hero-chevron-down" class="size-4 coach-week-chevron" />
       </summary>
-      <.week_rows state={@state} />
+      <.week_rows coach_week={@coach_week} timezone={@timezone} />
     </details>
     """
   end
 
-  attr(:state, :map, required: true)
+  attr(:coach_week, :list, required: true)
+  attr(:timezone, :string, required: true)
 
   # This week's window as Progress's rows: what is done, then what is left, muted.
   defp week_rows(assigns) do
     ~H"""
     <ol
-      :if={@state.coach_week != []}
+      :if={@coach_week != []}
       id="home-coach-week"
       class="coach-week"
       aria-label="This week"
     >
       <li
-        :for={{item, index} <- Enum.with_index(@state.coach_week)}
+        :for={{item, index} <- Enum.with_index(@coach_week)}
         id={"home-coach-week-#{index}"}
         class={["coach-week-item", "coach-week-#{item.status}"]}
         data-status={item.status}
@@ -157,7 +212,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           {BurpeeTrainerWeb.Fmt.burpee_type(item.burpee_type)}
         </span>
         <span class="coach-week-when">
-          {week_when(item, @state.current_scope.user.timezone)}
+          {week_when(item, @timezone)}
           <.icon :if={item.status == :done} name="hero-check" class="size-4 coach-week-done-mark" />
           <span :if={item.status == :done} class="sr-only">done</span>
         </span>
@@ -166,41 +221,50 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
     """
   end
 
-  attr(:state, :map, required: true)
   attr(:field, :atom, required: true, values: [:text, :review])
+  attr(:coach?, :boolean, required: true)
+  attr(:progress_summary, :any, required: true)
+  attr(:progress_summary_loading?, :boolean, required: true)
+  attr(:coach_thread, :list, required: true)
+  attr(:coach_memory_changes, :list, required: true)
+  attr(:coach_pending_message, :any, required: true)
+  attr(:coach_busy?, :boolean, required: true)
+  attr(:coach_streaming?, :boolean, required: true)
+  attr(:coach_reply_pieces, :any, required: true)
 
   # The conversation as a chat: the coach's opener first, then this week's exchanges, you on
   # the right and the coach on the left, what it noted between. Kept across reloads.
   defp conversation(assigns) do
-    assigns = assign(assigns, :field, opener_field(assigns.state, assigns.field))
+    assigns =
+      assign(assigns,
+        field: opener_field(assigns.progress_summary, assigns.field),
+        thread_items: thread_items(assigns.coach_thread, assigns.coach_memory_changes)
+      )
 
     ~H"""
     <div class="coach-chat">
       <p
-        :if={opener?(@state)}
+        :if={@coach? or not is_nil(@progress_summary) or @progress_summary_loading?}
         id="home-coach-note"
         class="coach-exchange-coach coach-opener"
       >
         <.summary_body
-          :if={@state.progress_summary || @state.progress_summary_loading?}
-          summary={@state.progress_summary}
-          loading?={@state.progress_summary_loading?}
+          :if={@progress_summary || @progress_summary_loading?}
+          summary={@progress_summary}
+          loading?={@progress_summary_loading?}
           field={@field}
         />
-        <span :if={
-          coach?(@state) and is_nil(@state.progress_summary) and
-            not @state.progress_summary_loading?
-        }>
+        <span :if={@coach? and is_nil(@progress_summary) and not @progress_summary_loading?}>
           Tell me what you're training for, or how the last session felt.
         </span>
       </p>
       <ol
-        :if={thread_items(@state) != [] or @state.coach_pending_message}
+        :if={@thread_items != [] or @coach_pending_message}
         id="home-coach-thread"
         class="coach-thread"
         aria-label="Conversation with the coach"
       >
-        <%= for item <- thread_items(@state) do %>
+        <%= for item <- @thread_items do %>
           <li
             :if={match?({:exchange, _}, item)}
             id={"home-coach-exchange-#{elem(item, 1).id}"}
@@ -220,24 +284,26 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           </li>
         <% end %>
         <li
-          :if={@state.coach_busy? and @state.coach_pending_message}
+          :if={@coach_busy? and @coach_pending_message}
           id="home-coach-pending"
           class="coach-exchange"
         >
-          <p class="coach-exchange-you">{@state.coach_pending_message}</p>
-          <%!-- The reply as it is written; it lands in the thread once it is whole. --%>
+          <p class="coach-exchange-you">{@coach_pending_message}</p>
+          <%!-- The reply as it is written, a piece at a time (`ReplyStream`); it lands in the
+               thread once it is whole. --%>
           <p
-            :if={Map.get(@state, :coach_streaming)}
+            :if={@coach_streaming?}
             id="home-coach-streaming"
             class="coach-exchange-coach chat-streaming"
             aria-busy="true"
+            phx-update="stream"
           >
-            {@state.coach_streaming}
+            <span :for={{id, piece} <- @coach_reply_pieces} id={id}>{piece.text}</span>
           </p>
         </li>
       </ol>
       <p
-        :if={@state.coach_busy? and is_nil(Map.get(@state, :coach_streaming))}
+        :if={@coach_busy? and not @coach_streaming?}
         id="home-coach-loading"
         role="status"
         class="coach-pending-status"
@@ -249,7 +315,11 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
     """
   end
 
-  attr(:state, :map, required: true)
+  attr(:coach_message_form, :any, required: true)
+  attr(:coach_busy?, :boolean, required: true)
+  attr(:coach_thread, :list, required: true)
+  attr(:coach_reply, :any, required: true)
+  attr(:coach_status, :any, required: true)
 
   # Talking to the app's coach needs it; without it the coach is Claude, and Home shows only
   # what Claude left. The box rides above the keyboard, as in the design chat (see the
@@ -260,20 +330,20 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       id="home-coach-dock"
       class="chat-dock"
       phx-hook="ChatDock"
-      data-version={coach_version(@state)}
+      data-version={version(@coach_thread, @coach_busy?)}
       data-scroll-to="#home-coach-thread > :last-child"
       data-scroll-on-mount="false"
     >
       <div class="chat-dock-inner">
         <.form
-          for={@state.coach_message_form}
+          for={@coach_message_form}
           id="home-coach-message-form"
           phx-submit="coach_message"
           phx-change="coach_message_change"
           class="coach-message-form home-authoring-form composer"
         >
           <.input
-            field={@state.coach_message_form[:text]}
+            field={@coach_message_form[:text]}
             id="home-coach-message-text"
             type="textarea"
             label="Message the coach"
@@ -281,14 +351,14 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
             maxlength="1000"
             placeholder="Message the coach"
             class="composer-input"
-            disabled={@state.coach_busy?}
+            disabled={@coach_busy?}
           />
           <div class="composer-bar">
             <button
               id="home-coach-message-send"
               type="submit"
               class="composer-send"
-              disabled={@state.coach_busy?}
+              disabled={@coach_busy?}
               aria-label="Send"
               title="Send"
             >
@@ -301,22 +371,22 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
       </div>
     </div>
     <p id="home-coach-reply" role="status" class="coach-guidance-status">
-      {@state.coach_reply}
+      {@coach_reply}
     </p>
     <p id="home-coach-status" role="status" class="coach-guidance-status">
-      {@state.coach_status}
+      {@coach_status}
     </p>
     """
   end
 
-  attr(:state, :map, required: true)
+  attr(:coach_goals, :any, required: true)
 
   # Goals the coach proposed, waiting on the owner.
   defp goals(assigns) do
     ~H"""
     <div id="home-coach-goals" phx-update="stream">
       <div
-        :for={{dom_id, goal} <- @state.streams.coach_goals}
+        :for={{dom_id, goal} <- @coach_goals}
         id={dom_id}
         data-status={goal.status}
         class="history-coach-entry"
@@ -351,37 +421,30 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
     """
   end
 
-  # Changes whenever the conversation moves, so the dock brings the newest line into view.
-  defp coach_version(state),
-    do: "#{length(Map.get(state, :coach_thread, []))}:#{state.coach_busy?}"
-
   @doc """
   Whether Home has a coach section: always with the app's coach; without it, only once
   there is something from Claude to read (a note, or a change to the memory).
   """
-  def shown?(state),
-    do:
-      coach?(state) or not is_nil(state.progress_summary) or
-        Map.get(state, :coach_memory_changes, []) != []
+  def shown?(scope, progress_summary, coach_memory_changes),
+    do: coach?(scope) or not is_nil(progress_summary) or coach_memory_changes != []
 
-  defp coach?(state), do: BurpeeTrainer.Coach.enabled?(state.current_scope)
+  defp coach?(scope), do: BurpeeTrainer.Coach.enabled?(scope)
 
-  defp opener?(state),
-    do: coach?(state) or not is_nil(state.progress_summary) or state.progress_summary_loading?
+  # Changes whenever the conversation moves, so the dock brings the newest line into view.
+  defp version(coach_thread, coach_busy?), do: "#{length(coach_thread)}:#{coach_busy?}"
 
   # From Progress the look back opens the chat; a summary without one opens with its note.
-  defp opener_field(%{progress_summary: %{review: review}}, :review)
-       when is_binary(review) and review != "",
-       do: :review
+  defp opener_field(%{review: review}, :review) when is_binary(review) and review != "",
+    do: :review
 
-  defp opener_field(_state, _field), do: :text
+  defp opener_field(_summary, _field), do: :text
 
   defp series_class(type), do: type |> Atom.to_string() |> String.replace("_", "-")
 
   # Exchanges and memory changes, in the order they happened.
-  defp thread_items(state) do
-    exchanges = Enum.map(Map.get(state, :coach_thread, []), &{:exchange, &1})
-    changes = Enum.map(Map.get(state, :coach_memory_changes, []), &{:memory, &1})
+  defp thread_items(coach_thread, coach_memory_changes) do
+    exchanges = Enum.map(coach_thread, &{:exchange, &1})
+    changes = Enum.map(coach_memory_changes, &{:memory, &1})
 
     Enum.sort_by(exchanges ++ changes, &item_at/1, DateTime)
   end
@@ -410,13 +473,14 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   defp close_memory,
     do: JS.push("coach_memory_close") |> JS.focus(to: "#coach-memory-open")
 
-  attr(:state, :map, required: true)
+  attr(:coach_memory, :list, required: true)
+  attr(:coach_memory_changes, :list, required: true)
 
   # What the coach remembers, in the workout picker's bottom sheet: who the athlete is, then
   # its notes on coaching them, each part with how full it is. A line the coach changed this
   # week is marked; a line can be forgotten here, and changed by telling the coach.
   defp memory_sheet(assigns) do
-    assigns = assign(assigns, :updated, updated_texts(assigns.state))
+    assigns = assign(assigns, :updated, updated_texts(assigns.coach_memory_changes))
 
     ~H"""
     <div
@@ -457,7 +521,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
           <h2 id="coach-memory-title">What I remember</h2>
         </header>
         <section
-          :for={part <- @state.coach_memory}
+          :for={part <- @coach_memory}
           id={"coach-memory-#{part.store}"}
           class="coach-memory-part"
           aria-labelledby={"coach-memory-#{part.store}-heading"}
@@ -497,11 +561,6 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   defp part_name(_memory), do: "Coaching notes"
 
   # The lines the coach rewrote this week; a line only added reads as "Noted" in the chat.
-  defp updated_texts(state),
-    do:
-      for(
-        %{kind: :updated, text: text} <- Map.get(state, :coach_memory_changes, []),
-        into: MapSet.new(),
-        do: text
-      )
+  defp updated_texts(coach_memory_changes),
+    do: for(%{kind: :updated, text: text} <- coach_memory_changes, into: MapSet.new(), do: text)
 end

@@ -26,9 +26,7 @@ defmodule BurpeeTrainer.WeekWindow do
     since = week_start_utc(scope)
 
     scope
-    |> Workouts.list_sessions()
-    |> Enum.filter(&(&1.state == :completed and match?(%DateTime{}, &1.completed_at)))
-    |> Enum.filter(&(DateTime.compare(&1.completed_at, since) != :lt))
+    |> Workouts.list_sessions_since(since)
     |> lay_out(target_sec)
   end
 

@@ -96,7 +96,7 @@ defmodule BurpeeTrainer.Coach.AgentPrompt do
 
     %{
       goals: goals["goals"] |> Enum.take(20),
-      current_level: Levels.current_level(Workouts.list_sessions(scope)),
+      current_level: Workouts.current_level(scope),
       slot: slot,
       progression: slot && progression(scope, slot),
       recent_sessions: sessions |> Enum.take(10) |> Enum.map(&Tools.History.summary/1),

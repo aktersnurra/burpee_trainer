@@ -1,4 +1,4 @@
-// Drives Home's swipes and the studio (Edit and New) in a phone-sized browser against the server
+// Drives Home's drawer and the studio (Edit and New) in a phone-sized browser against the server
 // scripts/e2e/studio_preview.exs started, and fails (exit 1) when something is off. See
 // docs/guides/studio-e2e.md.
 //
@@ -93,26 +93,37 @@ await settle(800);
 const home = await geometry();
 check(!home.overflow, "Home does not scroll sideways");
 check(home.small.length === 0, "Home's buttons are big enough to hit", home.small.join(", "));
-// Swap, Edit and New a tap each, along the bottom edge within the thumb's reach.
-const corner = await page.locator("#home-corner-new").boundingBox();
-check(corner && corner.y + corner.height > 844 - 80, "Swap, Edit and New sit along the bottom edge", JSON.stringify(corner));
+// Collapsed Home is the workout and Play alone; Swap, Edit and New come with its sets.
+check(!(await page.isVisible("#home-corner-edit")), "collapsed Home keeps Swap, Edit and New away");
 await shot("01-home");
+await page.tap("#home-summary");
+await settle(500);
+const opened = await geometry();
+check(await page.isVisible("#home-corner-new"), "opening the workout shows Swap, Edit and New");
+check(opened.small.length === 0, "the opened workout's buttons are big enough to hit", opened.small.join(", "));
+await shot("02-opened");
 
-// Swipe right: the swap drawer; left: back.
-await swipe(client, [60, 400], [320, 410]);
+// On a phone the drawer is a sheet: its button opens it, a pull down puts it away. A sideways
+// stroke does nothing (that is the tablet's gesture).
+await swipe(client, [60, 300], [320, 310]);
+await settle(500);
+check(await page.evaluate(() => document.querySelector("#home-alternatives-panel").hidden), "a sideways swipe leaves the drawer shut on a phone");
+await page.tap("#home-corner-swap");
 await settle(700);
-check(await page.evaluate(() => !document.querySelector("#home-alternatives-panel").hidden), "swipe right opens the swap drawer");
-await shot("02-drawer");
-await swipe(client, [300, 400], [60, 405]);
-await settle(600);
-check(await page.evaluate(() => document.querySelector("#home-alternatives-panel").hidden), "swipe left closes it");
+check(await page.evaluate(() => !document.querySelector("#home-alternatives-panel").hidden), "Swap opens the drawer");
+await shot("03-drawer");
+const sheet = await page.locator("#home-alternatives-panel").boundingBox();
+await swipe(client, [195, sheet.y + 24], [195, sheet.y + 24 + sheet.height * 0.6]);
+await settle(700);
+check(await page.evaluate(() => document.querySelector("#home-alternatives-panel").hidden), "a pull down closes it");
 
 // Edit.
 await page.tap("#home-corner-edit");
 await page.waitForSelector("#home-studio");
 await settle(600);
 let g = await geometry();
-check(g.back === home.summary || Math.abs(g.back - 30) <= 1, "the studio starts where Home does", `back=${g.back} home=${home.summary}`);
+// Close is a 44px target around a 20px glyph, so the glyph, not the target, sits on Home's edge.
+check(Math.abs(g.back + 12 - home.summary) <= 1, "the studio's Close sits on Home's edge", `back=${g.back} home=${home.summary}`);
 check(Math.abs(g.dock - 30) <= 1, "the docked box starts at the same edge", `dock=${g.dock}`);
 check(!g.overflow, "the studio does not scroll sideways");
 check(g.small.length === 0, "the studio's buttons are big enough to hit", g.small.join(", "));
@@ -122,7 +133,7 @@ await page.tap("#home-edit-send");
 await settle(400);
 check(await page.isVisible("#home-update-loading"), "a spinner shows while the coach works");
 await page.waitForSelector("#home-request-run", { timeout: 20000 });
-check(!(await page.isVisible("#home-request-save")), "Run alone sits under the proposal");
+check(await page.isVisible("#home-request-save"), "Save and Run sit under the proposal");
 g = await geometry();
 check(g.small.length === 0, "the proposal's buttons are big enough to hit", g.small.join(", "));
 await shot("05-proposal");
@@ -130,10 +141,14 @@ await page.tap("#home-request-abort");
 await page.waitForSelector("#home-summary");
 
 // New.
+if (!(await page.isVisible("#home-corner-new"))) await page.tap("#home-summary");
 await page.tap("#home-corner-new");
 await page.waitForSelector("#studio-new-form");
 check(await page.isVisible("#studio-create"), "New opens on one form with Create");
 check(await page.isVisible("#studio-pace"), "sets and pace are rows in the open");
+// Which beat New opens on follows the athlete; both are checked from a known one.
+await page.tap("label:has(#studio-pacing_style-even)");
+await settle(400);
 check(!(await page.isVisible("#studio-sets")), "an even beat has no set size");
 await page.tap("label:has(#studio-burpee_type-six_count)");
 await page.tap("label:has(#studio-pacing_style-unbroken)");

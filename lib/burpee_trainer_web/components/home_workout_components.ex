@@ -50,20 +50,38 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     """
   end
 
-  attr(:state, :map, required: true)
+  attr(:expanded?, :boolean, required: true)
+  attr(:busy?, :boolean, required: true)
+  attr(:authoring_stage, :atom, required: true)
+  attr(:authoring_returned?, :boolean, required: true)
+  attr(:start_choices, :map, required: true)
+  attr(:start_client_session_id, :string, required: true)
+  attr(:inspection_rows, :list, required: true)
+  attr(:expanded_groups, :any, required: true)
+  attr(:local_error, :any, required: true)
+  attr(:chooser_open?, :boolean, required: true)
+  attr(:flash, :map, required: true)
+  attr(:active_tab, :atom, required: true)
+  attr(:filters_open?, :boolean, required: true)
+  attr(:filters, :map, required: true)
+  attr(:current_level, :atom, required: true)
+  attr(:alternatives_empty?, :boolean, required: true)
+  attr(:alternatives_filtered_out?, :boolean, required: true)
+  attr(:alternatives, :any, required: true, doc: "the stream of workouts and videos to pick")
+  attr(:home_selection, :any, required: true)
 
   # Today's workout. Swipe right to swap it (the drawer's button does the same); Edit and New are
   # a button each, and take Home's place as a chat: `HomeStudioComponents`.
   def workspace(assigns) do
     ~H"""
-    <section id="home-ready-recommendation" data-expanded={to_string(@state.expanded?)}>
-      <div id="home-workout-area" aria-busy={to_string(@state.busy?)}>
-        <%= if @state.busy? and @state.authoring_stage == :idle do %>
+    <section id="home-ready-recommendation" data-expanded={to_string(@expanded?)}>
+      <div id="home-workout-area" aria-busy={to_string(@busy?)}>
+        <%= if @busy? and @authoring_stage == :idle do %>
           <p class="home-eyebrow">Today’s workout</p>
           <div class="home-hero">
-            <h1 class="home-workout-name">{@state.home_selection.plan.name}</h1>
+            <h1 class="home-workout-name">{@home_selection.plan.name}</h1>
             <span class="home-workout-totals">
-              {duration_label(@state.home_selection.plan.target_duration_sec)} · {@state.home_selection.plan.target_reps} reps
+              {duration_label(@home_selection.plan.target_duration_sec)} · {@home_selection.plan.target_reps} reps
             </span>
           </div>
           <div id="home-update-loading" role="status" aria-label="Updating workout">
@@ -73,8 +91,8 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         <% else %>
           <div
             id="home-workout-hero"
-            class={@state.authoring_returned? && "home-enter"}
-            phx-mounted={@state.authoring_returned? && JS.focus(to: "#home-summary")}
+            class={@authoring_returned? && "home-enter"}
+            phx-mounted={@authoring_returned? && JS.focus(to: "#home-summary")}
           >
             <p class="home-eyebrow">Today’s workout</p>
             <div class="home-hero">
@@ -84,76 +102,87 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
                     id="home-summary"
                     type="button"
                     phx-click="toggle_summary"
-                    inert={@state.authoring_stage != :idle}
-                    class={["home-summary", @state.expanded? && "home-summary-expanded"]}
-                    aria-expanded={to_string(@state.expanded?)}
+                    inert={@authoring_stage != :idle}
+                    class={["home-summary", @expanded? && "home-summary-expanded"]}
+                    aria-expanded={to_string(@expanded?)}
                     aria-controls="home-expansion-content"
                   >
-                    <span class="home-workout-name">{@state.home_selection.plan.name}</span>
+                    <span class="home-workout-name">{@home_selection.plan.name}</span>
                   </button>
                 </h1>
               </div>
               <span class="home-workout-totals">
-                {duration_label(@state.home_selection.plan.target_duration_sec)} · {@state.home_selection.plan.target_reps} reps
+                {duration_label(@home_selection.plan.target_duration_sec)} · {@home_selection.plan.target_reps} reps
               </span>
             </div>
             <p
-              :if={@state.authoring_stage == :idle and shape(@state.home_selection.plan)}
+              :if={@authoring_stage == :idle and shape(@home_selection.plan)}
               id="home-shape"
               class="home-shape"
             >
-              {shape(@state.home_selection.plan)}
+              {shape(@home_selection.plan)}
             </p>
             <p
-              :if={@state.home_selection.rationale && @state.authoring_stage == :idle}
+              :if={@home_selection.rationale && @authoring_stage == :idle}
               id="home-planner-rationale"
               class="home-coach-summary-text"
             >
-              {@state.home_selection.rationale}
+              {@home_selection.rationale}
             </p>
             <div
-              :if={@state.authoring_stage == :idle}
+              :if={@authoring_stage == :idle}
               class="home-workout-actions"
               data-expanded="true"
             >
-              <.start_choice choice="camera" pressed={@state.start_choices["camera"]} />
-              <.start_choice choice="warmup" pressed={@state.start_choices["warmup"]} />
+              <.start_choice choice="camera" pressed={@start_choices["camera"]} />
+              <.start_choice choice="warmup" pressed={@start_choices["warmup"]} />
               <button
                 id="home-action"
                 data-primary-action="start"
                 type="button"
                 phx-click="start_workout"
-                phx-value-client_session_id={@state.start_client_session_id}
+                phx-value-client_session_id={@start_client_session_id}
                 aria-label="Start workout"
                 title="Start workout"
                 class="home-primary-action home-play-action"
-                disabled={@state.authoring_stage != :idle}
+                disabled={@authoring_stage != :idle}
               >
                 <.icon name="hero-play-solid" class="size-6" />
               </button>
             </div>
           </div>
-          <div id="home-expansion" class="home-expansion" data-open={to_string(@state.expanded?)}>
+          <div id="home-expansion" class="home-expansion" data-open={to_string(@expanded?)}>
             <section
               id="home-expansion-content"
               class="home-expansion-content"
-              inert={!@state.expanded?}
-              aria-hidden={to_string(!@state.expanded?)}
+              inert={!@expanded?}
+              aria-hidden={to_string(!@expanded?)}
             >
               <.inspection
-                :if={@state.authoring_stage == :idle}
-                rows={@state.inspection_rows}
-                expanded={@state.expanded_groups}
+                :if={@authoring_stage == :idle}
+                rows={@inspection_rows}
+                expanded={@expanded_groups}
               />
-              <.corner :if={@state.authoring_stage == :idle and not @state.chooser_open?} />
-              <div id={"home-editor-#{@state.home_selection.home_revision}"}>
+              <.corner :if={@authoring_stage == :idle and not @chooser_open?} />
+              <div id={"home-editor-#{@home_selection.home_revision}"}>
                 <p id="home-adjustment-error" role="status" class="home-local-message">
-                  {@state.local_error}
+                  {@local_error}
                 </p>
               </div>
             </section>
           </div>
-          <.chooser state={@state} />
+          <.chooser
+            chooser_open?={@chooser_open?}
+            flash={@flash}
+            active_tab={@active_tab}
+            filters_open?={@filters_open?}
+            filters={@filters}
+            current_level={@current_level}
+            alternatives_empty?={@alternatives_empty?}
+            alternatives_filtered_out?={@alternatives_filtered_out?}
+            alternatives={@alternatives}
+            home_selection={@home_selection}
+          />
         <% end %>
       </div>
     </section>
@@ -203,21 +232,30 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     """
   end
 
-  attr(:state, :map, required: true)
+  attr(:chooser_open?, :boolean, required: true)
+  attr(:flash, :map, required: true)
+  attr(:active_tab, :atom, required: true)
+  attr(:filters_open?, :boolean, required: true)
+  attr(:filters, :map, required: true)
+  attr(:current_level, :atom, required: true)
+  attr(:alternatives_empty?, :boolean, required: true)
+  attr(:alternatives_filtered_out?, :boolean, required: true)
+  attr(:alternatives, :any, required: true, doc: "the stream of workouts and videos to pick")
+  attr(:home_selection, :any, required: true)
 
   def chooser(assigns) do
     ~H"""
     <div
       id="home-alternatives-panel"
-      hidden={!@state.chooser_open?}
+      hidden={!@chooser_open?}
       phx-hook="SheetDrag"
       data-close="#home-chooser-close"
       data-backdrop="#home-chooser-backdrop"
       role="dialog"
       aria-modal="true"
       aria-label="Choose a workout"
-      phx-window-keydown={@state.chooser_open? && close_chooser()}
-      phx-key={@state.chooser_open? && "Escape"}
+      phx-window-keydown={@chooser_open? && close_chooser()}
+      phx-key={@chooser_open? && "Escape"}
     >
       <.focus_wrap id="home-chooser-focus">
         <%!-- On a phone the list is a sheet: its grip says it drags down to close. --%>
@@ -236,13 +274,13 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           <h2>Choose a workout</h2>
         </header>
         <p
-          :if={Phoenix.Flash.get(@state.flash, :error)}
+          :if={Phoenix.Flash.get(@flash, :error)}
           id="home-chooser-error"
           role="alert"
           tabindex="-1"
           class="home-local-message focus-visible:outline-2 focus-visible:outline-offset-2"
         >
-          {Phoenix.Flash.get(@state.flash, :error)}
+          {Phoenix.Flash.get(@flash, :error)}
         </p>
         <div id="home-alternatives-toolbar">
           <div role="tablist" aria-label="Other workouts">
@@ -253,7 +291,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               type="button"
               phx-click="tab"
               phx-value-tab={tab}
-              aria-selected={to_string(@state.active_tab == tab)}
+              aria-selected={to_string(@active_tab == tab)}
             >
               {if tab == :workouts, do: "Workouts", else: "Videos"}
             </button>
@@ -263,7 +301,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
             class="home-text-action home-icon-action"
             type="button"
             phx-click="toggle_filters"
-            aria-expanded={to_string(@state.filters_open?)}
+            aria-expanded={to_string(@filters_open?)}
             aria-controls="home-filters"
             aria-label="Filter"
             title="Filter"
@@ -272,7 +310,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           </button>
         </div>
         <%!-- The list opens on both types and the athlete's level and every one above. --%>
-        <div :if={@state.filters_open?} id="home-filters">
+        <div :if={@filters_open?} id="home-filters">
           <div role="group" aria-label="Burpee type">
             <button
               :for={type <- [:six_count, :navy_seal]}
@@ -281,7 +319,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               phx-click="filter"
               phx-value-kind="type"
               phx-value-filter={type}
-              aria-pressed={to_string(MapSet.member?(@state.filters.types, type))}
+              aria-pressed={to_string(MapSet.member?(@filters.types, type))}
             >
               {BurpeeTrainerWeb.Fmt.burpee_type(type)}
             </button>
@@ -307,34 +345,34 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
               phx-click="filter"
               phx-value-kind="level"
               phx-value-filter={level}
-              aria-pressed={to_string(MapSet.member?(@state.filters.levels, level))}
+              aria-pressed={to_string(MapSet.member?(@filters.levels, level))}
             >
               {level |> BurpeeTrainerWeb.Fmt.level() |> String.replace_prefix("Level ", "")}
             </button>
           </div>
           <p id="home-current-level" class="sr-only">
-            {BurpeeTrainerWeb.Fmt.level(@state.current_level)} is your level.
+            {BurpeeTrainerWeb.Fmt.level(@current_level)} is your level.
           </p>
         </div>
         <p
-          :if={@state.alternatives_empty?}
+          :if={@alternatives_empty?}
           id="home-alternatives-empty"
           class="home-local-message"
         >
-          <%= if @state.alternatives_filtered_out? do %>
-            No {if(@state.active_tab == :videos, do: "videos", else: "workouts")} match these filters.
+          <%= if @alternatives_filtered_out? do %>
+            No {if(@active_tab == :videos, do: "videos", else: "workouts")} match these filters.
           <% else %>
-            No {if(@state.active_tab == :videos, do: "videos", else: "workouts")} yet.
+            No {if(@active_tab == :videos, do: "videos", else: "workouts")} yet.
           <% end %>
         </p>
         <div id="home-alternatives" phx-update="stream">
           <.alternative
-            :for={{id, item} <- @state.streams.alternatives}
+            :for={{id, item} <- @alternatives}
             id={id}
             item={item}
             current?={
-              not is_nil(@state.home_selection) and item.kind == :plan and
-                item.source_id == @state.home_selection.plan.id
+              not is_nil(@home_selection) and item.kind == :plan and
+                item.source_id == @home_selection.plan.id
             }
           />
         </div>
@@ -345,7 +383,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
          the drawer in the page, which would cut the drawer's slide short. Escape listens only
          while the drawer is open. --%>
     <div
-      :if={@state.chooser_open?}
+      :if={@chooser_open?}
       id="home-chooser-backdrop"
       phx-click={close_chooser()}
       phx-mounted={JS.focus(to: "#home-chooser-close")}
@@ -354,17 +392,27 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
     """
   end
 
-  attr(:state, :map, required: true)
+  attr(:local_error, :any, required: true)
+  attr(:chooser_open?, :boolean, required: true)
+  attr(:flash, :map, required: true)
+  attr(:active_tab, :atom, required: true)
+  attr(:filters_open?, :boolean, required: true)
+  attr(:filters, :map, required: true)
+  attr(:current_level, :atom, required: true)
+  attr(:alternatives_empty?, :boolean, required: true)
+  attr(:alternatives_filtered_out?, :boolean, required: true)
+  attr(:alternatives, :any, required: true, doc: "the stream of workouts and videos to pick")
+  attr(:home_selection, :any, required: true)
 
   def choose(assigns) do
     ~H"""
     <section id="home-ready-recommendation" class="home-result" data-expanded="true">
       <h1 class="home-state-heading">Your workout is being prepared</h1>
-      <p :if={@state.local_error} id="home-initialization-error" role="status">
-        {@state.local_error}
+      <p :if={@local_error} id="home-initialization-error" role="status">
+        {@local_error}
       </p>
       <a
-        :if={@state.local_error}
+        :if={@local_error}
         id="home-fallback-reload"
         href={~p"/"}
         class="mt-4 inline-flex min-h-11 items-center underline focus-visible:outline-2"
@@ -380,14 +428,25 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
           aria-label="Switch workout"
           title="Switch workout"
           aria-haspopup="dialog"
-          aria-expanded={to_string(@state.chooser_open?)}
+          aria-expanded={to_string(@chooser_open?)}
           aria-controls="home-alternatives-panel"
           class="home-primary-action home-icon-action"
         >
           <.icon name="hero-arrows-right-left" class="size-5" />
         </button>
       </div>
-      <.chooser state={@state} />
+      <.chooser
+        chooser_open?={@chooser_open?}
+        flash={@flash}
+        active_tab={@active_tab}
+        filters_open?={@filters_open?}
+        filters={@filters}
+        current_level={@current_level}
+        alternatives_empty?={@alternatives_empty?}
+        alternatives_filtered_out?={@alternatives_filtered_out?}
+        alternatives={@alternatives}
+        home_selection={@home_selection}
+      />
     </section>
     """
   end

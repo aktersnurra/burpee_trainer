@@ -25,7 +25,9 @@ node assets/js/tools/pose_corpus_report.mjs .docs/pose-corpus assets/js/hooks/fi
 Per session: the logged count, the session's camera count, the replayed count, whether a
 version 2 trace's replay reproduces the reps the camera emitted live (traces from before
 2026-10-26 are version 1: they lack dropouts, so replay is optimistic), and the replay's
-reps matched to the program's schedule. The schedule is a rep-by-rep label only for sessions
+reps matched to the program's schedule. Under a version 2 session: the share of frames the
+counter could not use and, for traces from 2026-11-10 on, the check each failed
+(`world_coverage`, `confidence`, `landmark_confidence`, `visible_fraction`, `features`). The schedule is a rep-by-rep label only for sessions
 where you kept up. The command exits non-zero if a version 2 replay differs from live.
 
 ## 3. Refit

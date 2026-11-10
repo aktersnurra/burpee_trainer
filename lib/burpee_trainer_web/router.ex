@@ -106,14 +106,5 @@ defmodule BurpeeTrainerWeb.Router do
 
       get("/login", DevSessionController, :create)
     end
-
-    scope "/", BurpeeTrainerWeb do
-      pipe_through([:browser, :require_auth])
-
-      live_session :dev_authed,
-        on_mount: [{BurpeeTrainerWeb.Auth, :require_authenticated_user}] do
-        live("/tracking-test", TrackingTestLive)
-      end
-    end
   end
 end

@@ -17,7 +17,21 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   @doc "How many recent weeks the day grid holds: those of the widest screen."
   def grid_weeks, do: @wide_weeks
 
-  attr(:state, :map, required: true)
+  attr(:current_scope, :map, required: true)
+  attr(:current_level, :atom, required: true)
+  attr(:progress_summary, :any, required: true)
+  attr(:progress_summary_loading?, :boolean, required: true)
+  attr(:history_streak, :integer, required: true)
+  attr(:history_error, :any, required: true)
+  attr(:history_available?, :boolean, required: true)
+  attr(:history_empty?, :boolean, required: true)
+  attr(:history_grid_weeks, :list, required: true)
+  attr(:history_weeks, :list, required: true)
+  attr(:history_points, :map, required: true)
+  attr(:history_snapshot_now, :any, required: true)
+  attr(:history_gauges, :list, required: true)
+  attr(:history_selected_session, :any, required: true)
+  attr(:history_confirm_delete?, :boolean, required: true)
 
   def panel(assigns) do
     ~H"""
@@ -32,30 +46,36 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             tabindex="-1"
             phx-mounted={JS.focus(to: "#home-history-heading")}
             class="screen-heading"
-            aria-label={"Progress, #{Fmt.level(@state.current_level)}"}
+            aria-label={"Progress, #{Fmt.level(@current_level)}"}
           >
             <%!-- Progress is titled by where you stand: your level. --%>
 
-            <span id="history-level">{Fmt.level(@state.current_level)}</span>
+            <span id="history-level">{Fmt.level(@current_level)}</span>
           </h1>
           <%!-- Weeks in a row at 80 minutes; nothing while there is no run. --%>
           <span
-            :if={Map.get(@state, :history_streak, 0) > 0}
+            :if={@history_streak > 0}
             id="history-streak"
             class="history-streak"
-            title={"#{@state.history_streak} #{if(@state.history_streak == 1, do: "week", else: "weeks")} in a row at the weekly target"}
-            aria-label={"#{@state.history_streak} #{if(@state.history_streak == 1, do: "week", else: "weeks")} in a row at the weekly target"}
+            title={"#{@history_streak} #{if(@history_streak == 1, do: "week", else: "weeks")} in a row at the weekly target"}
+            aria-label={"#{@history_streak} #{if(@history_streak == 1, do: "week", else: "weeks")} in a row at the weekly target"}
           >
             <.icon name="hero-fire" class="size-5" />
             <span aria-hidden="true">
-              {@state.history_streak} {if(@state.history_streak == 1, do: "week", else: "weeks")}
+              {@history_streak} {if(@history_streak == 1, do: "week", else: "weeks")}
             </span>
           </span>
         </div>
-        <.history_header state={@state} />
-        <p :if={@state.history_error} id="home-history-error" role="status">{@state.history_error}</p>
-        <%= if is_nil(@state.history_error) and @state.history_available? do %>
-          <.week_grid weeks={@state.history_grid_weeks} />
+        <.history_header
+          history_gauges={@history_gauges}
+          current_level={@current_level}
+          current_scope={@current_scope}
+          progress_summary={@progress_summary}
+          progress_summary_loading?={@progress_summary_loading?}
+        />
+        <p :if={@history_error} id="home-history-error" role="status">{@history_error}</p>
+        <%= if is_nil(@history_error) and @history_available? do %>
+          <.week_grid weeks={@history_grid_weeks} />
           <section
             id="home-history-reps"
             class="home-history-reps"
@@ -65,37 +85,37 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
               Reps per 20 minutes
             </h2>
             <.trend_chart
-              points={@state.history_points}
-              empty?={@state.history_empty?}
-              period_start={List.first(@state.history_weeks).start}
-              now={@state.history_snapshot_now}
-              gauges={@state.history_gauges}
+              points={@history_points}
+              empty?={@history_empty?}
+              period_start={List.first(@history_weeks).start}
+              now={@history_snapshot_now}
+              gauges={@history_gauges}
             />
             <%!-- The session a point opened: when, its reps and time, and the bin. --%>
             <table
-              :if={@state.history_selected_session}
+              :if={@history_selected_session}
               id="home-history-opened"
               class="home-history-table"
             >
               <caption class="sr-only">The session you opened</caption>
               <tbody>
                 <.session_row
-                  id={"home-history-session-#{@state.history_selected_session.id}"}
-                  session={@state.history_selected_session}
-                  timezone={@state.current_scope.user.timezone}
+                  id={"home-history-session-#{@history_selected_session.id}"}
+                  session={@history_selected_session}
+                  timezone={@current_scope.user.timezone}
                   expanded?={true}
-                  confirm?={@state.history_confirm_delete?}
+                  confirm?={@history_confirm_delete?}
                 />
               </tbody>
             </table>
           </section>
         <% end %>
         <p
-          :if={@state.history_empty? and is_nil(@state.history_error)}
+          :if={@history_empty? and is_nil(@history_error)}
           id="home-history-empty"
           class="home-history-empty"
         >
-          <%= if @state.history_available? do %>
+          <%= if @history_available? do %>
             No sessions in this period.
           <% else %>
             No workouts yet. Complete a workout to begin tracking your training.
@@ -192,7 +212,11 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   defp day_duration(seconds) when rem(seconds, 60) == 0, do: "#{div(seconds, 60)} min"
   defp day_duration(seconds), do: "#{div(seconds, 60)} min #{rem(seconds, 60)} sec"
 
-  attr(:state, :map, required: true)
+  attr(:history_gauges, :list, required: true)
+  attr(:current_level, :atom, required: true)
+  attr(:current_scope, :map, required: true)
+  attr(:progress_summary, :any, required: true)
+  attr(:progress_summary_loading?, :boolean, required: true)
 
   # Each burpee type's best in 20 minutes side by side, then the coach's look back under the
   # page's only rule.
@@ -202,33 +226,45 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
       <p class="history-best-label">Best in 20 minutes</p>
       <div id="progress-gauges" class="progress-gauges">
         <.gauge
-          :for={gauge <- @state.history_gauges}
+          :for={gauge <- @history_gauges}
           gauge={gauge}
-          next={BurpeeTrainer.Levels.next(@state.current_level)}
+          next={BurpeeTrainer.Levels.next(@current_level)}
         />
       </div>
       <%!-- The way into the coach, under its look back when there is one; without the app's
            coach the look back is Claude's and only reads here. --%>
       <.link
-        :if={BurpeeTrainer.Coach.enabled?(@state.current_scope)}
+        :if={BurpeeTrainer.Coach.enabled?(@current_scope)}
         id="history-look-back"
         patch={~p"/coach?from=progress"}
         data-vt="forward"
         class="history-look-back"
       >
-        <.look_back state={@state} chevron?={true} />
+        <.look_back
+          progress_summary={@progress_summary}
+          progress_summary_loading?={@progress_summary_loading?}
+          chevron?={true}
+        />
       </.link>
       <div
-        :if={summary_line?(@state) and not BurpeeTrainer.Coach.enabled?(@state.current_scope)}
+        :if={
+          summary_line?(@progress_summary, @progress_summary_loading?) and
+            not BurpeeTrainer.Coach.enabled?(@current_scope)
+        }
         class="history-look-back"
       >
-        <.look_back state={@state} chevron?={false} />
+        <.look_back
+          progress_summary={@progress_summary}
+          progress_summary_loading?={@progress_summary_loading?}
+          chevron?={false}
+        />
       </div>
     </header>
     """
   end
 
-  attr(:state, :map, required: true)
+  attr(:progress_summary, :any, required: true)
+  attr(:progress_summary_loading?, :boolean, required: true)
   attr(:chevron?, :boolean, required: true)
 
   defp look_back(assigns) do
@@ -236,10 +272,14 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
     <p class="history-look-back-label">
       Coach<.icon :if={@chevron?} name="hero-chevron-right-mini" class="size-4" />
     </p>
-    <p :if={summary_line?(@state)} id="history-coach-summary" class="history-coach-summary">
+    <p
+      :if={summary_line?(@progress_summary, @progress_summary_loading?)}
+      id="history-coach-summary"
+      class="history-coach-summary"
+    >
       <BurpeeTrainerWeb.HomeCoachComponents.summary_body
-        summary={@state.progress_summary}
-        loading?={@state.progress_summary_loading?}
+        summary={@progress_summary}
+        loading?={@progress_summary_loading?}
         field={:review}
       />
     </p>
@@ -319,10 +359,10 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   defp type_sentence(:navy_seal), do: "Navy SEAL"
 
   # The look back shows once the coach has written one; the note itself is for Home.
-  defp summary_line?(state),
+  defp summary_line?(progress_summary, progress_summary_loading?),
     do:
-      Map.get(state, :progress_summary_loading?, false) or
-        match?(%{review: review} when is_binary(review), Map.get(state, :progress_summary))
+      progress_summary_loading? or
+        match?(%{review: review} when is_binary(review), progress_summary)
 
   attr(:points, :map, required: true)
   attr(:empty?, :boolean, required: true)

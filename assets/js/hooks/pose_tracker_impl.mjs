@@ -1,8 +1,8 @@
 import { createWorkerPoseDetector } from "./pose_worker_detector.mjs";
 import {
+	burpeeHsmmFrameRejection,
 	initialBurpeeHsmmState,
 	stepBurpeeHsmm,
-	usableBurpeeHsmmFrame,
 } from "./pose_burpee_hsmm.mjs";
 import { initialPoseReadiness, stepPoseReadiness } from "./pose_readiness.mjs";
 import {
@@ -454,11 +454,13 @@ export function createPoseTracker(hook, runtime = {}) {
 			});
 		}
 
-		// The trace keeps every frame the counter saw, so a replay counts what it counted.
+		// The trace keeps every frame the counter saw, so a replay counts what it counted, and
+		// says why it could not use one.
+		const rejection = burpeeHsmmFrameRejection(sample.features);
 		recordCapture(
-			usableBurpeeHsmmFrame(sample.features)
+			rejection === null
 				? sample
-				: { tMs: sample.tMs, usable: false },
+				: { tMs: sample.tMs, usable: false, why: rejection },
 		);
 
 		scheduleNextFrame();

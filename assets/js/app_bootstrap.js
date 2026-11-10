@@ -13,8 +13,6 @@ import SheetDrag from "./hooks/sheet_drag.mjs";
 import SessionHook from "./hooks/session_hook";
 import SessionCompleted from "./hooks/session_completed.mjs";
 import VideoHook from "./hooks/video_hook";
-import PoseDebug from "./hooks/pose_debug";
-import PoseTraceButton from "./hooks/pose_trace_button";
 import { startPoseTraceSync } from "./hooks/pose_trace_sync.mjs";
 import { openSessionStore } from "./hooks/session_store.mjs";
 import { viewTransitions } from "./view_transitions.mjs";
@@ -41,8 +39,6 @@ export function startApp(PoseTracker) {
 			SessionCompleted,
 			VideoHook,
 			PoseTracker,
-			PoseDebug,
-			PoseTraceButton,
 		},
 	});
 

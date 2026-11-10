@@ -107,7 +107,29 @@ export function reportTrace(trace) {
 					JSON.stringify(trace.liveRepsMs.filter((repMs) => repMs >= replay.fromMs))
 				: null,
 		schedule: alignSchedule(replay.all, schedule),
+		unusable: unusableFrames(trace),
 	};
+}
+
+// A version 2 trace marks the frames the counter could not use; from 2026-11-10 with the
+// check each failed.
+function unusableFrames(trace) {
+	if (trace.version < 2) return null;
+	const frames = trace.frames.filter((frame) => !frame.reset);
+	const reasons = {};
+	for (const frame of frames) {
+		if (frame.usable === false) reasons[frame.why ?? "unrecorded"] = (reasons[frame.why ?? "unrecorded"] ?? 0) + 1;
+	}
+	return { frames: frames.length, reasons };
+}
+
+function formatUnusable({ frames, reasons }) {
+	const percent = (count) => `${((100 * count) / frames).toFixed(1)}%`;
+	const total = Object.values(reasons).reduce((sum, count) => sum + count, 0);
+	const parts = Object.entries(reasons)
+		.sort((a, b) => b[1] - a[1])
+		.map(([why, count]) => `${why} ${percent(count)}`);
+	return `    unusable frames ${percent(total)}${parts.length ? `: ${parts.join(", ")}` : ""}`;
 }
 
 function formatRow(row) {
@@ -123,7 +145,10 @@ function formatRow(row) {
 
 if (import.meta.url === new URL(process.argv[1], "file://").href) {
 	const all = traceFilesIn(process.argv.slice(2)).map((path) => reportTrace(loadTraceFile(path)));
-	all.forEach((row) => console.log(formatRow(row)));
+	all.forEach((row) => {
+		console.log(formatRow(row));
+		if (row.replayable && row.unusable) console.log(formatUnusable(row.unusable));
+	});
 	const rows = all.filter((row) => row.replayable);
 
 	const counted = rows.filter((row) => Number.isInteger(row.logged));

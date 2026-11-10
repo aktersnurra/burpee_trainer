@@ -167,6 +167,27 @@ defmodule BurpeeTrainer.Coach.PolicyTest do
     refute slot.exploration_allowed?
   end
 
+  test "an exploration older than six weeks still counts while nothing structured followed it" do
+    user = user_fixture() |> provision_timezone("Etc/UTC")
+
+    complete(user, ~U[2025-06-28 09:00:00Z], 1_200,
+      source_kind: :plan,
+      definition: structured_definition("Baseline", 100)
+    )
+
+    complete(user, ~U[2025-06-29 09:00:00Z], 1_200,
+      source_kind: :plan,
+      definition: structured_definition("Recovery exploration", 200),
+      limiter: :legs
+    )
+
+    complete(user, ~U[2025-08-30 09:00:00Z], 1_200)
+
+    assert {:ok, slot} = Policy.required_slot(Scope.for_user(user), ~U[2025-09-01 12:00:00Z])
+    refute slot.exploration_allowed?
+    assert slot.feedback.limiters == [:legs]
+  end
+
   test "manual and unfingerprintable completions count in the three-workout window without crashing" do
     user = user_fixture() |> provision_timezone("Etc/UTC")
 

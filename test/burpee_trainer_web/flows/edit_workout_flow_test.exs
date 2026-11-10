@@ -255,6 +255,8 @@ defmodule BurpeeTrainerWeb.Flows.EditWorkoutFlowTest do
     send(view.pid, {:studio_streaming, id, "Continuous sets"})
     assert has_element?(view, "#studio-streaming[aria-busy=true]", "Continuous sets")
     refute has_element?(view, "#home-update-loading")
+    send(view.pid, {:studio_streaming, id, "Continuous sets, so"})
+    assert has_element?(view, "#studio-streaming", "Continuous sets, so")
 
     send(planner, :release_plan)
     render_async(view)

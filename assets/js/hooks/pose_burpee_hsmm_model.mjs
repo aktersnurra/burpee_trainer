@@ -2,7 +2,7 @@
 // Features, in order: worldBodyVerticalSpan, worldHipVerticalSpan, worldTorsoElevation, worldWristVerticalSpan, dWorldBodyVerticalSpan, dWorldWristVerticalSpan.
 export const BURPEE_HSMM_MODEL = Object.freeze({
 	tickMs: 100,
-	lagTicks: 6,
+	lagTicks: 4,
 	minTicks: { standing: 2, lowering: 2, pushup: 3, rising: 2, other: 2 },
 	leave: { standing: 0.0343, lowering: 0.2678, pushup: 0.0317, rising: 0.6667, other: 0.0761 },
 	branch: { standing: { lowering: 0.7902, other: 0.2098 } },

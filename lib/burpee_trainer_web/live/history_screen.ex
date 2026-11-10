@@ -118,31 +118,30 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
     user = a.current_scope.user
 
     with {:ok, _} <- History.filter_sessions([], user, now, @period) do
-      points =
-        Map.new([:six_count, :navy_seal], fn type ->
-          {:ok, sessions} =
-            History.filter_sessions(
-              Workouts.list_sessions_for_chart(a.current_scope, type),
-              user,
-              now,
-              @period
-            )
-
-          {type, History.points(sessions)}
-        end)
-
       all_sessions = Workouts.list_sessions(a.current_scope)
       {:ok, available_sessions} = History.filter_sessions(all_sessions, user, now, "all")
       {:ok, in_period} = History.filter_sessions(all_sessions, user, now, @period)
-      {:ok, weeks} = History.weeks(all_sessions, user, now, @period)
+
+      points =
+        Map.new([:six_count, :navy_seal], fn type ->
+          {type, in_period |> Enum.filter(&(&1.burpee_type == type)) |> History.points()}
+        end)
+
       {:ok, all_weeks} = History.weeks(all_sessions, user, now, "all")
-      {:ok, year_weeks} = History.weeks(all_sessions, user, now, "year")
+      grid_weeks = HomeHistoryComponents.grid_weeks()
+
+      # Every week back to the first session, twelve at the least; a shorter history's grid
+      # is padded with the empty weeks of a year.
+      {:ok, year_weeks} =
+        if length(all_weeks) >= grid_weeks,
+          do: {:ok, all_weeks},
+          else: History.weeks(all_sessions, user, now, "year")
 
       assign(socket,
         history_available?: available_sessions != [],
         history_gauges: gauges(a.current_scope, all_sessions, now),
-        history_weeks: from_first_trained_week(weeks),
-        history_grid_weeks: Enum.take(year_weeks, -HomeHistoryComponents.grid_weeks()),
+        history_weeks: from_first_trained_week(Enum.take(all_weeks, -12)),
+        history_grid_weeks: Enum.take(year_weeks, -grid_weeks),
         history_streak: History.streak(all_weeks),
         history_error: nil,
         history_empty?: in_period == [],
@@ -189,6 +188,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
   defp gauges_none,
     do: [%{kind: :none, burpee_type: :six_count}, %{kind: :none, burpee_type: :navy_seal}]
 
+  @doc "The Progress screen: `HomeLive` calls it with its own assigns (see docs/ui.md)."
   def screen(assigns) do
     ~H"""
     <main
@@ -218,7 +218,23 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
             <span class="sr-only">Back to Home</span>
           </button>
         </div>
-        <HomeHistoryComponents.panel state={assigns} />
+        <HomeHistoryComponents.panel
+          current_scope={@current_scope}
+          current_level={@current_level}
+          progress_summary={@progress_summary}
+          progress_summary_loading?={@progress_summary_loading?}
+          history_streak={@history_streak}
+          history_error={@history_error}
+          history_available?={@history_available?}
+          history_empty?={@history_empty?}
+          history_grid_weeks={@history_grid_weeks}
+          history_weeks={@history_weeks}
+          history_points={@history_points}
+          history_snapshot_now={@history_snapshot_now}
+          history_gauges={@history_gauges}
+          history_selected_session={@history_selected_session}
+          history_confirm_delete?={@history_confirm_delete?}
+        />
       </div>
     </main>
     """

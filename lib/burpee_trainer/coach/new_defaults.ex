@@ -161,7 +161,7 @@ defmodule BurpeeTrainer.Coach.NewDefaults do
 
   # No recent session: the next level, which is also what the planner may reach for.
   defp landmark_rate(scope, burpee_type) do
-    current = Levels.current_level(BurpeeTrainer.Workouts.list_sessions(scope))
+    current = BurpeeTrainer.Workouts.current_level(scope)
     Levels.threshold(Levels.next(current) || current, burpee_type)
   end
 

@@ -999,7 +999,7 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .studio-suggestions::-webkit-scrollbar { display: none; }
 @media (max-width: 600px) { .studio-suggestions { margin-right: calc(-1 * var(--gutter)); padding-right: var(--gutter); } }
 .studio-suggestion { flex: none; white-space: nowrap; }
-.studio-suggestion { min-height: 36px; padding: 0 14px; color: var(--muted); font-size: var(--text-small); text-align: left; }
+.studio-suggestion { min-height: 40px; padding: 0 14px; color: var(--muted); font-size: var(--text-small); text-align: left; }
 .studio-actions .studio-pill { min-width: 96px; padding-inline: 36px; }
 
 /* New's form: a card of rows, each a label and its control, then the note and Create. It takes

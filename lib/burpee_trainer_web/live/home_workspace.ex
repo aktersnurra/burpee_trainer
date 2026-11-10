@@ -4,7 +4,7 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
   use BurpeeTrainerWeb, :html
   import Phoenix.LiveView
   alias BurpeeTrainer.Workouts.Inspection
-  alias BurpeeTrainerWeb.{HomeWorkoutRequest, HomeChooser, HomeAuthoring, HomeLive}
+  alias BurpeeTrainerWeb.{HomeWorkoutRequest, HomeChooser, HomeAuthoring, HomeLive, ReplyStream}
 
   def assign_workspace(socket) do
     socket =
@@ -36,6 +36,8 @@ defmodule BurpeeTrainerWeb.HomeWorkspace do
       )
       |> HomeAuthoring.adjustment_form("")
       |> stream(:alternatives, [], dom_id: &"home-alternative-#{&1.id}")
+      |> ReplyStream.initialize(:studio_reply_pieces)
+      |> assign(studio_streaming?: false)
 
     case socket.assigns.home_state do
       {:start, selected} ->

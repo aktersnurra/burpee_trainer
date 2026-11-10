@@ -122,15 +122,22 @@ export function segmentBurpeeHsmm(frames, model = BURPEE_HSMM_MODEL) {
 }
 
 export function usableBurpeeHsmmFrame(frame) {
-	return (
-		Number.isFinite(frame?.tMs) &&
-		frame?.hasFullWorldLandmarkCoverage === true &&
-		finiteOr(frame.poseConfidence, frame.confidence) >= MIN_CONFIDENCE &&
-		finiteOr(frame.macroLandmarkConfidence, 0) >=
-			MIN_MACRO_LANDMARK_CONFIDENCE &&
-		finiteOr(frame.visibleFraction, 0) >= MIN_VISIBLE_FRACTION &&
-		BURPEE_HSMM_FEATURES.every((name) => Number.isFinite(frame[name]))
-	);
+	return burpeeHsmmFrameRejection(frame) === null;
+}
+
+// Why the counter cannot use a frame, or null when it can: the first check it fails.
+export function burpeeHsmmFrameRejection(frame) {
+	if (!Number.isFinite(frame?.tMs)) return "time";
+	if (frame.hasFullWorldLandmarkCoverage !== true) return "world_coverage";
+	if (finiteOr(frame.poseConfidence, frame.confidence) < MIN_CONFIDENCE)
+		return "confidence";
+	if (finiteOr(frame.macroLandmarkConfidence, 0) < MIN_MACRO_LANDMARK_CONFIDENCE)
+		return "landmark_confidence";
+	if (finiteOr(frame.visibleFraction, 0) < MIN_VISIBLE_FRACTION)
+		return "visible_fraction";
+	if (!BURPEE_HSMM_FEATURES.every((name) => Number.isFinite(frame[name])))
+		return "features";
+	return null;
 }
 
 export function phaseLogLikelihoods(model, frame) {

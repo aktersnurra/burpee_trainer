@@ -101,7 +101,7 @@ export function flushPoseCaptureRecorder(state, _options = {}) {
 }
 
 // Version 2: samples hold every frame the counter saw (unusable ones as
-// `{ tMs, usable: false }`, resets as `{ tMs, reset: true }`); reps are the rep times it emitted.
+// `{ tMs, usable: false, why }`, resets as `{ tMs, reset: true }`); reps are the rep times it emitted.
 function payloadFor(samples, reps) {
 	return {
 		version: PAYLOAD_VERSION,

@@ -20,27 +20,38 @@ defmodule BurpeeTrainer.History do
           {:ok, [WorkoutSession.t()]} | {:error, :invalid_timezone}
   def filter_sessions(sessions, user, now, period)
       when period in ["week", "four_weeks", "twelve_weeks", "year", "all"] do
-    with {:ok, context} <- UserTime.context(user, now) do
-      start =
-        case period do
-          "week" -> context.week_start
-          "four_weeks" -> Date.add(context.week_start, -21)
-          "twelve_weeks" -> Date.add(context.week_start, -77)
-          "year" -> Date.add(context.week_start, -357)
-          "all" -> nil
-        end
-
+    with {:ok, context} <- UserTime.context(user, now),
+         {:ok, since} <- period_start_utc(period, context) do
       {:ok,
        Enum.filter(sessions, fn session ->
-         with %DateTime{} = at <- session.completed_at,
-              true <- DateTime.compare(at, now) != :gt,
-              {:ok, date} <- UserTime.local_date(at, context.timezone) do
-           is_nil(start) or Date.compare(date, start) != :lt
-         else
-           _ -> false
+         case session.completed_at do
+           %DateTime{} = at ->
+             DateTime.compare(at, now) != :gt and
+               (is_nil(since) or DateTime.compare(at, since) != :lt)
+
+           _ ->
+             false
          end
        end)}
     end
+  end
+
+  # The period's first local midnight, in UTC: one conversion, not one for each session.
+  defp period_start_utc("all", _context), do: {:ok, nil}
+
+  defp period_start_utc(period, context) do
+    weeks_back =
+      case period do
+        "week" -> 0
+        "four_weeks" -> 3
+        "twelve_weeks" -> 11
+        "year" -> 51
+      end
+
+    start = Date.add(context.week_start, -7 * weeks_back)
+
+    with {:ok, since, _week_end} <- UserTime.week_bounds_utc(%{context | week_start: start}),
+         do: {:ok, since}
   end
 
   @spec weeks([WorkoutSession.t()], map(), DateTime.t(), period()) ::
@@ -188,7 +199,9 @@ defmodule BurpeeTrainer.History do
           {:ok, %{today: [WorkoutSession.t()], week: [WorkoutSession.t()]}} | {:error, term()}
   def results(%BurpeeTrainer.Accounts.Scope{user: user} = scope, now) do
     with {:ok, context} <- UserTime.context(user, now),
-         {:ok, week} <- filter_sessions(Workouts.list_sessions(scope), user, now, "week") do
+         {:ok, week_start, _week_end} <- UserTime.week_bounds_utc(context),
+         {:ok, week} <-
+           filter_sessions(Workouts.list_sessions_since(scope, week_start), user, now, "week") do
       week = Enum.filter(week, &AuthoritativeSession.authoritative?/1)
 
       today =

@@ -5,6 +5,7 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   import Phoenix.LiveView
   alias BurpeeTrainer.{Coach, Workouts}
   alias BurpeeTrainerWeb.HomeAuthoring.Flow
+  alias BurpeeTrainerWeb.ReplyStream
 
   alias BurpeeTrainerWeb.{
     CreationParameters,
@@ -452,7 +453,16 @@ defmodule BurpeeTrainerWeb.HomeAuthoring do
   # One authoring transition: the pure flow decides, the socket carries it out.
   defp step(socket, event) do
     {model, commands} = Flow.update(Flow.from_assigns(socket.assigns), event)
-    Enum.reduce(commands, assign(socket, Flow.to_assigns(model)), &run/2)
+
+    socket =
+      socket
+      |> assign(Flow.to_assigns(model))
+      # The words go to the browser a piece at a time; the template reads only whether there
+      # are any yet.
+      |> ReplyStream.show(:studio_reply_pieces, model.streamed)
+      |> assign(studio_streaming?: is_binary(model.streamed))
+
+    Enum.reduce(commands, socket, &run/2)
   end
 
   defp run({:cancel_async, name}, socket), do: cancel_async(socket, name)

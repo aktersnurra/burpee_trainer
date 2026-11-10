@@ -8,7 +8,6 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
   alias BurpeeTrainer.Repo
   alias BurpeeTrainer.Accounts.Scope
   alias BurpeeTrainer.Coach.Summary
-  alias BurpeeTrainerWeb.HomeCoachComponents
 
   setup %{conn: conn} do
     user = user_fixture()
@@ -244,8 +243,9 @@ defmodule BurpeeTrainerWeb.Flows.HistorySummaryFlowTest do
     refute has_element?(view, "#home-coach-notebook, #home-coach-flip")
 
     busy =
-      render_component(&HomeCoachComponents.panel/1,
-        state: %{:sys.get_state(view.pid).socket.assigns | coach_busy?: true}
+      render_component(
+        &BurpeeTrainerWeb.HomeLive.render/1,
+        %{:sys.get_state(view.pid).socket.assigns | coach_busy?: true}
       )
 
     assert busy =~ "Sending to the coach"

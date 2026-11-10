@@ -43,6 +43,7 @@
 | `BurpeeTrainerWeb.{HomeScreen, HistoryScreen}` | Screen modules rendered by `HomeLive` |
 | `BurpeeTrainerWeb.HomeAuthoring.Flow` | Pure authoring transitions: `update(model, event) -> {model, commands}`; work in flight is applied only while its `update_id` is current; each follow-up refines the latest proposal and the ones it replaced stay as `design_turns` (`docs/specs/2026-10-29-design-chat-design.md`) |
 | `BurpeeTrainerWeb.{HomeAuthoring, HomeChooser, HomeWorkspace, HomeAdjustment, HomeWorkoutRequest, CreationParameters}` | Home authoring, chooser, and workspace behaviour |
+| `BurpeeTrainerWeb.ReplyStream` | A reply as the coach writes it, sent to the browser a piece at a time (a LiveView stream) for the coach chat and the studio |
 | `BurpeeTrainerWeb.{HomeStudioComponents, NewWorkoutForm}` / `BurpeeTrainer.Coach.NewDefaults` | The studio (Edit as a chat, New as one form then the chat), New's form rules (reps and pace follow duration and type until set by hand; everything fits the duration), and what each value starts from: the week's time left, a step past the athlete's recent best, a pace that fits |
 | `BurpeeTrainerWeb.SessionLive` / `BurpeeTrainerWeb.VideoLive.Show` | Plan and video session runners; both end on `SessionComponents.completion_review` (a video drives it through `events`), and a video counts reps with the camera when the device's toggle is on |
 | `BurpeeTrainerWeb.HomeDayBoundary` | Local-day boundary scheduling |

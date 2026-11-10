@@ -25,7 +25,7 @@ At least one of those should return a context object, not `null`.
 
 ## 1. MediaPipe asset check
 
-Open the browser devtools Network tab and start the camera debug/tracked flow.
+Open the browser devtools Network tab and start a camera session.
 
 Confirm these requests return `200`, not `404`:
 
@@ -44,21 +44,7 @@ If any are missing, run:
 mix assets.pose
 ```
 
-## 2. Camera debug smoke test
-
-1. Go to `/tracking-test`.
-2. Allow camera permission.
-3. Confirm the status reaches `Live`.
-4. Move in frame and confirm the skeleton/pose display updates.
-5. Confirm there is no browser alert like:
-
-```text
-Failed to create WebGL canvas context when passing video frame
-```
-
-If that appears, try another browser or enable hardware acceleration/WebGL.
-
-## 3. Completed tracked session smoke test
+## 2. Completed tracked session smoke test
 
 1. Go to a runnable workout plan.
 2. Start a session.
@@ -77,7 +63,7 @@ Expected behavior:
 - Saving creates a tracked `workout_session`.
 - The `pose_capture_run` is marked completed and linked to that saved session.
 
-## 4. Database checks after saving
+## 3. Database checks after saving
 
 In an IEx session or database browser, verify:
 
@@ -106,7 +92,7 @@ run.status == :completed
 length(chunks) > 0
 ```
 
-## 5. Abort/discard smoke test
+## 4. Abort/discard smoke test
 
 1. Start another tracked session.
 2. Allow the camera to start.
@@ -127,7 +113,7 @@ Repo.aggregate(PoseTraceChunk, :count)
 
 The counts should not increase after an aborted tracked attempt.
 
-## 6. Timer-only fallback smoke test
+## 5. Timer-only fallback smoke test
 
 1. Start a session.
 2. Choose timer-only mode.
@@ -139,14 +125,14 @@ Expected behavior:
 - No new `pose_capture_run` is created.
 - Saved session has `capture_mode == :timed`.
 
-## 7. Count-in visual check
+## 6. Count-in visual check
 
 During count-in before a set starts, verify:
 
 - The session background is the app's light background.
 - The header/count-in label stays legible against it.
 
-## 8. Final automated checks
+## 7. Final automated checks
 
 After manual smoke testing, run:
 

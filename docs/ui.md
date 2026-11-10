@@ -445,6 +445,18 @@ column: Home and Progress render in the same `.adaptive-home` container on the
 layout's session surface, so the background, gutters and width never change between
 them. Sheets and the chooser use `--color-base-200`. Never hard-code a page background.
 
+### How the screens are rendered
+
+Home, Progress and Coach are one LiveView (`HomeLive`), and only what changed is sent to the
+browser. Two rules keep it so:
+
+- `HomeLive.render/1` calls a screen (`HomeScreen.screen/1`, `HistoryScreen.screen/1`,
+  `HomeCoachComponents.page/1`) as a function with its own assigns, so the screen reads `@name`
+  as the view does.
+- Every component under a screen declares the values it reads as attributes and is given each
+  one by name. Never pass a component all the assigns (`{assigns}`, `state={assigns}`): LiveView
+  then sends the component's whole content again on every update.
+
 ---
 
 ## 6. What We Are NOT Doing

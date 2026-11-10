@@ -14,6 +14,8 @@ defmodule BurpeeTrainer.Coach.Policy do
   @standard_duration_sec 1_200
   @catch_up_floor_sec 2_400
   @six_weeks_sec 42 * 24 * 60 * 60
+  # The three latest sessions and the one before them.
+  @exploration_sessions 4
   @type slot :: %{
           slot_key: String.t(),
           slot_date: Date.t(),
@@ -105,17 +107,34 @@ defmodule BurpeeTrainer.Coach.Policy do
     min(remaining_sec, blocks_today * @standard_duration_sec)
   end
 
+  # The week and the personal best read the last six weeks, feedback the three latest
+  # sessions, and exploration those three with the structured session before each. Six weeks
+  # with four structured sessions hold all of that; otherwise the whole history is read.
   defp completed_sessions(user_id, now) do
-    Repo.all(
+    since = DateTime.add(now, -@six_weeks_sec, :second)
+    recent = completed_sessions(user_id, now, since)
+
+    if Enum.count(recent, &structured?/1) >= @exploration_sessions,
+      do: recent,
+      else: completed_sessions(user_id, now, nil)
+  end
+
+  defp completed_sessions(user_id, now, since) do
+    query =
       from(session in WorkoutSession,
         where:
           session.user_id == ^user_id and session.state == :completed and
             not is_nil(session.completed_at) and session.completed_at <= ^now,
         order_by: [desc: session.completed_at, desc: session.id]
       )
-    )
-    |> Enum.filter(&AuthoritativeSession.authoritative?/1)
+
+    query = if since, do: where(query, [session], session.completed_at >= ^since), else: query
+
+    query |> Repo.all() |> Enum.filter(&AuthoritativeSession.authoritative?/1)
   end
+
+  defp structured?(session),
+    do: match?({:ok, %{video_format: :program}}, fingerprint_for_session(session))
 
   defp credited_duration(%WorkoutSession{tags: "warmup"}), do: 0
 

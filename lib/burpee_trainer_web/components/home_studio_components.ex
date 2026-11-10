@@ -13,55 +13,127 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   alias BurpeeTrainerWeb.{CreationParameters, HomeWorkoutComponents, NewWorkoutForm}
 
   @doc "Whether Home gives way to the studio."
-  def studio?(state), do: state.authoring_stage in [:new, :editing, :review]
+  def studio?(authoring_stage), do: authoring_stage in [:new, :editing, :review]
 
-  defp edit?(state), do: not is_nil(state.editing_source)
+  defp edit?(editing_source), do: not is_nil(editing_source)
 
-  defp heading(state), do: if(edit?(state), do: "Edit workout", else: "New workout")
+  defp heading(editing_source),
+    do: if(edit?(editing_source), do: "Edit workout", else: "New workout")
 
   # New's form until it is sent; from then on the thread.
-  defp form?(state), do: state.authoring_stage == :new and not state.busy?
+  defp form?(authoring_stage, busy?), do: authoring_stage == :new and not busy?
 
-  attr(:state, :map, required: true)
+  # In Edit, whether the coach was asked: a proposal is on screen or on its way.
+  defp asked?(authoring_stage, pending_request, busy?),
+    do: (authoring_stage == :review and not is_nil(pending_request)) or busy?
+
+  attr(:authoring_stage, :atom, required: true)
+  attr(:editing_source, :any, required: true)
+  attr(:busy?, :boolean, required: true)
+  attr(:local_error, :any, required: true)
+  attr(:home_selection, :any, required: true)
+  attr(:inspection_rows, :list, required: true)
+  attr(:review_inspection_rows, :list, required: true)
+  attr(:expanded_groups, :any, required: true)
+  attr(:pending_request, :any, required: true)
+  attr(:pending_turn, :any, required: true)
+  attr(:design_turns, :list, required: true)
+  attr(:streaming?, :boolean, required: true)
+  attr(:reply_pieces, :any, required: true)
+  attr(:previous, :any, required: true)
+  attr(:instruction, :any, required: true)
+  attr(:workout_parameters, :any, required: true)
+  attr(:slot, :any, required: true)
+  attr(:adjustment_form, :any, required: true)
 
   def studio(assigns) do
     ~H"""
-    <section id="home-studio" class="studio" data-stage={@state.authoring_stage}>
-      <.header state={@state} />
-      <h1 :if={not edit?(@state)} id="home-authoring-heading" class="studio-title">
-        {heading(@state)}
+    <section id="home-studio" class="studio" data-stage={@authoring_stage}>
+      <.header editing_source={@editing_source} authoring_stage={@authoring_stage} busy?={@busy?} />
+      <h1 :if={not edit?(@editing_source)} id="home-authoring-heading" class="studio-title">
+        {heading(@editing_source)}
       </h1>
-      <.new_form :if={form?(@state)} state={@state} />
+      <.new_form
+        :if={form?(@authoring_stage, @busy?)}
+        workout_parameters={@workout_parameters}
+        slot={@slot}
+        local_error={@local_error}
+      />
       <ol
-        :if={not form?(@state)}
+        :if={not form?(@authoring_stage, @busy?)}
         id="studio-thread"
         class="studio-thread"
         aria-label="Conversation with the coach"
       >
-        <.edit_thread :if={edit?(@state)} state={@state} />
-        <.new_thread :if={not edit?(@state)} state={@state} />
-        <li :if={@state.local_error} id="home-adjustment-error" role="status" class="studio-error">
-          {@state.local_error}
+        <%!-- One workout on screen: today's until you ask, then only what the coach makes of it. --%>
+        <li
+          :if={edit?(@editing_source) and not asked?(@authoring_stage, @pending_request, @busy?)}
+          class="studio-msg studio-coach"
+        >
+          <.card
+            id="studio-source"
+            name={@home_selection.plan.name}
+            seconds={@home_selection.plan.target_duration_sec}
+            reps={@home_selection.plan.target_reps}
+            shape={Shape.describe(@home_selection.plan.definition_json)}
+            rows={@inspection_rows}
+            expanded={@expanded_groups}
+          />
+        </li>
+        <.proposal_thread
+          :if={not edit?(@editing_source) or asked?(@authoring_stage, @pending_request, @busy?)}
+          authoring_stage={@authoring_stage}
+          editing_source={@editing_source}
+          busy?={@busy?}
+          home_selection={@home_selection}
+          inspection_rows={@inspection_rows}
+          review_inspection_rows={@review_inspection_rows}
+          expanded_groups={@expanded_groups}
+          pending_request={@pending_request}
+          pending_turn={@pending_turn}
+          design_turns={@design_turns}
+          streaming?={@streaming?}
+          reply_pieces={@reply_pieces}
+          previous={@previous}
+          instruction={@instruction}
+          workout_parameters={@workout_parameters}
+        />
+        <li :if={@local_error} id="home-adjustment-error" role="status" class="studio-error">
+          {@local_error}
         </li>
       </ol>
-      <.dock state={@state} />
+      <.dock
+        adjustment_form={@adjustment_form}
+        authoring_stage={@authoring_stage}
+        editing_source={@editing_source}
+        busy?={@busy?}
+        pending_request={@pending_request}
+        pending_turn={@pending_turn}
+        design_turns={@design_turns}
+      />
     </section>
     """
   end
 
-  attr(:state, :map, required: true)
+  attr(:editing_source, :any, required: true)
+  attr(:authoring_stage, :atom, required: true)
+  attr(:busy?, :boolean, required: true)
 
   # Close: out of the studio with nothing changed, whatever is on screen (Save keeps a proposal).
   # Only the step back from New's request in flight to its form points back.
   defp header(assigns) do
-    back = back(assigns.state)
-    assigns = assign(assigns, back: back, close?: back.id != "studio-back")
+    form? = form?(assigns.authoring_stage, assigns.busy?)
+
+    back =
+      back(edit?(assigns.editing_source) or form? or assigns.authoring_stage == :review)
+
+    assigns = assign(assigns, back: back, close?: back.id != "studio-back", form?: form?)
 
     ~H"""
     <header class="studio-header">
       <%!-- New's form closes from its foot; the bar keeps the top row's height. --%>
       <button
-        :if={not form?(@state)}
+        :if={not @form?}
         id={@back.id}
         type="button"
         class="studio-back"
@@ -73,74 +145,60 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         <.icon name={if(@close?, do: "hero-x-mark", else: "hero-chevron-left")} class="size-5" />
       </button>
       <%!-- The title is the workout: in Edit its name, below; New's stands under the bar. --%>
-      <h1 :if={edit?(@state)} id="home-authoring-heading" class="sr-only">{heading(@state)}</h1>
+      <h1 :if={edit?(@editing_source)} id="home-authoring-heading" class="sr-only">
+        {heading(@editing_source)}
+      </h1>
     </header>
     """
   end
 
   # What the header's button does here: leave, or step back to New's form.
   # (New's form leaves by the X at its foot, which does the same.)
-  defp back(state) do
-    if edit?(state) or form?(state) or state.authoring_stage == :review,
-      do: %{
-        id: "home-request-abort",
-        vt: "drop",
-        click: JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")
-      },
-      else: %{
-        id: "studio-back",
-        label: "Back to the form",
-        vt: nil,
-        click: JS.push("back_new_step")
-      }
-  end
+  defp back(true = _leave?),
+    do: %{
+      id: "home-request-abort",
+      vt: "drop",
+      click: JS.push("abort_new_workout") |> JS.focus(to: "#home-summary")
+    }
 
-  ## Edit
+  defp back(false = _leave?),
+    do: %{
+      id: "studio-back",
+      label: "Back to the form",
+      vt: nil,
+      click: JS.push("back_new_step")
+    }
 
-  attr(:state, :map, required: true)
+  ## The thread
 
-  defp edit_thread(assigns) do
-    state = assigns.state
-    proposed? = state.authoring_stage == :review and not is_nil(state.pending_request)
-    asked? = proposed? or state.busy?
-
-    assigns = assign(assigns, proposed?: proposed?, asked?: asked?)
-
-    ~H"""
-    <%!-- One workout on screen: today's until you ask, then only what the coach makes of it. --%>
-    <li :if={not @asked?} class="studio-msg studio-coach">
-      <.card
-        id="studio-source"
-        name={@state.home_selection.plan.name}
-        seconds={@state.home_selection.plan.target_duration_sec}
-        reps={@state.home_selection.plan.target_reps}
-        shape={Shape.describe(@state.home_selection.plan.definition_json)}
-        rows={@state.inspection_rows}
-        expanded={@state.expanded_groups}
-      />
-    </li>
-    <.proposal_thread :if={@asked?} state={@state} />
-    """
-  end
-
-  attr(:state, :map, required: true)
+  attr(:authoring_stage, :atom, required: true)
+  attr(:editing_source, :any, required: true)
+  attr(:busy?, :boolean, required: true)
+  attr(:home_selection, :any, required: true)
+  attr(:inspection_rows, :list, required: true)
+  attr(:review_inspection_rows, :list, required: true)
+  attr(:expanded_groups, :any, required: true)
+  attr(:pending_request, :any, required: true)
+  attr(:pending_turn, :any, required: true)
+  attr(:design_turns, :list, required: true)
+  attr(:streaming?, :boolean, required: true)
+  attr(:reply_pieces, :any, required: true)
+  attr(:previous, :any, required: true)
+  attr(:instruction, :any, required: true)
+  attr(:workout_parameters, :any, required: true)
 
   # The asks so far and what each became, then the proposal now on screen, then the ask
   # in flight, each below the last.
   defp proposal_thread(assigns) do
-    state = assigns.state
-    first_busy? = state.busy? and is_nil(state.pending_turn) and state.authoring_stage != :review
-    streamed = Map.get(state, :streamed)
-
     assigns =
       assign(assigns,
-        first_busy?: first_busy?,
-        refining?: is_binary(state.pending_turn),
-        streamed: streamed
+        first_busy?:
+          assigns.busy? and is_nil(assigns.pending_turn) and assigns.authoring_stage != :review,
+        refining?: is_binary(assigns.pending_turn)
       )
 
     ~H"""
-    <%= for turn <- @state.design_turns do %>
+    <%= for turn <- @design_turns do %>
       <li class="studio-msg studio-you">
         <p class="studio-bubble">{turn.instruction}</p>
       </li>
@@ -150,24 +208,37 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         </p>
       </li>
     <% end %>
-    <li :if={ask(@state) != ""} class="studio-msg studio-you">
-      <p id="home-design-ask" class="studio-bubble">{ask(@state)}</p>
+    <li
+      :if={ask(@editing_source, @design_turns, @instruction, @workout_parameters) != ""}
+      class="studio-msg studio-you"
+    >
+      <p id="home-design-ask" class="studio-bubble">
+        {ask(@editing_source, @design_turns, @instruction, @workout_parameters)}
+      </p>
     </li>
     <li :if={@first_busy?} class="studio-msg studio-coach">
-      <.writing text={@streamed} />
+      <.writing streaming?={@streaming?} pieces={@reply_pieces} />
     </li>
-    <li
-      :if={@state.authoring_stage == :review and @state.pending_request}
-      class="studio-msg studio-coach"
-    >
-      <.proposal state={@state} stale?={@state.busy?} />
+    <li :if={@authoring_stage == :review and @pending_request} class="studio-msg studio-coach">
+      <%!-- What it is read against comes from the tracked values, so a reply streaming in
+           below does not send the card again. --%>
+      <.proposal
+        pending_request={@pending_request}
+        rows={@review_inspection_rows}
+        expanded_groups={@expanded_groups}
+        busy?={@busy?}
+        compare={compare(@previous, @editing_source, @inspection_rows)}
+        was={was(@previous, @editing_source, @home_selection)}
+      />
     </li>
     <li :if={@refining?} class="studio-msg studio-you">
-      <p id="home-design-pending" class="studio-bubble">{@state.pending_turn}</p>
+      <p id="home-design-pending" class="studio-bubble">{@pending_turn}</p>
     </li>
-    <li :if={@refining?} class="studio-msg studio-coach"><.writing text={@streamed} /></li>
+    <li :if={@refining?} class="studio-msg studio-coach">
+      <.writing streaming?={@streaming?} pieces={@reply_pieces} />
+    </li>
     <li
-      :if={@state.authoring_stage == :review and @state.busy? and not @refining?}
+      :if={@authoring_stage == :review and @busy? and not @refining?}
       class="studio-msg studio-coach"
     >
       <.working label="Saving…" />
@@ -177,22 +248,24 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   # What was asked for the proposal on screen: your words in Edit and in a follow-up; New's
   # first ask is only what was written with its answers, which the screen before showed.
-  defp ask(state) do
-    if edit?(state) or state.design_turns != [],
-      do: state.instruction,
-      else: state.workout_parameters.note || ""
+  defp ask(editing_source, design_turns, instruction, workout_parameters) do
+    if edit?(editing_source) or design_turns != [],
+      do: instruction,
+      else: workout_parameters.note || ""
   end
 
-  attr(:state, :map, required: true)
-  attr(:stale?, :boolean, default: false)
+  attr(:pending_request, :any, required: true)
+  attr(:rows, :list, required: true)
+  attr(:expanded_groups, :any, required: true)
+  attr(:busy?, :boolean, required: true, doc: "stale while the coach works on what replaces it")
+  attr(:compare, :any, required: true)
+  attr(:was, :any, required: true)
 
   defp proposal(assigns) do
-    definition = assigns.state.pending_request.definition
-
-    assigns = assign(assigns, definition: definition)
+    assigns = assign(assigns, definition: assigns.pending_request.definition)
 
     ~H"""
-    <div id="home-edit-review" class={["studio-proposal", @stale? && "studio-proposal-stale"]}>
+    <div id="home-edit-review" class={["studio-proposal", @busy? && "studio-proposal-stale"]}>
       <p :if={@definition["rationale"]} id="studio-reply" class="studio-reply">
         {@definition["rationale"]}
       </p>
@@ -202,17 +275,17 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         seconds={@definition["target_duration_sec"]}
         reps={@definition["target_reps"]}
         shape={Shape.describe(@definition)}
-        rows={@state.review_inspection_rows}
-        compare={compare(@state)}
-        was={was(@state)}
-        expanded={@state.expanded_groups}
+        rows={@rows}
+        compare={@compare}
+        was={@was}
+        expanded={@expanded_groups}
       />
       <p
-        :if={@state.pending_request.request.timed_rests != []}
+        :if={@pending_request.request.timed_rests != []}
         id="home-edit-review-pauses"
         class="studio-turn"
       >
-        {pauses_label(@state.pending_request.request.timed_rests)}
+        {pauses_label(@pending_request.request.timed_rests)}
       </p>
       <%!-- What to do with it sits right under the card it is about: Save makes it today's
            workout and goes home with it; Run does that and starts it, with the camera and
@@ -225,7 +298,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           phx-click={JS.push("keep_workout_request") |> JS.focus(to: "#home-summary")}
           data-vt="drop"
           data-vt-from="#studio-proposal .studio-card-name"
-          disabled={@state.busy?}
+          disabled={@busy?}
           aria-label="Save"
           title="Save"
         >
@@ -236,7 +309,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           type="button"
           class="studio-pill studio-pill-primary"
           phx-click="run_workout_request"
-          disabled={@state.busy?}
+          disabled={@busy?}
           aria-label="Run"
           title="Run"
         >
@@ -248,21 +321,21 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   end
 
   # What a proposal is read against: the one it replaced, else the workout Edit began from.
-  defp compare(state) do
-    case Map.get(state, :previous) do
+  defp compare(previous, editing_source, inspection_rows) do
+    case previous do
       %{rows: rows} -> rows
-      nil -> if edit?(state), do: state.inspection_rows
+      nil -> if edit?(editing_source), do: inspection_rows
     end
   end
 
-  defp was(state) do
-    case Map.get(state, :previous) do
+  defp was(previous, editing_source, home_selection) do
+    case previous do
       %{reps: reps, seconds: seconds, definition: definition} ->
         %{reps: reps, seconds: seconds, shape: Shape.describe(definition)}
 
       nil ->
-        if edit?(state) do
-          plan = state.home_selection.plan
+        if edit?(editing_source) do
+          plan = home_selection.plan
 
           %{
             reps: plan.target_reps,
@@ -273,12 +346,21 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
     end
   end
 
-  attr(:text, :string, default: nil)
+  attr(:streaming?, :boolean, required: true)
+  attr(:pieces, :any, required: true)
 
-  # The coach at work: its loader until its first word, then what it has written so far.
-  defp writing(%{text: text} = assigns) when is_binary(text) do
+  # The coach at work: its loader until its first word, then what it has written so far, a
+  # piece at a time (`ReplyStream`).
+  defp writing(%{streaming?: true} = assigns) do
     ~H"""
-    <p id="studio-streaming" class="studio-reply chat-streaming" aria-busy="true">{@text}</p>
+    <p
+      id="studio-streaming"
+      class="studio-reply chat-streaming"
+      aria-busy="true"
+      phx-update="stream"
+    >
+      <span :for={{id, piece} <- @pieces} id={id}>{piece.text}</span>
+    </p>
     """
   end
 
@@ -375,22 +457,16 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   ## New
 
-  attr(:state, :map, required: true)
-
-  defp new_thread(assigns) do
-    ~H"""
-    <.proposal_thread state={@state} />
-    """
-  end
-
-  attr(:state, :map, required: true)
+  attr(:workout_parameters, :any, required: true)
+  attr(:slot, :any, required: true)
+  attr(:local_error, :any, required: true)
 
   # Everything New asks, on one screen: the burpee as two pills, duration and reps as big
   # numbers, the structure they make as a sentence, then the rest as quiet rows labelled like
   # settings, the request, and the foot: X to leave, ✓ to create.
   defp new_form(assigns) do
-    params = assigns.state.workout_parameters
-    remaining = assigns.state.slot && assigns.state.slot.remaining_sec
+    params = assigns.workout_parameters
+    remaining = assigns.slot && assigns.slot.remaining_sec
     durations = NewDefaults.durations(remaining)
     minutes = duration_minutes(params)
     seconds = duration_seconds(params)
@@ -410,7 +486,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
         at_max_pace?: params.reps * (params.pace + 0.5) > seconds,
         min_pace: NewDefaults.min_pace(String.to_existing_atom(params.burpee_type)),
         shape: NewWorkoutForm.shape(params),
-        abort: back(assigns.state)
+        abort: back(true)
       )
 
     ~H"""
@@ -491,8 +567,8 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           phx-debounce="300"
         >{@params.note}</textarea>
       </div>
-      <p :if={@state.local_error} id="home-adjustment-error" role="status" class="studio-error">
-        {@state.local_error}
+      <p :if={@local_error} id="home-adjustment-error" role="status" class="studio-error">
+        {@local_error}
       </p>
       <div class="studio-foot">
         <button
@@ -617,25 +693,29 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   ## Dock
 
-  attr(:state, :map, required: true)
+  attr(:adjustment_form, :any, required: true)
+  attr(:authoring_stage, :atom, required: true)
+  attr(:editing_source, :any, required: true)
+  attr(:busy?, :boolean, required: true)
+  attr(:pending_request, :any, required: true)
+  attr(:pending_turn, :any, required: true)
+  attr(:design_turns, :list, required: true)
 
   # Where you write. It is docked
   # above the keyboard (see the ChatDock hook), so it stays within reach as the thread grows.
   defp dock(assigns) do
-    state = assigns.state
-
     assigns =
       assign(assigns,
         # New's form has its own note; the box is for Edit's asks and every follow-up.
-        visible?: state.authoring_stage in [:editing, :review],
+        visible?: assigns.authoring_stage in [:editing, :review],
         # The coach's guesses at the next ask, for the proposal on screen; gone while it works.
         suggestions:
-          if(state.authoring_stage == :review and not state.busy?,
-            do: Map.get(state.pending_request, :suggestions, []),
+          if(assigns.authoring_stage == :review and not assigns.busy?,
+            do: Map.get(assigns.pending_request, :suggestions, []),
             else: []
           ),
-        event: event(state),
-        placeholder: placeholder(state)
+        event: event(assigns.authoring_stage),
+        placeholder: placeholder(assigns.authoring_stage)
       )
 
     ~H"""
@@ -644,8 +724,8 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
       id="home-chat-dock"
       class="chat-dock"
       phx-hook="ChatDock"
-      data-version={version(@state)}
-      data-scroll-to={scroll_target(@state)}
+      data-version={version(@authoring_stage, @design_turns, @pending_turn, @busy?)}
+      data-scroll-to={scroll_target(@pending_turn)}
     >
       <div class="chat-dock-inner">
         <%!-- Just above the box: a tap sends one, as if it were typed. --%>
@@ -668,24 +748,26 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
           </button>
         </div>
         <.form
-          for={@state.adjustment_form}
+          for={@adjustment_form}
           id="home-edit-form"
           class="home-authoring-form"
           phx-submit={@event}
           phx-change="change_current_edit"
-          aria-busy={to_string(@state.busy?)}
+          aria-busy={to_string(@busy?)}
         >
           <div class="composer">
             <.input
-              field={@state.adjustment_form[:instruction]}
+              field={@adjustment_form[:instruction]}
               id="home-edit-instruction"
               type="textarea"
-              label={if(edit?(@state), do: "What do you want to change?", else: "Anything else?")}
+              label={
+                if(edit?(@editing_source), do: "What do you want to change?", else: "Anything else?")
+              }
               placeholder={@placeholder}
               rows="1"
-              maxlength={if(edit?(@state), do: "500", else: "300")}
+              maxlength={if(edit?(@editing_source), do: "500", else: "300")}
               class="composer-input"
-              disabled={@state.busy?}
+              disabled={@busy?}
             />
             <div class="composer-bar">
               <button
@@ -694,7 +776,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
                 class="composer-send"
                 aria-label="Send"
                 title="Send"
-                disabled={@state.busy?}
+                disabled={@busy?}
               >
                 <span class="composer-send-dot" aria-hidden="true">
                   <.icon name="hero-arrow-up-mini" class="size-5" />
@@ -710,19 +792,18 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
   end
 
   # The first message of an edit starts the design; every later one refines the proposal.
-  defp event(%{authoring_stage: :review}), do: "refine_workout"
-  defp event(_state), do: "review_current_edit"
+  defp event(:review), do: "refine_workout"
+  defp event(_authoring_stage), do: "review_current_edit"
 
-  defp placeholder(%{authoring_stage: :review}), do: "Change anything else?"
-  defp placeholder(_state), do: "What should change?"
+  defp placeholder(:review), do: "Change anything else?"
+  defp placeholder(_authoring_stage), do: "What should change?"
 
   # The newest thing said: your pending message while the coach works, else your last one.
-  defp scroll_target(%{pending_turn: turn}) when is_binary(turn), do: "#home-design-pending"
-  defp scroll_target(_state), do: "#home-design-ask"
+  defp scroll_target(turn) when is_binary(turn), do: "#home-design-pending"
+  defp scroll_target(_no_turn), do: "#home-design-ask"
 
-  defp version(state),
-    do:
-      "#{state.authoring_stage}:#{length(state.design_turns)}:#{is_binary(state.pending_turn)}:#{state.busy?}"
+  defp version(authoring_stage, design_turns, pending_turn, busy?),
+    do: "#{authoring_stage}:#{length(design_turns)}:#{is_binary(pending_turn)}:#{busy?}"
 
   ## Labels
 

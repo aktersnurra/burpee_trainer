@@ -83,11 +83,7 @@ defmodule BurpeeTrainer.Coach.WorkoutGuidance do
       @training_rules <>
       "\nReturn only the layout JSON.\n" <>
       Jason.encode!(%{
-        current_level:
-          Levels.current_level(
-            Workouts.list_sessions(scope),
-            context.date
-          ),
+        current_level: Workouts.current_level(scope, context.date),
         level_landmarks: levels,
         recent_results: recent_results
       })

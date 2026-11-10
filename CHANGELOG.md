@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-11-10 — Pages open faster as history grows
+
+- **Home**: opening Home no longer reads the whole session history. The week, the level and the next slot each read only the weeks they need, so Home takes the same time with a thousand sessions as with ten.
+- **Progress**: reads the history once instead of seven times, and works out local dates once.
+- **First load**: the camera's code (MediaPipe) is fetched when a session or video starts, not with every page; the script every page starts with is about 40% smaller.
+- **Updates**: a change on Home, Progress or Coach sends only what changed, not the whole screen again: a start toggle went from 3.3 KB to 0.2 KB, and a chunk of the coach's reply streaming in is the text and little else.
+- **Camera count**: a rep shows about 0.2 s sooner after you stand up (about 0.53 s, was 0.74 s): the counter waits 4 ticks, not 6, before it commits; every recorded session counts the same.
+- **Camera frames**: the camera samples a steady 15 frames a second; timer rounding had it at about 13, alternating 67 and 83 ms.
+- **Camera traces**: a frame the counter could not use says which check it failed, and the corpus report shows the shares per session.
+- **Coach replies**: a reply streaming in sends each new piece, not the whole text so far, in the coach chat and the studio.
+- **Removed**: the `/tracking-test` debug page, its trace recorder and the main-thread pose detector only it used.
+- **Suggested asks**: the pills are 40px tall (were 36px), big enough to hit by the app's own rule.
+- **Browser check**: `scripts/e2e/studio_journey.mjs` passes again: it follows Home as it is now (Swap, Edit and New under the opened workout, the drawer a sheet on a phone, Save and Run under a proposal).
+
 ## 2026-11-09 — Progress always leads to the coach
 
 - **Coach ›** stays on Progress when the coach has nothing to look back on (it leaves that empty when nothing stands out), so the way into the coach no longer disappears with it.

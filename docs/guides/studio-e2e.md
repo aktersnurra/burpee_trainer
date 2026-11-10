@@ -1,18 +1,19 @@
-# Home swipes and the studio: browser end-to-end check
+# Home's drawer and the studio: browser end-to-end check
 
 The unit and LiveView tests cannot see layout, gestures or the keyboard. This check drives Home's
-swipes and the studio (Edit and New) in a phone-sized browser against a real server, and fails
+drawer and the studio (Edit and New) in a phone-sized browser against a real server, and fails
 when something is off. It is not part of `mix precommit`; run it after changing Home, the studio,
 the composer or the CSS around them.
 
 ## What it checks
 
-- Swap, Edit and New sit along the bottom edge of Home, a tap each.
-- A swipe right opens the swap drawer and a swipe left closes it.
+- Collapsed Home is the workout and Play alone; opening the workout shows Swap, Edit and New.
+- On a phone the drawer is a sheet: Swap opens it, a pull down closes it, and a sideways swipe
+  (the tablet's gesture) does nothing.
 - Edit: the studio starts at Home's left edge, the docked box starts at the same edge, nothing
-  scrolls sideways, a spinner shows while the coach works, and Run sits under the proposal.
-- New: one form with Create, sets and pace as rows in the open, unbroken alone asks for a set
-  size, a value's buttons move it by a step, a held button keeps stepping, a value can be typed,
+  scrolls sideways, a spinner shows while the coach works, and Save and Run sit under the proposal.
+- New: one form with Create, sets and pace as rows in the open, an even beat has no set size and
+  unbroken asks for one, a value's buttons move it by a step, a held button keeps stepping, a value can be typed,
   the form says what the values make, nothing scrolls sideways, and Run starts the workout.
 - Every button and form control is big enough to hit (at least 40px on both sides and 44px on one;
   parts are exempt) and the browser logs no errors.

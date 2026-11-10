@@ -28,8 +28,9 @@ config :burpee_trainer, BurpeeTrainerWeb.Endpoint,
 config :esbuild,
   version: "0.28.2",
   burpee_trainer: [
+    # Split, so the camera's code (MediaPipe) is fetched by the pages that import it.
     args:
-      ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
+      ~w(js/app.js --bundle --splitting --format=esm --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
   ],

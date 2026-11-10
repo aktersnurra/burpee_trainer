@@ -1,8 +1,3 @@
-import { FilesetResolver, PoseLandmarker } from "@mediapipe/tasks-vision";
-
-const POSE_WASM_PATH = "/models/mediapipe_pose/wasm";
-const POSE_MODEL_PATH = "/models/mediapipe_pose/pose_landmarker_full.task";
-
 const LANDMARK_NAMES = Object.freeze([
 	"nose",
 	"left_eye_inner",
@@ -38,68 +33,6 @@ const LANDMARK_NAMES = Object.freeze([
 	"left_foot_index",
 	"right_foot_index",
 ]);
-
-async function createDefaultPoseLandmarker() {
-	const fileset = await FilesetResolver.forVisionTasks(POSE_WASM_PATH);
-
-	return PoseLandmarker.createFromOptions(fileset, {
-		baseOptions: { modelAssetPath: POSE_MODEL_PATH, delegate: "GPU" },
-		runningMode: "VIDEO",
-		numPoses: 1,
-		minPoseDetectionConfidence: 0.5,
-		minPosePresenceConfidence: 0.5,
-		minTrackingConfidence: 0.5,
-		outputSegmentationMasks: false,
-	});
-}
-
-export async function createBlazePoseDetector(runtime = {}) {
-	const createLandmarker =
-		runtime.createPoseLandmarker || createDefaultPoseLandmarker;
-	const now = runtime.now || (() => performance.now());
-	const landmarker = await createLandmarker();
-	// detectForVideo rejects a timestamp that does not advance, so keep our own
-	// strictly increasing clock rather than trusting the caller's.
-	let lastTimestamp = -1;
-
-	return {
-		async estimatePoses(video) {
-			const timestamp = Math.max(now(), lastTimestamp + 1);
-			lastTimestamp = timestamp;
-			const result = landmarker.detectForVideo(video, timestamp);
-			const pose = poseFromPoseLandmarkerResult(result, video);
-			return pose ? [pose] : [];
-		},
-		dispose() {
-			landmarker.close();
-		},
-	};
-}
-
-export function poseFromPoseLandmarkerResult(result, video) {
-	const landmarks = result?.landmarks?.[0];
-	if (!landmarks?.length) return null;
-
-	return {
-		model: "blazepose-full",
-		keypoints: keypointsFromPoseLandmarks(
-			landmarks,
-			video,
-			result.worldLandmarks?.[0] || [],
-		),
-	};
-}
-
-export function poseFromBlazePoseResults(results, video) {
-	return {
-		model: "blazepose-full",
-		keypoints: keypointsFromPoseLandmarks(
-			results.poseLandmarks || [],
-			video,
-			results.poseWorldLandmarks || [],
-		),
-	};
-}
 
 export function keypointsFromPoseLandmarks(
 	landmarks,

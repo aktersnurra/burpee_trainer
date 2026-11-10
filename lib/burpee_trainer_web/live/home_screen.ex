@@ -67,6 +67,7 @@ defmodule BurpeeTrainerWeb.HomeScreen do
     """
   end
 
+  @doc "The Home screen: `HomeLive` calls it with its own assigns (see docs/ui.md)."
   def screen(assigns) do
     ~H"""
     <main
@@ -77,11 +78,31 @@ defmodule BurpeeTrainerWeb.HomeScreen do
       <p :if={@home_planning_error} id="home-planning-error" role="status" class="home-local-message">
         {@home_planning_error}
       </p>
-      <HomeStudioComponents.studio :if={HomeStudioComponents.studio?(assigns)} state={assigns} />
+      <HomeStudioComponents.studio
+        :if={HomeStudioComponents.studio?(@authoring_stage)}
+        authoring_stage={@authoring_stage}
+        editing_source={@editing_source}
+        busy?={@busy?}
+        local_error={@local_error}
+        home_selection={@home_selection}
+        inspection_rows={@inspection_rows}
+        review_inspection_rows={@review_inspection_rows}
+        expanded_groups={@expanded_groups}
+        pending_request={@pending_request}
+        pending_turn={@pending_turn}
+        design_turns={@design_turns}
+        streaming?={@studio_streaming?}
+        reply_pieces={@streams.studio_reply_pieces}
+        previous={assigns[:previous]}
+        instruction={@instruction}
+        workout_parameters={@workout_parameters}
+        slot={@slot}
+        adjustment_form={@adjustment_form}
+      />
       <%!-- The whole screen takes the swipe right to swap the workout; the drawer's button stays
            for anyone who cannot swipe. --%>
       <div
-        :if={not HomeStudioComponents.studio?(assigns)}
+        :if={not HomeStudioComponents.studio?(@authoring_stage)}
         id="home-gestures"
         class="adaptive-home"
         phx-hook="HomeGestures"
@@ -166,7 +187,15 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                 <section
                   id="home-done-today"
                   class="home-result"
-                  data-expanded={to_string(HomeCoachComponents.shown?(assigns))}
+                  data-expanded={
+                    to_string(
+                      HomeCoachComponents.shown?(
+                        @current_scope,
+                        @progress_summary,
+                        @coach_memory_changes
+                      )
+                    )
+                  }
                 >
                   <h1 class="home-state-heading">
                     <.done_title>
@@ -200,7 +229,15 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                 <section
                   id="home-week-complete"
                   class="home-result"
-                  data-expanded={to_string(HomeCoachComponents.shown?(assigns))}
+                  data-expanded={
+                    to_string(
+                      HomeCoachComponents.shown?(
+                        @current_scope,
+                        @progress_summary,
+                        @coach_memory_changes
+                      )
+                    )
+                  }
                 >
                   <h1 class="home-state-heading">
                     <.done_title>Training target complete</.done_title>
@@ -228,11 +265,62 @@ defmodule BurpeeTrainerWeb.HomeScreen do
               </p>
               <%!-- Done is when there is something to talk about: the coach's report on the week
                    and the conversation sit open under the result. --%>
-              <HomeCoachComponents.panel :if={HomeCoachComponents.shown?(assigns)} state={assigns} />
+              <HomeCoachComponents.panel
+                :if={
+                  HomeCoachComponents.shown?(@current_scope, @progress_summary, @coach_memory_changes)
+                }
+                current_scope={@current_scope}
+                home_focus_from={@home_focus_from}
+                coach_week={@coach_week}
+                progress_summary={@progress_summary}
+                progress_summary_loading?={@progress_summary_loading?}
+                coach_thread={@coach_thread}
+                coach_memory_changes={@coach_memory_changes}
+                coach_pending_message={@coach_pending_message}
+                coach_busy?={@coach_busy?}
+                coach_streaming?={@coach_streaming?}
+                coach_reply_pieces={@streams.coach_reply_pieces}
+                coach_message_form={@coach_message_form}
+                coach_reply={@coach_reply}
+                coach_status={@coach_status}
+                coach_goals={@streams.coach_goals}
+              />
             <% {:start, _selection} -> %>
-              <HomeWorkoutComponents.workspace state={assigns} />
+              <HomeWorkoutComponents.workspace
+                expanded?={@expanded?}
+                busy?={@busy?}
+                authoring_stage={@authoring_stage}
+                authoring_returned?={@authoring_returned?}
+                start_choices={@start_choices}
+                start_client_session_id={@start_client_session_id}
+                inspection_rows={@inspection_rows}
+                expanded_groups={@expanded_groups}
+                local_error={@local_error}
+                chooser_open?={@chooser_open?}
+                flash={@flash}
+                active_tab={@active_tab}
+                filters_open?={@filters_open?}
+                filters={@filters}
+                current_level={@current_level}
+                alternatives_empty?={@alternatives_empty?}
+                alternatives_filtered_out?={@alternatives_filtered_out?}
+                alternatives={@streams.alternatives}
+                home_selection={@home_selection}
+              />
             <% :choose -> %>
-              <HomeWorkoutComponents.choose state={assigns} />
+              <HomeWorkoutComponents.choose
+                local_error={@local_error}
+                chooser_open?={@chooser_open?}
+                flash={@flash}
+                active_tab={@active_tab}
+                filters_open?={@filters_open?}
+                filters={@filters}
+                current_level={@current_level}
+                alternatives_empty?={@alternatives_empty?}
+                alternatives_filtered_out?={@alternatives_filtered_out?}
+                alternatives={@streams.alternatives}
+                home_selection={@home_selection}
+              />
             <% :unavailable -> %>
               <section
                 id="home-ready-recommendation"

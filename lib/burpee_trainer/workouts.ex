@@ -1631,6 +1631,47 @@ defmodule BurpeeTrainer.Workouts do
     )
   end
 
+  @doc "Completed sessions from `since` on, most recent first."
+  @spec list_sessions_since(Scope.t(), DateTime.t()) :: [WorkoutSession.t()]
+  def list_sessions_since(%Scope{user: %User{id: user_id}}, %DateTime{} = since) do
+    since = DateTime.truncate(since, :second)
+
+    Repo.all(
+      from(session in WorkoutSession,
+        where:
+          session.user_id == ^user_id and session.state == :completed and
+            session.completed_at >= ^since,
+        order_by: [desc: session.completed_at, desc: session.id]
+      )
+    )
+  end
+
+  @doc """
+  The level the scope holds on `today`, read from only the sessions recent enough to hold
+  one (`Levels.lookback_days/0`).
+  """
+  @spec current_level(Scope.t(), Date.t()) :: atom()
+  def current_level(%Scope{user: %User{id: user_id}}, %Date{} = today \\ Date.utc_today()) do
+    since = DateTime.new!(Date.add(today, -Levels.lookback_days()), ~T[00:00:00])
+
+    Repo.all(
+      from(session in WorkoutSession,
+        where:
+          session.user_id == ^user_id and session.state == :completed and
+            session.completed_at >= ^since,
+        select:
+          map(session, [
+            :id,
+            :burpee_type,
+            :burpee_count_actual,
+            :duration_sec_actual,
+            :completed_at
+          ])
+      )
+    )
+    |> Levels.current_level(today)
+  end
+
   @doc "Returns the latest 16 non-warmup sessions used by coach memory and generation."
   @spec list_recent_training_sessions(Scope.t()) :: [WorkoutSession.t()]
   def list_recent_training_sessions(%Scope{user: %User{id: user_id}}) do
@@ -1765,21 +1806,6 @@ defmodule BurpeeTrainer.Workouts do
   end
 
   def previous_same_program(%Scope{}, _session), do: nil
-
-  @spec list_sessions_for_chart(Scope.t(), atom) :: [WorkoutSession.t()]
-  def list_sessions_for_chart(%Scope{user: %User{id: user_id}}, burpee_type)
-      when is_atom(burpee_type) do
-    Repo.all(
-      from(s in WorkoutSession,
-        where:
-          s.user_id == ^user_id and s.state == :completed and
-            s.burpee_type == ^burpee_type and
-            s.burpee_count_actual > 0 and
-            s.duration_sec_actual > 0,
-        order_by: [asc: s.completed_at, asc: s.id]
-      )
-    )
-  end
 
   defp apply_tracked_session_mode(changeset, :manual_correction) do
     Ecto.Changeset.change(changeset,

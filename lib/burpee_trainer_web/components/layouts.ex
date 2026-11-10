@@ -178,7 +178,6 @@ defmodule BurpeeTrainerWeb.Layouts do
   defp session_surface_page?(:history), do: true
   defp session_surface_page?(:coach), do: true
   defp session_surface_page?(:session), do: true
-  defp session_surface_page?(:tracking_test), do: true
   defp session_surface_page?(_page), do: false
 
   attr(:id, :string, default: nil)

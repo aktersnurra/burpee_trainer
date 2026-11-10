@@ -9,6 +9,7 @@ defmodule BurpeeTrainerWeb.HomeCoach do
   import Phoenix.LiveView
   alias BurpeeTrainer.Coach.{Agent, Exchange, Memory, MemoryJob}
   alias BurpeeTrainer.{Goals, WeekWindow}
+  alias BurpeeTrainerWeb.ReplyStream
 
   def initialize(socket) do
     socket
@@ -17,8 +18,8 @@ defmodule BurpeeTrainerWeb.HomeCoach do
       coach_busy?: false,
       coach_reply: nil,
       coach_pending_message: nil,
-      # The reply so far while the coach writes it.
-      coach_streaming: nil,
+      # Whether the coach has started writing its reply (the words are `:coach_reply_pieces`).
+      coach_streaming?: false,
       coach_status: nil,
       coach_memory_open?: false,
       # Whether the coach wrote to its memory as it talked on this page, so leaving the Coach
@@ -26,6 +27,7 @@ defmodule BurpeeTrainerWeb.HomeCoach do
       coach_memory_changed?: false
     )
     |> stream_configure(:coach_goals, dom_id: &"home-coach-goal-#{&1.id}")
+    |> ReplyStream.initialize(:coach_reply_pieces)
     |> refresh()
   end
 
@@ -83,7 +85,7 @@ defmodule BurpeeTrainerWeb.HomeCoach do
          |> assign(
            coach_busy?: true,
            coach_status: nil,
-           coach_streaming: nil,
+           coach_streaming?: false,
            coach_pending_message: text,
            # The message moves into the thread; the box empties, as in the studio.
            coach_message_form: to_form(%{"text" => ""}, as: :coach_message)
@@ -115,7 +117,11 @@ defmodule BurpeeTrainerWeb.HomeCoach do
 
   # The reply as the coach writes it; one arriving after the answer is in changes nothing.
   def handle_info({:coach_streaming, text}, %{assigns: %{coach_busy?: true}} = socket),
-    do: {:noreply, assign(socket, coach_streaming: text)}
+    do:
+      {:noreply,
+       socket
+       |> ReplyStream.show(:coach_reply_pieces, text)
+       |> assign(coach_streaming?: true)}
 
   def handle_info({:coach_streaming, _text}, socket), do: {:noreply, socket}
 
@@ -143,10 +149,11 @@ defmodule BurpeeTrainerWeb.HomeCoach do
 
     {:noreply,
      socket
+     |> ReplyStream.show(:coach_reply_pieces, nil)
      |> assign(
        coach_busy?: false,
        coach_pending_message: nil,
-       coach_streaming: nil,
+       coach_streaming?: false,
        # The reply reads in the conversation; this line is for failures only.
        coach_reply: nil,
        coach_message_form: to_form(%{"text" => ""}, as: :coach_message),
@@ -160,10 +167,12 @@ defmodule BurpeeTrainerWeb.HomeCoach do
   def handle_async(:coach_reply, _, socket),
     do:
       {:noreply,
-       assign(socket,
+       socket
+       |> ReplyStream.show(:coach_reply_pieces, nil)
+       |> assign(
          coach_busy?: false,
          coach_pending_message: nil,
-         coach_streaming: nil,
+         coach_streaming?: false,
          coach_message_form:
            to_form(%{"text" => socket.assigns.coach_pending_message}, as: :coach_message),
          coach_reply: "Coach unavailable. Try again later."

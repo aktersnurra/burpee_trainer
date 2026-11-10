@@ -578,6 +578,12 @@ defmodule BurpeeTrainerWeb.HomeLive do
     HomeAuthoring.handle_async(operation, result, socket)
   end
 
+  # Each screen is this view's own template, kept in its module: it is called with the view's
+  # assigns, not as a component, so its change tracking is the view's (see docs/ui.md).
+  defp screen(%{workspace_screen: :history} = assigns), do: HistoryScreen.screen(assigns)
+  defp screen(%{workspace_screen: :home} = assigns), do: HomeScreen.screen(assigns)
+  defp screen(%{workspace_screen: :coach} = assigns), do: HomeCoachComponents.page(assigns)
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -589,14 +595,7 @@ defmodule BurpeeTrainerWeb.HomeLive do
       navigation?={false}
       flash?={false}
     >
-      <%= case @workspace_screen do %>
-        <% :history -> %>
-          <HistoryScreen.screen {assigns} />
-        <% :home -> %>
-          <HomeScreen.screen {assigns} />
-        <% :coach -> %>
-          <HomeCoachComponents.page state={assigns} />
-      <% end %>
+      {screen(assigns)}
     </Layouts.app>
     """
   end

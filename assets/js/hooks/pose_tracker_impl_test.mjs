@@ -456,7 +456,7 @@ test("a rep event says how long after the rep it was decided", async () => {
 	await tracker.run();
 
 	const [lagMs] = tracker.repLags();
-	assert.ok(lagMs >= 600 && lagMs <= 800, `lag ${lagMs}`);
+	assert.ok(lagMs >= 400 && lagMs <= 600, `lag ${lagMs}`);
 });
 
 test("a recorded trace replays to exactly the reps the tracker emitted", async () => {

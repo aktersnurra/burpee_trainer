@@ -28,7 +28,7 @@ defmodule BurpeeTrainer.Coach.RepCeiling do
       _none ->
         case UserTime.context(scope.user, DateTime.utc_now()) do
           {:ok, %{date: today}} ->
-            current = Levels.current_level(Workouts.list_sessions(scope), today)
+            current = Workouts.current_level(scope, today)
             {:ok, {:level, rank(current) + 1}}
 
           {:error, _} ->

@@ -212,6 +212,9 @@ defmodule BurpeeTrainerWeb.Flows.CoachConversationFlowTest do
            )
 
     refute has_element?(view, "#home-coach-loading")
+    # The next words join the ones already there.
+    send(view.pid, {:coach_streaming, "Keep Thursday li"})
+    assert has_element?(view, "#home-coach-streaming", "Keep Thursday li")
 
     send(provider, :release)
     render_async(view)

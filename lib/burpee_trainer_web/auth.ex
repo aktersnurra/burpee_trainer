@@ -14,7 +14,7 @@ defmodule BurpeeTrainerWeb.Auth do
   import Plug.Conn
   import Phoenix.Controller
 
-  alias BurpeeTrainer.{Accounts, Levels, Workouts}
+  alias BurpeeTrainer.{Accounts, Workouts}
   alias BurpeeTrainer.Accounts.Scope
 
   @session_key :user_id
@@ -119,7 +119,7 @@ defmodule BurpeeTrainerWeb.Auth do
       _ ->
         user = provision_browser_timezone(user, socket)
         scope = Scope.for_user(user)
-        level = scope |> Workouts.list_sessions() |> Levels.current_level()
+        level = Workouts.current_level(scope)
 
         {:cont,
          socket

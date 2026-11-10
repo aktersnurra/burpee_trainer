@@ -54,14 +54,25 @@ BurpeeTrainer.ReqStub.default(fn request ->
       constraints ->
         Process.sleep(delay)
         r = constraints["target_reps"]
-        a = div(r, 2)
         pace = constraints["requested_pace_sec"] || 5
+        # The sets asked for; else two, or as many as the set size asked for needs.
+        size = min(constraints["max_set_reps"] || r, r)
+        count = max(ceil(r / size), 2)
+
+        set_reps =
+          case constraints["set_reps"] do
+            [_ | _] = asked -> asked
+            _ -> for i <- 1..count, do: div(r, count) + if(i <= rem(r, count), do: 1, else: 0)
+          end
+
+        count = length(set_reps)
+        sets = Enum.map(set_reps, &%{"reps" => &1, "sec_per_rep" => pace, "sec_per_burpee" => pace})
         # In the schema's order, as the model writes it: the rationale first, so it streams.
         %Jason.OrderedObject{values: [
-          {"rationale", "Two even sets with a proper breather between them, so the second half holds the same pace as the first."},
+          {"rationale", "Even sets with a proper breather between them, so the last holds the same pace as the first."},
           {"name", "Steady #{r}"},
           {"suggestions", ["Split it into four sets", "Add a 1-minute rest at 10:00", "Front-load the reps"]},
-          {"phases", [%{"sets" => [%{"reps" => a, "sec_per_rep" => pace, "sec_per_burpee" => pace}, %{"reps" => r - a, "sec_per_rep" => pace, "sec_per_burpee" => pace}], "rests" => [%{"share" => 1}]}]}]}
+          {"phases", [%{"sets" => sets, "rests" => List.duplicate(%{"share" => 1}, count - 1)}]}]}
 
       fixed ->
         Map.merge(fixed, %{"set_reps" => []})

@@ -49,6 +49,13 @@ defmodule BurpeeTrainer.Levels do
   @graduated_window_days 30
   @default_window_days 14
 
+  @doc """
+  How many days back a session can still count toward today's level: the longest window,
+  and the week a session shares with its pair.
+  """
+  @spec lookback_days() :: pos_integer
+  def lookback_days, do: @graduated_window_days + 7
+
   @doc "Maintenance window (in days) before a level decays."
   @spec window_days(atom) :: pos_integer
   def window_days(:graduated), do: @graduated_window_days
