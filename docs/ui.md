@@ -375,9 +375,10 @@ names the field (keep the label for screen readers).
 
 ## 4b. Motion
 
-Two durations and two curves, as tokens: `--motion-quick` (180ms) for fades, folds and
+Two durations and three curves, as tokens: `--motion-quick` (180ms) for fades, folds and
 hovers; `--motion-settle` (360ms) for things that arrive or open; `--motion-stagger`
-(80ms) between related arrivals. `--ease-out` for arrivals, `--ease-in-out` for folds.
+(80ms) between related arrivals. `--ease-out` for arrivals, `--ease-in-out` for folds,
+`--ease-spring` (a little overshoot) only for what a save just earned popping in.
 Leaving runs on the action and LiveView holds the patch until it ends, so the new content
 arrives in place instead of beside the old. Moving between views (Home, Progress, New, Edit) is a
 view transition (`js/view_transitions.mjs`): a control marked `data-vt="forward"` or `"back"`
@@ -389,8 +390,24 @@ title after it share the `workout-title` transition name, so a name picked from 
 from the studio flies into Home's title (`"attach"` is that flight with the list leaving as one
 piece). Play grows into the runner: an ink curtain opens from the pill's box to the screen over
 360ms (`js/session_curtain.mjs`, since Play is a live navigation the patch transitions cannot
-see), and leaving a night screen by live navigation shrinks it back into Play. Buttons that start or change something (Play, the start
-choices, steppers, icon buttons) press in to 96% under the finger. Reduced motion turns it all off.
+see), and leaving a night screen by live navigation shrinks it back into Play.
+
+Saving a session is the app's one moment. Finish's ✓ spins while the save runs (the arrow-path
+stays still when it means retry). The runner's way back to Home is a full page load, so it is a
+cross-document view transition (`@view-transition`, `js/saved_transition.mjs`): Finish lifts
+away and Home settles in; every other page load skips it. The runner and a video return to
+`/?saved=<id>` (`HomeArrival`), and Home shows what the save did: the week bar fills from where
+it stood, the session's ✓ pops in, and a week the save brought to its target pops its flame the
+first time Progress opens. It plays once; then the address loses the save.
+
+Every control answers a press: buttons and pills press in to 96% (the send key's circle to 90%,
+a chart's point to 80%), quickly, and spring back; a row takes a deeper tint instead. Hover is
+only for a pointer that hovers (`@media (hover: hover)`), since a phone keeps a tapped control's
+hover look until the next tap. A tap that waits on the server dims its control after 150ms
+(`phx-click-loading`), so a slow reply still answers and a fast one never shows it; steppers,
+which repeat while held, never dim. A stepped big number (New's duration and reps, Finish's
+count) rises into place going up and drops into it going down (`NumberNudge`); a typed one never
+moves. Reduced motion turns it all off and keeps the state changes.
 
 ## 5. Navigation and screens
 

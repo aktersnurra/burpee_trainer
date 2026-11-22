@@ -26,6 +26,7 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   attr(:current_scope, :map, required: true)
   attr(:home_focus_from, :atom, required: true)
   attr(:coach_week, :list, required: true)
+  attr(:arrived_at, :any, default: nil, doc: "when the session just saved was completed")
   attr(:progress_summary, :any, required: true)
   attr(:progress_summary_loading?, :boolean, required: true)
   attr(:coach_thread, :list, required: true)
@@ -46,7 +47,11 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
   def panel(assigns) do
     ~H"""
     <section id="home-coach-panel" class="home-coach-panel" aria-label="Coach">
-      <.week_rows coach_week={@coach_week} timezone={@current_scope.user.timezone} />
+      <.week_rows
+        coach_week={@coach_week}
+        timezone={@current_scope.user.timezone}
+        arrived_at={@arrived_at}
+      />
       <.link
         :if={coach?(@current_scope)}
         id="home-coach-open"
@@ -189,8 +194,10 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
 
   attr(:coach_week, :list, required: true)
   attr(:timezone, :string, required: true)
+  attr(:arrived_at, :any, default: nil)
 
-  # This week's window as Progress's rows: what is done, then what is left, muted.
+  # This week's window as Progress's rows: what is done, then what is left, muted. Arriving
+  # from a save, that session's ✓ pops in.
   defp week_rows(assigns) do
     ~H"""
     <ol
@@ -210,7 +217,14 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
         </span>
         <span class="coach-week-when">
           {week_when(item, @timezone)}
-          <.icon :if={item.status == :done} name="hero-check" class="size-4 coach-week-done-mark" />
+          <.icon
+            :if={item.status == :done}
+            name="hero-check"
+            class={[
+              "size-4 coach-week-done-mark",
+              arrived?(item, @arrived_at) && "coach-week-done-mark-new"
+            ]}
+          />
           <span :if={item.status == :done} class="sr-only">done</span>
         </span>
       </li>
@@ -460,6 +474,11 @@ defmodule BurpeeTrainerWeb.HomeCoachComponents do
 
   defp item_at({:exchange, exchange}), do: exchange.inserted_at
   defp item_at({:memory, change}), do: change.at
+
+  defp arrived?(%{status: :done, completed_at: at}, %DateTime{} = arrived_at),
+    do: DateTime.compare(at, arrived_at) == :eq
+
+  defp arrived?(_item, _arrived_at), do: false
 
   # Done: the day it was done and its minutes. Left: its minutes.
   defp week_when(%{status: :done, completed_at: at, duration_sec: sec}, timezone) do

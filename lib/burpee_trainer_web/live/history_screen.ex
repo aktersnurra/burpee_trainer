@@ -228,6 +228,7 @@ defmodule BurpeeTrainerWeb.HistoryScreen do
           history_available?={@history_available?}
           history_empty?={@history_empty?}
           history_grid_weeks={@history_grid_weeks}
+          flame_arrival={@flame_arrival}
           history_weeks={@history_weeks}
           history_points={@history_points}
           history_snapshot_now={@history_snapshot_now}

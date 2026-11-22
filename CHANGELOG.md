@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-11-22 — Every tap answers
+
+- **Saving a session**: Finish's ✓ spins while it saves. Back on Home, Finish lifts away and Home settles in, the week bar fills from where it stood to where the session took it, and the session's ✓ pops in. A save that met the week's target pops that week's flame the first time Progress opens. It plays once; a reload is an ordinary Home.
+- **Press**: every control presses in under the finger: Finish's ✓, trash, moods and tags, the studio's Save, Run, suggestions and send, the drawer's rows, Progress's rows and points, the filters and the runner's chips.
+- **Hover on a phone**: hover looks only show for a mouse, so a tapped stepper or mood no longer stays grey on the iPhone.
+- **Waiting on the server**: a tap whose reply takes longer than 150ms dims its control until the reply arrives.
+- **Big numbers**: New's duration and reps and Finish's count rise into place when stepped up and drop into it when stepped down.
+
 ## 2026-11-10 — Progress reads your history
 
 - **Look back**: the coach's look back is the caption under your level, with no "Coach" heading, and it comments on your training history: how many sessions in how many of the last 12 weeks, and where each type's 20-minute sessions went. When the model writes none, or one that fails the number check, the same is read plainly from the numbers. It still opens the Coach page on it; with no look back there is no line.

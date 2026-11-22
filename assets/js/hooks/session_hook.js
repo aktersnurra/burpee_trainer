@@ -25,6 +25,7 @@ import {
 } from "./session_display_model.mjs";
 import { SessionWakeLock } from "./session_wake_lock.mjs";
 import { openSessionStore } from "./session_store.mjs";
+import { LEAVING_SAVED } from "../saved_transition.mjs";
 import { cameraAvailable } from "./camera_available.mjs";
 import { readStartChoices } from "./start_choices.mjs";
 import {
@@ -674,6 +675,7 @@ const SessionHook = {
         if (this.lifecycleActive(generation)) {
           this.inMemoryCompletionDraft = null;
           this.dispatchFlow({ type: "SAVE_SUCCEEDED" });
+          window.dispatchEvent(new CustomEvent(LEAVING_SAVED));
           window.location.assign(serverCompletion.redirect_to);
         }
       })

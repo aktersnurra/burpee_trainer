@@ -2,6 +2,7 @@ import { formatClock } from "./session_display_model.mjs";
 import { countOrigin } from "./session_flow_fsm.mjs";
 import { setsReached } from "./session_plan.mjs";
 import { createSink } from "./session_sink.mjs";
+import { nudge } from "./number_nudge.mjs";
 const VISUAL_STATE_CLASSES = [
 	"is-working",
 	"is-work-active",
@@ -475,9 +476,11 @@ export class SessionRenderer {
 			completion.burpeeCountProvenance ??
 			(hasActualReps ? "manual" : "unresolved");
 		if (actualReps) {
-			actualReps.textContent = hasActualReps
-				? String(completion.burpeeCountActual)
-				: "—";
+			const shown = hasActualReps ? String(completion.burpeeCountActual) : "—";
+			// A step moves the count; the first render on opening Finish only shows it.
+			if (this.shownReps !== undefined) nudge(actualReps, this.shownReps, shown);
+			this.shownReps = shown;
+			actualReps.textContent = shown;
 		}
 		if (plannedReps)
 			plannedReps.textContent = String(completion.burpeeCountPlanned);

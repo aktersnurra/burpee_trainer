@@ -507,7 +507,24 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
 
   attr(:slot, :map, required: true)
 
+  attr(:arrival, :any,
+    default: nil,
+    doc: "a `HomeArrival`: the bar fills from where it stood before the session just saved"
+  )
+
   def week_progress(assigns) do
+    fill =
+      case assigns.arrival do
+        nil ->
+          "width: #{progress_percent(assigns.slot)}%"
+
+        arrival ->
+          before = %{assigns.slot | completed_sec: arrival.before_sec}
+          "width: #{progress_percent(assigns.slot)}%; --before: #{progress_percent(before)}%"
+      end
+
+    assigns = assign(assigns, :fill, fill)
+
     ~H"""
     <div id="home-week-progress">
       <div class="home-progress-labels">
@@ -525,7 +542,7 @@ defmodule BurpeeTrainerWeb.HomeWorkoutComponents do
         aria-valuenow={min(@slot.completed_sec, @slot.weekly_target_sec)}
         aria-valuetext={"#{@slot.completed_sec} of #{@slot.weekly_target_sec} seconds completed"}
       >
-        <span id="home-week-fill" style={"width: #{progress_percent(@slot)}%"}></span>
+        <span id="home-week-fill" class={@arrival && "home-week-fill-arrive"} style={@fill}></span>
       </div>
     </div>
     """

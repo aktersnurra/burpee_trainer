@@ -35,6 +35,8 @@
   --motion-stagger: 80ms;
   --ease-out: cubic-bezier(.22, 1, .36, 1);
   --ease-in-out: cubic-bezier(.4, 0, .2, 1);
+  /* A little overshoot, for the one thing that pops in: a ✓ or a flame a save just earned. */
+  --ease-spring: cubic-bezier(.34, 1.56, .64, 1);
 }
 @media (min-width: 601px) { :root { --top: 48px; } }
 /* Home, History and Coach share one page: no nested gutters, the theme background. */
@@ -104,8 +106,10 @@
   line-height: 1.2;
   letter-spacing: -0.9px;
 }
-button.home-summary:hover .home-workout-name {
-  color: var(--ink-soft);
+@media (hover: hover) {
+  button.home-summary:hover .home-workout-name {
+    color: var(--ink-soft);
+  }
 }
 .home-workout-totals {
   display: block;
@@ -168,8 +172,10 @@ button.home-summary:hover .home-workout-name {
   padding: 10px;
   transition: opacity var(--motion-quick) ease;
 }
-.home-action:hover {
-  opacity: 0.65;
+@media (hover: hover) {
+  .home-action:hover {
+    opacity: 0.65;
+  }
 }
 .home-local-message {
   margin-block: 8px;
@@ -247,8 +253,10 @@ button.home-summary:hover .home-workout-name {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
-.home-group-row:hover {
-  background: rgb(115 111 104 / 4%);
+@media (hover: hover) {
+  .home-group-row:hover {
+    background: rgb(115 111 104 / 4%);
+  }
 }
 .home-group-toggle {
   display: flex;
@@ -315,8 +323,10 @@ button.home-summary:hover .home-workout-name {
   border-bottom: 1px solid var(--line);
   overflow-wrap: anywhere;
 }
-.home-alternative:hover .home-alternative-name {
-  color: var(--ink-soft);
+@media (hover: hover) {
+  .home-alternative:hover .home-alternative-name {
+    color: var(--ink-soft);
+  }
 }
 .home-alternative-name,
 .home-alternative-metadata {
@@ -533,7 +543,7 @@ button.home-summary:hover .home-workout-name {
 .home-workout-name { font: 400 var(--text-title)/1.08 var(--font-sans); letter-spacing: -.045em; text-wrap: balance; }
 .home-workout-totals { margin-top: 12px; color: var(--muted); font-size: var(--text-small); }
 .home-title-action { flex: none; display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 10px; border-radius: 5px; color: var(--ink); transition: background var(--motion-quick), color var(--motion-quick); }
-.home-title-action:hover, .home-action:hover { background: var(--fill); opacity: 1; }
+@media (hover: hover) { .home-title-action:hover, .home-action:hover { background: var(--fill); opacity: 1; } }
 .home-expansion { margin-top: 0; }
 #home-inspection { max-width: 640px; padding-top: 26px; }
 #home-inspection table { font-variant-numeric: tabular-nums; }
@@ -552,7 +562,7 @@ button.home-summary:hover .home-workout-name {
 .home-loading-animation { width: 142px; height: 142px; border: 0; border-radius: 0; animation: none; object-fit: contain; }
 .home-state-heading { font: 400 var(--text-title)/1.12 var(--font-sans); letter-spacing: -.9px; }
 .home-resume-action { display: inline-flex; align-items: center; gap: 10px; margin-top: 24px; border-bottom: 1px solid var(--ink); font-size: var(--text-body); }
-.home-resume-action:hover { color: var(--ink-soft); }
+@media (hover: hover) { .home-resume-action:hover { color: var(--ink-soft); } }
 .home-history { max-width: 100%; margin: 0 auto; overflow: visible; }
 
 .home-history-streak-line { white-space: nowrap; }
@@ -641,7 +651,7 @@ button.home-summary:hover .home-workout-name {
 .coach-chat-head { display: flex; align-items: center; justify-content: space-between; margin: 24px 0 -2px; color: var(--muted); font-size: var(--text-small); }
 .coach-chat-head-link { min-height: 44px; text-decoration: none; }
 .coach-chat-head-link .size-5 { margin-right: -4px; transition: transform var(--motion-quick) var(--ease-out), color var(--motion-quick) ease; }
-.coach-chat-head-link:hover .size-5 { color: var(--ink); transform: translateX(2px); }
+@media (hover: hover) { .coach-chat-head-link:hover .size-5 { color: var(--ink); transform: translateX(2px); } }
 .coach-chat-head-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 @media (prefers-reduced-motion: reduce) { .coach-chat-head-link .size-5 { transition: none; } }
 /* History and Coach start where Home's top row does, so Back never moves between screens. */
@@ -703,10 +713,10 @@ button.home-summary:hover .home-workout-name {
 .home-authoring-form { margin-top: 14px; }
 .home-text-action { min-height: 44px; padding: 0 20px; border-radius: 999px; font: 500 var(--text-body)/1 var(--font-sans); }
 .home-text-action { background: transparent; border: 0; color: var(--muted); }
-.home-text-action:hover { color: var(--ink); }
+@media (hover: hover) { .home-text-action:hover { color: var(--ink); } }
 /* The one filled pill: every view's way on (Play, Resume, Approve, Sign in, Run, Create). */
 .home-primary-action, .studio-pill.studio-pill-primary { min-height: var(--pill-h); padding: 0 24px; border: 0; border-radius: 999px; background: var(--ink); color: var(--color-base-100); font: 500 var(--text-body)/1 var(--font-sans); }
-.home-primary-action:hover, .studio-pill.studio-pill-primary:hover:not(:disabled) { background: var(--ink); opacity: .85; }
+@media (hover: hover) { .home-primary-action:hover, .studio-pill.studio-pill-primary:hover:not(:disabled) { background: var(--ink); opacity: .85; } }
 :is(.home-text-action, .home-primary-action):disabled { opacity: .4; cursor: default; }
 /* Every row of the New form: label left, value right, one height and one value size. */
 .home-authoring-form .fieldset { min-height: 60px; padding: 12px 0; margin: 0; border-bottom: 1px solid var(--line); font: inherit; display: flex; align-items: center; }
@@ -771,7 +781,7 @@ button.home-summary:hover .home-workout-name {
 .history-best-label { margin: 18px 0 0; color: var(--muted); font-size: var(--text-small); }
 .progress-gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
 .history-look-back { display: block; margin-top: 10px; color: inherit; text-decoration: none; }
-a.history-look-back:hover .history-coach-summary { color: var(--ink-soft); }
+@media (hover: hover) { a.history-look-back:hover .history-coach-summary { color: var(--ink-soft); } }
 a.history-look-back:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; border-radius: 4px; }
 .history-header .history-coach-summary { display: block; margin: 0; padding: 0; color: var(--ink); font-size: var(--text-body); line-height: 1.5; }
 .progress-gauge { display: flex; flex-direction: column; min-width: 0; }
@@ -944,11 +954,11 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .home-corner { display: flex; justify-content: center; gap: 8px; padding-top: 20px; }
 /* Swap, Edit and New wear the start toggles' pill, so the controls round play read as one set. */
 .home-corner .home-corner-action { width: auto; min-width: 44px; padding-inline: 14px; border-radius: 999px; background: var(--color-base-200); color: var(--ink); }
-.home-corner .home-corner-action:hover { background: var(--color-base-300); }
+@media (hover: hover) { .home-corner .home-corner-action:hover { background: var(--color-base-300); } }
 
 /* One icon button everywhere: 44px, plain and muted, filled on hover, pressed in on a tap. */
 .home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .coach-page-action { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 12px; background: transparent; color: var(--muted); cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
-:is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .coach-page-action):hover { background: var(--color-base-300); color: var(--ink); }
+@media (hover: hover) { :is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .coach-page-action):hover { background: var(--color-base-300); color: var(--ink); } }
 :is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .coach-page-action):active { transform: scale(.94); }
 :is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .coach-page-action):focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
@@ -971,8 +981,8 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .studio-you { display: flex; justify-content: flex-end; }
 .studio-bubble { width: fit-content; max-width: 88%; margin: 0; padding: 9px 15px; border: 0; border-radius: 20px 20px 6px 20px; background: var(--bubble); color: var(--ink); font: 400 var(--text-body)/1.5 var(--font-sans); overflow-wrap: anywhere; text-align: left; white-space: pre-line; scroll-margin-top: 72px; }
 .studio-parts { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0; }
-.studio-part { min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--fill); color: var(--ink); font: 400 var(--text-small)/1 var(--font-sans); cursor: pointer; transition: background var(--motion-quick) ease; }
-.studio-part:hover { background: var(--fill-hover); }
+.studio-part { min-height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: var(--fill); color: var(--ink); font: 400 var(--text-small)/1 var(--font-sans); cursor: pointer; transition: background var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
+@media (hover: hover) { .studio-part:hover { background: var(--fill-hover); } }
 .studio-text { margin: 0; font-size: var(--text-body); line-height: 1.55; }
 .studio-turn { margin: 0; color: var(--muted); font-size: var(--text-small); font-variant-numeric: tabular-nums; }
 .studio-error { margin: 0; color: #a55643; font-size: var(--text-small); }
@@ -996,8 +1006,8 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
 .studio-spinner { display: block; flex: none; width: 36px; height: 36px; margin-left: -6px; object-fit: contain; }
 .studio-working .studio-turn { font-size: var(--text-body); line-height: 1.5; }
 .studio-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.studio-pill { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 20px; border: 0; border-radius: 999px; background: var(--fill); color: var(--ink); font: 500 var(--text-body)/1 var(--font-sans); cursor: pointer; transition: background var(--motion-quick) ease, opacity var(--motion-quick) ease; }
-.studio-pill:hover:not(:disabled) { background: var(--fill-hover); }
+.studio-pill { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; padding: 0 20px; border: 0; border-radius: 999px; background: var(--fill); color: var(--ink); font: 500 var(--text-body)/1 var(--font-sans); cursor: pointer; transition: background var(--motion-quick) ease, opacity var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
+@media (hover: hover) { .studio-pill:hover:not(:disabled) { background: var(--fill-hover); } }
 .studio-pill-wide { width: 100%; }
 .studio-pill:disabled { opacity: .4; cursor: default; }
 /* Save and Run sit under the workout, on the left with it; Run is the ink pill, as Play on Home. */
@@ -1030,15 +1040,15 @@ html[data-vt-hold] #home-alternatives-panel[hidden] { display: block !important;
    (--pick, set on New's form), never a solid fill. Each is a 44px target. */
 .studio-segment { display: inline-flex; gap: 8px; }
 .studio-segment-option { position: relative; display: grid; place-items: center; min-height: 44px; cursor: pointer; }
-.studio-segment-option > span { display: grid; place-items: center; height: 44px; padding: 0 18px; border-radius: 999px; background: var(--fill); color: var(--ink); font: 400 var(--text-body)/1 var(--font-sans); white-space: nowrap; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, box-shadow var(--motion-quick) ease; }
-.studio-segment-option:hover > span { background: var(--fill-hover); }
+.studio-segment-option > span { display: grid; place-items: center; height: 44px; padding: 0 18px; border-radius: 999px; background: var(--fill); color: var(--ink); font: 400 var(--text-body)/1 var(--font-sans); white-space: nowrap; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, box-shadow var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
+@media (hover: hover) { .studio-segment-option:hover > span { background: var(--fill-hover); } }
 .studio-segment-option input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
 .studio-segment-option:has(input:checked) > span { background: var(--pick); box-shadow: inset 0 0 0 1px var(--pick-ring); color: var(--pick-fg); }
 .studio-segment-option:has(input:focus-visible) > span { outline: 2px solid var(--focus); outline-offset: 2px; }
 .studio-row .studio-segment-option > span { height: 36px; padding: 0 14px; }
 .studio-number { display: grid; grid-template-columns: 44px 104px 44px; align-items: center; gap: 4px; }
 .studio-number-button { display: grid; place-items: center; width: 44px; height: 44px; border: 0; border-radius: 50%; background: var(--fill); color: var(--ink); cursor: pointer; transition: background var(--motion-quick) ease; }
-.studio-number-button:hover:not(:disabled) { background: var(--fill-hover); }
+@media (hover: hover) { .studio-number-button:hover:not(:disabled) { background: var(--fill-hover); } }
 .studio-number-button:disabled { opacity: .3; cursor: default; }
 /* Held to repeat, so a long press must not select text or open the phone's callout. */
 .studio-number-button { -webkit-touch-callout: none; user-select: none; touch-action: manipulation; }
@@ -1130,6 +1140,23 @@ html[data-vt="drop"]::view-transition-new(root) { animation: vt-recede var(--mot
 @keyframes vt-rise { from { transform: translateY(100%); } }
 @keyframes vt-drop { to { transform: translateY(100%); } }
 @keyframes vt-recede { to { opacity: .6; transform: scale(.97); } }
+/* Out of a saved session, a full page load: Finish lifts away and Home settles in. Only that load
+   runs it (js/saved_transition.mjs skips every other one), and Home knows it from the arrival the
+   server draws on its first paint. The week bar is part of the page here, so it moves with it. */
+@media (prefers-reduced-motion: no-preference) { @view-transition { navigation: auto; } }
+html:not([data-vt]):has(.home-week-fill-arrive) #home-week-progress { view-transition-name: none; }
+html:not([data-vt]):has(.home-week-fill-arrive)::view-transition-old(root) { animation: vt-saved-out 240ms var(--ease-out) both; }
+html:not([data-vt]):has(.home-week-fill-arrive)::view-transition-new(root) { animation: vt-saved-in var(--motion-settle) var(--ease-out) both; }
+@keyframes vt-saved-out { to { opacity: 0; transform: translateY(-10px); } }
+@keyframes vt-saved-in { from { opacity: 0; transform: translateY(10px); } }
+/* Then Home shows what the save did (HomeArrival): the week bar fills from where it stood, the
+   session's ✓ pops in, and a week the save brought to its target pops its flame on Progress. */
+@keyframes home-week-fill-in { from { width: var(--before); } }
+#home-week-fill.home-week-fill-arrive { animation: home-week-fill-in calc(2 * var(--motion-settle)) var(--ease-out) 280ms backwards; }
+@keyframes home-pop { 0% { opacity: 0; transform: scale(.4); } 60% { opacity: 1; transform: scale(1.18); } 100% { transform: none; } }
+.coach-week-done-mark-new { animation: home-pop var(--motion-settle) var(--ease-spring) 760ms backwards; }
+.home-history-flame-new .home-history-flame-icon { animation: home-pop var(--motion-settle) var(--ease-spring) var(--motion-settle) backwards; }
+@media (prefers-reduced-motion: reduce) { #home-week-fill.home-week-fill-arrive, .coach-week-done-mark-new, .home-history-flame-new .home-history-flame-icon { animation: none; } }
 /* Into the runner: Play's ink grows from the pill to the screen, and back into it on the way
    out (js/session_curtain.mjs). */
 .session-curtain { position: fixed; inset: 0; z-index: 100; background: var(--ink); pointer-events: none; }
@@ -1150,10 +1177,32 @@ html[data-vt="back"]::view-transition-new(root) { animation-name: vt-in-left; }
 @keyframes vt-in-left { from { opacity: 0; transform: translateX(-12px); } }
 html[data-vt] :is(.studio, .studio-form, .studio-msg, .home-enter) { animation: none; }
 
-/* Buttons that start or change something press in under the finger. */
-:is(.home-primary-action, .studio-number-button, .home-start-choice) { transition: background var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
-:is(.home-primary-action, .studio-number-button, .home-start-choice):active:not(:disabled) { transform: scale(.96); }
-@media (prefers-reduced-motion: reduce) { :is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-primary-action, .studio-number-button, .home-start-choice):active { transform: none; } }
+/* Every control presses in under the finger, quickly, and springs back at its own pace: buttons
+   and pills to 96%, the send key's circle to 90%, a chart's point to 80%; a row takes a deeper
+   tint instead of shrinking. An armed control keeps its own transform (its id rule wins). */
+:is(.home-primary-action, .studio-number-button, .home-start-choice, .home-text-action) { transition: background var(--motion-quick) ease, color var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
+:is(.home-alternative, .home-group-row, .home-history-session-toggle) { transition: background var(--motion-quick) ease; }
+.home-history-point span { transition: transform var(--motion-quick) var(--ease-out); }
+:is(.home-primary-action, .studio-number-button, .home-start-choice, .home-text-action, .studio-pill, .studio-part, .session-mood, .session-tag-pill, .session-finish-save, .session-finish-trash, .session-chip, .video-chip, .video-camera-chip):active:not(:disabled),
+:is(#home-filters [role="group"] button, .studio-segment-option > span):active,
+.studio-segment-option:active > span { transform: scale(.96); transition-duration: 60ms; }
+.composer-send:active:not(:disabled) .composer-send-dot { transform: scale(.9); transition-duration: 60ms; }
+.home-history-point:active span { transform: scale(.8); transition-duration: 60ms; }
+:is(.home-alternative, .home-group-row, .home-history-session-toggle):active { background: rgb(115 111 104 / 9%); transition-duration: 60ms; }
+@media (prefers-reduced-motion: reduce) {
+  :is(.home-corner-action, .studio-back, .studio-close, .home-chooser-header button, .home-primary-action, .studio-number-button, .home-start-choice, .home-text-action, .studio-pill, .studio-part, .session-mood, .session-tag-pill, .session-finish-save, .session-finish-trash, .session-chip, .video-chip, .video-camera-chip, #home-filters [role="group"] button, .studio-segment-option > span, .home-history-point span):active,
+  .studio-segment-option:active > span,
+  .composer-send:active .composer-send-dot,
+  .home-history-point:active span { transform: none; }
+}
+
+/* A tap that waits on the server: after 150ms the control dims, so a slow round trip still
+   answers. Fast replies never show it. Steppers repeat while held, so they never dim. The
+   Finish screen's ✓ spins while the plan's save runs (aria-busy); its retry stays still. */
+:is(button, a).phx-click-loading:not(.studio-number-button, .session-reps-step),
+.phx-submit-loading .session-finish-save { opacity: .55; transition: opacity var(--motion-quick) ease 150ms, transform var(--motion-quick) var(--ease-out); }
+#session-save-btn[aria-busy="true"] #session-save-icon-pending > * { animation: home-loading 900ms linear infinite; }
+@media (prefers-reduced-motion: reduce) { #session-save-btn[aria-busy="true"] #session-save-icon-pending > * { animation: none; } }
 
 /* ---- New as big numbers: the burpee as two pills, duration and reps large and centred with a
    plain step either side, the structure they make as a sentence, then quiet rows labelled like
@@ -1192,7 +1241,7 @@ html[data-vt] :is(.studio, .studio-form, .studio-msg, .home-enter) { animation: 
 .studio-foot { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; width: 100%; margin-top: auto; padding: 24px 0 calc(16px + env(safe-area-inset-bottom)); background: linear-gradient(to bottom, transparent, var(--color-base-100) 20px); }
 @media (min-width: 601px) { .studio-foot { padding-bottom: calc(24px + env(safe-area-inset-bottom)); } }
 .studio-foot-close { display: grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: var(--fill); color: var(--ink); cursor: pointer; transition: background var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
-.studio-foot-close:hover { background: var(--fill-hover); }
+@media (hover: hover) { .studio-foot-close:hover { background: var(--fill-hover); } }
 .studio-foot-close:active { transform: scale(.94); }
 .studio-foot-close:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .studio-foot #studio-create { min-width: 96px; }
@@ -1202,8 +1251,8 @@ html[data-vt] :is(.studio, .studio-form, .studio-msg, .home-enter) { animation: 
    its own colour, a level in a soft ink), each a 44px target; the reset sits by "Levels". */
 #home-filters { display: grid; gap: 12px; padding: 12px 0 16px; border-bottom: 1px solid var(--line); animation: home-fade-in var(--motion-quick) ease; }
 #home-filters [role="group"] { display: flex; flex-wrap: wrap; gap: 8px; }
-#home-filters [role="group"] button { min-height: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--fill); color: var(--muted); font: 400 var(--text-body)/1 var(--font-sans); white-space: nowrap; cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, box-shadow var(--motion-quick) ease; }
-#home-filters [role="group"] button:hover { background: var(--fill-hover); }
+#home-filters [role="group"] button { min-height: 44px; padding: 0 16px; border: 0; border-radius: 999px; background: var(--fill); color: var(--muted); font: 400 var(--text-body)/1 var(--font-sans); white-space: nowrap; cursor: pointer; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, box-shadow var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
+@media (hover: hover) { #home-filters [role="group"] button:hover { background: var(--fill-hover); } }
 #home-filters [role="group"] button[aria-pressed="true"] { background: color-mix(in srgb, var(--ink) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 30%, transparent); color: var(--ink); }
 #home-filters #home-type-six_count[aria-pressed="true"] { background: color-mix(in srgb, var(--six) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--six) 45%, transparent); color: var(--six); }
 #home-filters #home-type-navy_seal[aria-pressed="true"] { background: color-mix(in srgb, var(--seal) 32%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--seal-line) 60%, transparent); color: color-mix(in srgb, var(--six) 75%, var(--seal-line)); }

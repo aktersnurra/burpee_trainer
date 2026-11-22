@@ -207,7 +207,11 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
     case Workouts.complete_session(scope, session.id, params, capture(socket.assigns)) do
       {:ok, session} ->
         _events = Workouts.session_milestones(scope, session)
-        {:noreply, socket |> put_flash(:info, "Session logged.") |> push_navigate(to: ~p"/")}
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Session logged.")
+         |> push_navigate(to: ~p"/?#{%{saved: session.id}}")}
 
       {:error, %Ecto.Changeset{} = changeset} ->
         {:noreply, assign(socket, :form, to_form(changeset))}

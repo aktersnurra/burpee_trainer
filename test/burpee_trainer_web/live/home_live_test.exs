@@ -17,6 +17,69 @@ defmodule BurpeeTrainerWeb.HomeLiveTest do
     {:ok, conn: init_test_session(conn, %{user_id: user.id}), user: user}
   end
 
+  describe "arriving from a save" do
+    test "the week bar fills from where it stood and the saved session's ✓ arrives, once", %{
+      conn: conn,
+      user: user
+    } do
+      now = DateTime.utc_now(:second)
+
+      free_form_session_fixture(user, %{
+        duration_sec_actual: 600,
+        completed_at: DateTime.add(now, -60)
+      })
+
+      saved = free_form_session_fixture(user, %{duration_sec_actual: 600})
+
+      {:ok, view, _} = live(conn, ~p"/?#{%{saved: saved.id}}")
+      assert has_element?(view, "#home-week-fill.home-week-fill-arrive[style*='--before: ']")
+      assert has_element?(view, "#home-coach-week-1 .coach-week-done-mark-new")
+      refute has_element?(view, "#home-coach-week-0 .coach-week-done-mark-new")
+
+      # Once it has played, the address loses the save, so a reload is an ordinary Home.
+      assert_patch(view, ~p"/", 2_500)
+      refute has_element?(view, ".home-week-fill-arrive, .coach-week-done-mark-new")
+    end
+
+    test "another athlete's session, or no session, is an ordinary Home", %{
+      conn: conn,
+      user: user
+    } do
+      free_form_session_fixture(user, %{duration_sec_actual: 600})
+      stranger = free_form_session_fixture(user_fixture(), %{duration_sec_actual: 600})
+
+      for saved <- [stranger.id, "not-a-session"] do
+        {:ok, view, _} = live(conn, ~p"/?#{%{saved: saved}}")
+        assert has_element?(view, "#home-done-today")
+        refute has_element?(view, ".home-week-fill-arrive, .coach-week-done-mark-new")
+      end
+    end
+
+    test "a save that meets the week's target lights its flame the first time Progress opens", %{
+      conn: conn,
+      user: user
+    } do
+      now = DateTime.utc_now(:second)
+      {:ok, slot} = Policy.required_slot(Scope.for_user(user), now)
+
+      free_form_session_fixture(user, %{
+        duration_sec_actual: slot.weekly_target_sec - 600,
+        completed_at: DateTime.add(now, -60)
+      })
+
+      saved = free_form_session_fixture(user, %{duration_sec_actual: 600})
+      flame = "#home-history-flame-#{Date.to_iso8601(slot.week_start)}"
+
+      {:ok, view, _} = live(conn, ~p"/?#{%{saved: saved.id}}")
+      render_patch(view, ~p"/progress")
+      assert has_element?(view, "#{flame}.home-history-flame-new")
+
+      render_patch(view, ~p"/")
+      render_patch(view, ~p"/progress")
+      refute has_element?(view, "#{flame}.home-history-flame-new")
+    end
+  end
+
   test "the coach speaks on Home once today is done", %{
     conn: conn,
     user: user

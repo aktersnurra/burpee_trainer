@@ -147,7 +147,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
         data-session-id={@workout_session.id}
         data-content-hash={@workout_session.content_hash}
         data-client-session-id={@workout_session.client_session_id}
-        data-redirect-to={~p"/"}
+        data-redirect-to={~p"/?#{%{saved: @workout_session.id}}"}
         role="status"
       >
         Session saved. Returning Home…
@@ -352,7 +352,7 @@ defmodule BurpeeTrainerWeb.SessionLive do
   defp acknowledge_completed_retry(result, _session, _attrs), do: result
 
   defp save_reply({:ok, session}) do
-    %{status: "ok", session_id: session.id, redirect_to: ~p"/"}
+    %{status: "ok", session_id: session.id, redirect_to: ~p"/?#{%{saved: session.id}}"}
   end
 
   defp save_reply({:error, %Ecto.Changeset{} = changeset}) do

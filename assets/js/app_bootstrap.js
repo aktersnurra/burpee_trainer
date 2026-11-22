@@ -5,6 +5,7 @@ import topbar from "../vendor/topbar";
 import ChatDock from "./hooks/chat_dock.mjs";
 import HomeGestures from "./hooks/home_gestures.mjs";
 import HoldRepeat from "./hooks/hold_repeat.mjs";
+import NumberNudge from "./hooks/number_nudge.mjs";
 import { registerHomeChooserFeedback } from "./hooks/home_chooser_feedback.mjs";
 import HomePendingSession from "./hooks/home_pending_session.mjs";
 import HomeStartChoice from "./hooks/home_start_choice.mjs";
@@ -17,6 +18,7 @@ import { startPoseTraceSync } from "./hooks/pose_trace_sync.mjs";
 import { openSessionStore } from "./hooks/session_store.mjs";
 import { viewTransitions } from "./view_transitions.mjs";
 import { sessionCurtain } from "./session_curtain.mjs";
+import { savedTransition } from "./saved_transition.mjs";
 
 export function startApp(PoseTracker) {
 	const csrfToken = document
@@ -32,6 +34,7 @@ export function startApp(PoseTracker) {
 			ChatDock,
 			HomeGestures,
 			HoldRepeat,
+			NumberNudge,
 			HomePendingSession,
 			HomeStartChoice,
 			SheetDrag,
@@ -58,6 +61,7 @@ export function startApp(PoseTracker) {
 
 	registerHomeChooserFeedback();
 	sessionCurtain();
+	savedTransition();
 	liveSocket.connect();
 	window.liveSocket = liveSocket;
 

@@ -110,7 +110,7 @@ defmodule BurpeeTrainerWeb.HomeScreen do
       >
         <div id="home-progress-history" class="relative min-h-11">
           <%= if @slot do %>
-            <HomeWorkoutComponents.week_progress slot={@slot} />
+            <HomeWorkoutComponents.week_progress slot={@slot} arrival={@home_arrival} />
           <% else %>
             <p id="home-progress-unavailable">Weekly progress unavailable</p>
           <% end %>
@@ -272,6 +272,7 @@ defmodule BurpeeTrainerWeb.HomeScreen do
                 current_scope={@current_scope}
                 home_focus_from={@home_focus_from}
                 coach_week={@coach_week}
+                arrived_at={@home_arrival && @home_arrival.completed_at}
                 progress_summary={@progress_summary}
                 progress_summary_loading?={@progress_summary_loading?}
                 coach_thread={@coach_thread}

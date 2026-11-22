@@ -17,9 +17,13 @@ defmodule BurpeeTrainerWeb.HomeLive do
     HomeCoach,
     HomeCoachComponents,
     HistoryScreen,
+    HomeArrival,
     HomeDayBoundary,
     StartChoices
   }
+
+  # How long the arrival from a save plays before the address loses the save.
+  @arrival_ms 1_500
 
   @impl true
   def mount(_params, session, socket) do
@@ -43,7 +47,9 @@ defmodule BurpeeTrainerWeb.HomeLive do
         home_focus_from: nil,
         coach_from: :home,
         authoring_returned?: false,
-        review_inspection_rows: []
+        review_inspection_rows: [],
+        home_arrival: nil,
+        flame_arrival: nil
       )
       |> stream_configure(:result_sessions, dom_id: &"home-result-session-#{&1.id}")
       |> stream(:result_sessions, [])
@@ -67,9 +73,41 @@ defmodule BurpeeTrainerWeb.HomeLive do
       # Without the app's coach there is no one to talk to; Home shows what Claude left.
       {:noreply, push_navigate(socket, to: ~p"/")}
     else
-      {:noreply, open_screen(socket, screen, previous, params)}
+      {:noreply,
+       socket |> open_screen(screen, previous, params) |> arrive(screen, previous, params)}
     end
   end
+
+  # Arriving from a save (`/?saved=<id>`, see `HomeArrival`): it plays on Home once, then the
+  # address loses the save so a reload does not play it again. A save that met the week's target
+  # keeps its flame for the first Progress opened after it, and leaving that Progress spends it.
+  defp arrive(socket, :home, _previous, %{"saved" => saved}) do
+    case HomeArrival.from_save(socket.assigns.current_scope, socket.assigns[:slot], saved) do
+      nil ->
+        assign(socket, home_arrival: nil)
+
+      arrival ->
+        if connected?(socket), do: Process.send_after(self(), :home_arrival_played, @arrival_ms)
+
+        assign(socket,
+          home_arrival: arrival,
+          flame_arrival:
+            if(arrival.target_met?, do: arrival.week_start, else: socket.assigns.flame_arrival)
+        )
+    end
+  end
+
+  defp arrive(socket, :history, _previous, _params) do
+    if socket.assigns.flame_arrival && connected?(socket),
+      do: Process.send_after(self(), :flame_arrival_played, @arrival_ms)
+
+    assign(socket, home_arrival: nil)
+  end
+
+  defp arrive(socket, _screen, :history, _params),
+    do: assign(socket, home_arrival: nil, flame_arrival: nil)
+
+  defp arrive(socket, _screen, _previous, _params), do: assign(socket, home_arrival: nil)
 
   defp open_screen(socket, screen, previous, params) do
     socket =
@@ -135,6 +173,15 @@ defmodule BurpeeTrainerWeb.HomeLive do
   defp leave_coach(socket, _previous, _screen), do: socket
 
   @impl true
+  def handle_info(:home_arrival_played, socket) do
+    if socket.assigns.home_arrival && socket.assigns.workspace_screen == :home,
+      do: {:noreply, push_patch(socket, to: ~p"/", replace: true)},
+      else: {:noreply, socket}
+  end
+
+  def handle_info(:flame_arrival_played, socket),
+    do: {:noreply, assign(socket, flame_arrival: nil)}
+
   def handle_info({:coach_summary, summary}, socket),
     do: {:noreply, assign(socket, progress_summary: summary, progress_summary_loading?: false)}
 

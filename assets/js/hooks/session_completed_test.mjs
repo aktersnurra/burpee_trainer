@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import SessionCompleted from "./session_completed.mjs";
+import { LEAVING_SAVED } from "../saved_transition.mjs";
 
 function mount(finalizeServerCompletion) {
   const calls = { navigated: [], events: [], timers: new Map() };
@@ -34,14 +35,14 @@ test("an already-saved session finalizes local evidence and returns home", async
     return { traceReady: true };
   });
   await hook.finalized;
-  assert.deepEqual(calls.events, ["burpee:trace-upload-ready"]);
+  assert.deepEqual(calls.events, ["burpee:trace-upload-ready", LEAVING_SAVED]);
   assert.deepEqual(calls.navigated, ["/"]);
 });
 
 test("without pending trace chunks no upload is announced", async () => {
   const { hook, calls } = mount(async () => ({ traceReady: false }));
   await hook.finalized;
-  assert.deepEqual(calls.events, []);
+  assert.deepEqual(calls.events, [LEAVING_SAVED]);
   assert.deepEqual(calls.navigated, ["/"]);
 });
 
@@ -57,7 +58,7 @@ test("failed local finalization stays visible and retries before returning home"
   assert.match(hook.el.textContent, /retry/i);
   assert.equal(calls.timers.size, 1);
   await calls.timers.get(1)();
-  assert.deepEqual(calls.events, ["burpee:trace-upload-ready"]);
+  assert.deepEqual(calls.events, ["burpee:trace-upload-ready", LEAVING_SAVED]);
   assert.deepEqual(calls.navigated, ["/"]);
 });
 

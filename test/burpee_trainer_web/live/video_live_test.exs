@@ -93,7 +93,7 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     })
     |> render_submit()
 
-    assert_redirect(view, ~p"/")
+    assert_redirect(view, ~p"/?#{%{saved: started.id}}")
     assert Repo.aggregate(WorkoutSession, :count) == 1
     completed = Repo.get!(WorkoutSession, started.id)
     assert completed.state == :completed
@@ -288,7 +288,7 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
     |> form("#session-completion-form", %{"workout_session" => %{"burpee_count_actual" => "10"}})
     |> render_submit()
 
-    assert_redirect(view, ~p"/")
+    assert_redirect(view, ~p"/?#{%{saved: started.id}}")
     assert_receive {:workout_session_update, query}
     assert query =~ "UPDATE \"workout_sessions\""
     refute_receive {:workout_session_update, _second_query}

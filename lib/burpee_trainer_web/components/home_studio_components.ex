@@ -639,7 +639,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
 
   # A number to type, or to move a step at a time with the buttons beside it; held, a button
   # keeps stepping (the HoldRepeat hook). A value typed is sent when the typing pauses or the
-  # field is left.
+  # field is left. A big number moves with each step (the NumberNudge hook).
   defp number(assigns) do
     ~H"""
     <div class={if @hero, do: "studio-hero-number", else: "studio-row"}>
@@ -669,6 +669,7 @@ defmodule BurpeeTrainerWeb.HomeStudioComponents do
             inputmode={@inputmode}
             autocomplete="off"
             class="studio-number-input"
+            phx-hook={@hero && "NumberNudge"}
             phx-debounce="600"
           />
           <span :if={@unit} class="studio-number-unit" aria-hidden="true">{@unit}</span>

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import SessionHook from "./session_hook.js";
+import { LEAVING_SAVED } from "../saved_transition.mjs";
 import { initialFlowState } from "./session_flow_fsm.mjs";
 import { openSessionStore } from "./session_store.mjs";
 import { currentFrame, initialSegmentState } from "./session_segment_fsm.mjs";
@@ -3266,7 +3267,7 @@ test("successful Save commits local finalization before success state, upload di
 		await flushHookPromises();
 
 		assert.deepEqual(order, [["finalize", 41, "hash-1", "client-save"]]);
-		assert.deepEqual(readyEvents, ["burpee:trace-upload-ready"]);
+		assert.deepEqual(readyEvents, ["burpee:trace-upload-ready", LEAVING_SAVED]);
 		assert.deepEqual(navigations, ["/stats"]);
 		assert.equal(ctx.inMemoryCompletionDraft, null);
 	} finally {
@@ -3311,7 +3312,7 @@ test("successful Save without trace chunks atomically deletes only the exact com
 		await flushHookPromises();
 		await flushHookPromises();
 		assert.deepEqual(calls, [["finalize", 41, "hash-1", "client-save"]]);
-		assert.deepEqual(readyEvents, []);
+		assert.deepEqual(readyEvents, [LEAVING_SAVED]);
 		assert.deepEqual(navigations, ["/stats"]);
 	} finally {
 		ctx.destroyed();

@@ -307,6 +307,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
               autocomplete="off"
               aria-describedby="completion-reps-error"
               class="session-finish-count session-reps-input qs-tabular"
+              phx-hook="NumberNudge"
             />
             <button
               id="completion-reps-more"

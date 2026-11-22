@@ -1,4 +1,5 @@
 import { openSessionStore } from "./session_store.mjs";
+import { LEAVING_SAVED } from "../saved_transition.mjs";
 
 // Do not leave retained evidence undiscoverable if local queue finalization fails.
 const SessionCompleted = {
@@ -23,6 +24,7 @@ const SessionCompleted = {
       .then(({ traceReady }) => {
         if (!this.active) return;
         if (traceReady) this.announce("burpee:trace-upload-ready");
+        this.announce(LEAVING_SAVED);
         this.navigate(redirectTo);
       })
       .catch(() => {

@@ -47,6 +47,7 @@
 | `BurpeeTrainerWeb.{HomeStudioComponents, NewWorkoutForm}` / `BurpeeTrainer.Coach.NewDefaults` | The studio (Edit as a chat, New as one form then the chat), New's form rules (reps and pace follow duration and type until set by hand; everything fits the duration), and what each value starts from: the week's time left, a step past the athlete's recent best, a pace that fits |
 | `BurpeeTrainerWeb.SessionLive` / `BurpeeTrainerWeb.VideoLive.Show` | Plan and video session runners; both end on `SessionComponents.completion_review` (a video drives it through `events`), and a video counts reps with the camera when the device's toggle is on |
 | `BurpeeTrainerWeb.HomeDayBoundary` | Local-day boundary scheduling |
+| `BurpeeTrainerWeb.HomeArrival` | Home arriving from a save (`/?saved=<id>`): where the week bar stood before the session, whose ✓ pops in, and the week whose flame pops on Progress when the save met the target; only the owner's own session from this week |
 | `BurpeeTrainerWeb.Components.*` | Shared layout, Home, History, Coach, workout, and session components |
 | `BurpeeTrainerWeb.Router` | OIDC, authenticated Home/History/Coach/session/video, pose upload, and video stream routes |
 

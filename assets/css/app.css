@@ -209,7 +209,7 @@ body {
   border-radius: 999px;
   background: var(--session-track);
   color: var(--session-ink);
-  transition: background-color var(--motion-quick) var(--ease-out);
+  transition: background-color var(--motion-quick) var(--ease-out), transform var(--motion-quick) var(--ease-out);
 }
 .session-night .session-chip[hidden] { display: none; }
 .session-night .session-chip:disabled { visibility: hidden; }
@@ -505,8 +505,10 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
   border-radius: 4px;
   transition: background-color 150ms ease;
 }
-#burpee-session .session-preflight-back:hover {
-  background: var(--session-border);
+@media (hover: hover) {
+  #burpee-session .session-preflight-back:hover {
+    background: var(--session-border);
+  }
 }
 /* Headings take focus so screen readers announce each step; they are not controls, so
    no outline. */
@@ -538,7 +540,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 /* − count +: quiet round steps, as New's. No long-press menu or text selection while held. */
 #session-completion-review .session-reps-stepper { display: flex; align-items: center; justify-content: center; gap: 28px; }
 #session-completion-review .session-reps-step { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: 999px; background: var(--fill); color: var(--ink); touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: background var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
-#session-completion-review .session-reps-step:hover:not(:disabled) { background: var(--fill-hover); }
+@media (hover: hover) { #session-completion-review .session-reps-step:hover:not(:disabled) { background: var(--fill-hover); } }
 #session-completion-review .session-reps-step:active:not(:disabled) { transform: scale(.96); }
 #session-completion-review .session-reps-step:disabled { opacity: .35; }
 /* A video often has no count, so its count is typed as well as stepped: the same big
@@ -550,24 +552,24 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
    its text in that colour (clay Rough, cobalt OK, green Good). Tags: outlined pills that toggle,
    the chosen ones amber. */
 .session-moods { display: flex; gap: 8px; margin-top: 30px; }
-.session-mood { --tone: var(--cobalt); flex: 1; min-height: 44px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--fill); color: var(--ink); font: 400 15px/1.2 var(--font-sans); transition: background-color var(--motion-quick) ease, box-shadow var(--motion-quick) ease, color var(--motion-quick) ease; }
+.session-mood { --tone: var(--cobalt); flex: 1; min-height: 44px; padding: 0 18px; border: 0; border-radius: 999px; background: var(--fill); color: var(--ink); font: 400 15px/1.2 var(--font-sans); transition: background-color var(--motion-quick) ease, box-shadow var(--motion-quick) ease, color var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
 .session-mood[data-mood="-1"] { --tone: var(--clay); }
 .session-mood[data-mood="1"] { --tone: var(--good); }
-.session-mood:hover:not(:disabled) { background: var(--fill-hover); }
+@media (hover: hover) { .session-mood:hover:not(:disabled) { background: var(--fill-hover); } }
 .session-mood[aria-pressed="true"],
 .session-mood[aria-pressed="true"]:hover { background: color-mix(in srgb, var(--tone) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 55%, transparent); color: color-mix(in srgb, var(--tone) 75%, var(--ink)); }
 .session-mood:disabled { opacity: .45; }
 #session-completion-review .session-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
-#session-completion-review .session-tag-pill { min-height: 44px; padding: 8px 13px; white-space: nowrap; border: 0; border-radius: 999px; background: transparent; box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); font: 400 14px/1.2 var(--font-sans); transition: background-color var(--motion-quick) ease, box-shadow var(--motion-quick) ease, color var(--motion-quick) ease; }
+#session-completion-review .session-tag-pill { min-height: 44px; padding: 8px 13px; white-space: nowrap; border: 0; border-radius: 999px; background: transparent; box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); font: 400 14px/1.2 var(--font-sans); transition: background-color var(--motion-quick) ease, box-shadow var(--motion-quick) ease, color var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
 #session-completion-review .session-tag-pill[aria-pressed="true"] { background: color-mix(in srgb, var(--amber) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--amber) 55%, transparent); color: color-mix(in srgb, var(--amber) 55%, var(--ink)); }
 #session-completion-review .session-tag-pill:disabled { opacity: .45; }
 #session-completion-review .session-note-field { margin-top: 18px; }
 /* The foot: trash a quiet round on the left, ✓ the ink pill on the right. */
 .session-finish-actions { display: flex; align-items: center; justify-content: space-between; margin-top: auto; padding-top: 32px; container-type: inline-size; }
 .session-finish-trash { display: inline-grid; flex: none; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 999px; background: var(--fill); color: var(--ink); }
-.session-finish-trash:hover:not(:disabled) { background: var(--fill-hover); }
+@media (hover: hover) { .session-finish-trash:hover:not(:disabled) { background: var(--fill-hover); } }
 .session-finish-save { display: inline-flex; align-items: center; justify-content: center; min-width: 96px; height: var(--pill-h); padding: 0 24px; border: 0; border-radius: 999px; background: var(--ink); color: var(--color-base-100); }
-.session-finish-save:hover:not(:disabled) { opacity: .9; }
+@media (hover: hover) { .session-finish-save:hover:not(:disabled) { opacity: .9; } }
 /* Trash asks in place, as Abort does in the runner: armed, the page steps back, ✓ shrinks
    away and trash slides to the middle in clay under its question. A tap anywhere else or
    Escape lets go. */
@@ -605,7 +607,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 #video-session[data-armed="abort"] #video-abort-question { opacity: 1; visibility: visible; transform: translateY(-50%); transition-delay: var(--motion-stagger), var(--motion-stagger), 0s; }
 .video-watch-actions { display: flex; justify-content: center; gap: 24px; margin-top: 24px; }
 .video-chip { display: inline-grid; place-items: center; width: var(--pill-h); height: var(--pill-h); border: 0; border-radius: 999px; background: var(--fill); color: var(--ink); transition: opacity var(--motion-settle) var(--ease-out), transform var(--motion-settle) var(--ease-out), background-color var(--motion-quick) var(--ease-out), color var(--motion-quick) var(--ease-out); }
-.video-chip:hover { background: var(--fill-hover); }
+@media (hover: hover) { .video-chip:hover { background: var(--fill-hover); } }
 #video-session[data-armed="abort"] #video-finish-early,
 #video-session[data-armed="finish"] #video-abort-btn { opacity: 0; transform: scale(.6); pointer-events: none; }
 #video-session[data-armed="finish"] #video-finish-early { background: var(--ink); color: var(--color-base-100); transform: translateX(calc((var(--pill-h) + 24px) / 2)) scale(1.15); }
@@ -622,13 +624,13 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 .video-camera[data-stage="failed"] :is(#pose-tracker-preview, #pose-tracker-canvas) { visibility: hidden; }
 .video-camera:is([data-stage="setup"], [data-stage="failed"]) .video-camera-vignette { display: block; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(to bottom, rgb(38 39 34 / .85) 0, rgb(38 39 34 / 0) 300px), linear-gradient(to top, rgb(38 39 34 / .7) 0, rgb(38 39 34 / 0) 260px), radial-gradient(ellipse at center, rgb(0 0 0 / 0) 55%, rgb(0 0 0 / .45) 100%); }
 .video-camera:is([data-stage="setup"], [data-stage="failed"]) .video-camera-back { display: grid; position: absolute; z-index: 2; top: max(20px, env(safe-area-inset-top)); left: 16px; width: 44px; height: 44px; place-items: center; border-radius: 4px; color: #F4F2EE; transition: background-color 150ms ease; }
-.video-camera-back:hover { background: #3A3B35; }
+@media (hover: hover) { .video-camera-back:hover { background: #3A3B35; } }
 .video-camera:is([data-stage="setup"], [data-stage="failed"]) .video-camera-title { display: block; position: absolute; z-index: 2; inset-inline: 16px; top: 150px; text-align: center; }
 #video-camera-status { margin: 0; font: 600 var(--text-title)/1.1 var(--font-sans); letter-spacing: -0.03em; }
 #video-camera-status:focus { outline: none; }
 #video-camera-detail { margin: 8px 0 0; color: #A9A79F; font: 400 var(--text-body)/1.35 var(--font-sans); }
 .video-camera:is([data-stage="setup"], [data-stage="failed"]) .video-camera-foot { display: flex; position: absolute; z-index: 2; inset-inline: 0; bottom: calc(120px + env(safe-area-inset-bottom)); justify-content: center; gap: 16px; }
-.video-camera-chip { display: inline-grid; place-items: center; width: var(--pill-h); height: var(--pill-h); border: 0; border-radius: 999px; background: #3A3B35; color: #F4F2EE; transition: background-color var(--motion-quick) var(--ease-out); }
+.video-camera-chip { display: inline-grid; place-items: center; width: var(--pill-h); height: var(--pill-h); border: 0; border-radius: 999px; background: #3A3B35; color: #F4F2EE; transition: background-color var(--motion-quick) var(--ease-out), transform var(--motion-quick) var(--ease-out); }
 .video-camera-chip[hidden] { display: none; }
 .video-camera-chip:focus-visible, .video-camera-back:focus-visible { outline: 2px solid #F4F2EE; outline-offset: 2px; }
 /* Refused without a tap, play is the one thing to press: it fills and breathes. */
@@ -664,9 +666,9 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 .composer-bar { position: absolute; right: 3px; bottom: 3px; }
 /* A 44px target around a 34px circle, the circle 8px in from the corner. */
 .composer-send { display: inline-grid; place-items: center; width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; }
-.composer-send-dot { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--color-base-300); color: #9A9489; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, opacity var(--motion-quick) ease; }
+.composer-send-dot { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--color-base-300); color: #9A9489; transition: background var(--motion-quick) ease, color var(--motion-quick) ease, opacity var(--motion-quick) ease, transform var(--motion-quick) var(--ease-out); }
 .composer:has(textarea:not(:placeholder-shown)) .composer-send:not(:disabled) .composer-send-dot { background: #262722; color: var(--color-base-100); }
-.composer-send:hover:not(:disabled) .composer-send-dot { opacity: .85; }
+@media (hover: hover) { .composer-send:hover:not(:disabled) .composer-send-dot { opacity: .85; } }
 .composer-send:disabled { cursor: default; }
 .composer-send:focus-visible { outline: none; }
 .composer-send:focus-visible .composer-send-dot { outline: 2px solid #5e615b; outline-offset: 2px; }

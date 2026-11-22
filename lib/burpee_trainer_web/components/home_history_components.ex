@@ -26,6 +26,12 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   attr(:history_available?, :boolean, required: true)
   attr(:history_empty?, :boolean, required: true)
   attr(:history_grid_weeks, :list, required: true)
+
+  attr(:flame_arrival, :any,
+    default: nil,
+    doc: "the week a save just brought to its target; its flame pops in"
+  )
+
   attr(:history_weeks, :list, required: true)
   attr(:history_points, :map, required: true)
   attr(:history_snapshot_now, :any, required: true)
@@ -73,7 +79,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
         />
         <p :if={@history_error} id="home-history-error" role="status">{@history_error}</p>
         <%= if is_nil(@history_error) and @history_available? do %>
-          <.week_grid weeks={@history_grid_weeks} />
+          <.week_grid weeks={@history_grid_weeks} flame_arrival={@flame_arrival} />
           <section
             id="home-history-reps"
             class="home-history-reps"
@@ -127,6 +133,7 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
   defp open_session, do: JS.push("history_session")
 
   attr(:weeks, :list, required: true)
+  attr(:flame_arrival, :any, default: nil)
 
   # The days you trained, as GitHub draws contributions: a column a week from Monday, Monday on
   # top, each day in its type's colour (split diagonally for both). A phone holds the latest
@@ -172,10 +179,15 @@ defmodule BurpeeTrainerWeb.HomeHistoryComponents do
             title={!day.future? && day_title(day)}
           ></span>
           <%!-- Under a week at target, a flame: the current streak's deepen week by week in the
-               streak's amber, those of an earlier streak are grey. --%>
+               streak's amber, those of an earlier streak are grey. The week a save just brought
+               to its target pops its flame in. --%>
           <span
             id={week.target? && "home-history-flame-#{Date.to_iso8601(week.start)}"}
-            class={["home-history-flame", older? && "home-history-days-older"]}
+            class={[
+              "home-history-flame",
+              older? && "home-history-days-older",
+              week.target? && week.start == @flame_arrival && "home-history-flame-new"
+            ]}
             data-step={week.streak_week && min(week.streak_week, 4)}
             role={week.target? && "img"}
             aria-label={week.target? && flame_label(week)}

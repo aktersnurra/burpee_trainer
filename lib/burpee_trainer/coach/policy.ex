@@ -136,12 +136,14 @@ defmodule BurpeeTrainer.Coach.Policy do
   defp structured?(session),
     do: match?({:ok, %{video_format: :program}}, fingerprint_for_session(session))
 
-  defp credited_duration(%WorkoutSession{tags: "warmup"}), do: 0
+  @doc "How much of the week's target a session meets: its time, and none for a warmup."
+  @spec credited_duration(WorkoutSession.t()) :: non_neg_integer()
+  def credited_duration(%WorkoutSession{tags: "warmup"}), do: 0
 
-  defp credited_duration(%WorkoutSession{duration_sec_actual: duration})
-       when is_integer(duration), do: max(duration, 0)
+  def credited_duration(%WorkoutSession{duration_sec_actual: duration})
+      when is_integer(duration), do: max(duration, 0)
 
-  defp credited_duration(_session), do: 0
+  def credited_duration(_session), do: 0
 
   defp required_burpee_type(sessions) do
     seconds =

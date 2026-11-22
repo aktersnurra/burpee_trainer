@@ -41,7 +41,8 @@ defmodule BurpeeTrainerWeb.Flows.OfflineCompletionFlowTest do
     })
 
     session_id = started.id
-    assert_reply(view, %{status: "ok", session_id: ^session_id, redirect_to: "/"})
+    home = "/?saved=#{session_id}"
+    assert_reply(view, %{status: "ok", session_id: ^session_id, redirect_to: ^home})
     assert Repo.get!(WorkoutSession, started.id) == completed
   end
 
@@ -77,7 +78,7 @@ defmodule BurpeeTrainerWeb.Flows.OfflineCompletionFlowTest do
                "[data-session-id='#{completed.id}']" <>
                "[data-content-hash='#{completed.content_hash}']" <>
                "[data-client-session-id='#{completed.client_session_id}']" <>
-               "[data-redirect-to='/']"
+               "[data-redirect-to='/?saved=#{completed.id}']"
            )
 
     refute has_element?(view, "#burpee-session")
