@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-11-23 — The runner shows pace and rest
+
+- **Ahead and behind**: the rep fill turns green when you are ahead and red when you are behind. It stayed orange before, whatever the camera counted, so a set you had not started never changed colour.
+- **The wait inside a set**: once a rep is done, a blue line falls from the top of the screen to the bottom by the next beat, wherever the fill stood. Blue is rest everywhere in the runner.
+- **A set that runs into its rest**: the same blue line falls over the red block through the rest the set is using, reaching the bottom as the next set's count-in starts.
+- **Breathing in rest**: the swirling air is gone. The disc grows out to a still ring as you breathe in (2 s) and falls away from it as you breathe out (3 s), doubling in size, so the breath reads from across the room.
+
 ## 2026-11-22 — Every tap answers
 
 - **Saving a session**: Finish's ✓ spins while it saves. Back on Home, Finish lifts away and Home settles in, the week bar fills from where it stood to where the session took it, and the session's ✓ pops in. A save that met the week's target pops that week's flame the first time Progress opens. It plays once; a reload is an ordinary Home.

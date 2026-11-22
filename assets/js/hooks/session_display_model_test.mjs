@@ -259,6 +259,7 @@ test("the exact rest boundary enters work at zero per-rep progress", () => {
 		draining: false,
 		pace: "steady",
 		lead: null,
+		restLeft: null,
 		pulse: null,
 	});
 	assert.equal(boundaryModel.primaryCount, 6);
@@ -293,14 +294,33 @@ test("without the camera each rep is done at its due time and drains to the next
 	assert.equal(beat(unbroken, 4).pace, "steady");
 });
 
-test("a counted rep drains from where it stood to empty at the next beat", () => {
+test("a counted rep's line falls from the top to the bottom by the next beat", () => {
 	const early = beat(unbroken, 3, [3]);
 	assert.equal(early.done, 1);
 	assert.equal(early.draining, true);
-	near(early.fill, 0.75);
-	near(beat(unbroken, 3.5, [3]).fill, 0.375);
+	near(early.fill, 1);
+	near(beat(unbroken, 3.5, [3]).fill, 0.5);
 	near(beat(unbroken, 4, [3]).fill, 0);
 	assert.equal(beat(unbroken, 4, [3]).draining, false);
+	// However early the rep came, the line starts at the top.
+	near(beat(even, 1, [1]).fill, 1);
+	near(beat(even, 5.5, [1]).fill, 0.5);
+});
+
+test("a set running into its rest shows how much of the rest is left", () => {
+	const late = { kind: "work", reps: 5, sec_per_rep: 4, duration_sec: 47, ran_late: true, overrun_sec: 27 };
+	const restLeft = (event, elapsed) =>
+		runningDisplayModel({
+			timeline: [event],
+			frame: { event, index: 0, phase_elapsed: elapsed, phase_remaining: 47 - elapsed },
+			countedAtSec: [1, 5],
+			cameraTrusted: true,
+		}).visual.restLeft;
+	near(restLeft(late, 20), 1);
+	near(restLeft(late, 29), 2 / 3);
+	near(restLeft(late, 47), 0);
+	assert.equal(restLeft(late, 12), null);
+	assert.equal(restLeft(unbroken, 12), null);
 });
 
 test("a rep past its due time holds the fill full and reads behind until it is counted", () => {

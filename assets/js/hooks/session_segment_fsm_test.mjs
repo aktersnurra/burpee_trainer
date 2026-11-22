@@ -746,6 +746,7 @@ test("a set short when its time ends runs into its rest, and its last rep gives 
 	assert.equal(currentFrame(state.timeline, 57).event.kind, "rest");
 	assert.equal(currentFrame(state.timeline, 60).index, 2);
 	assert.equal(state.timeline[0].ran_late, true);
+	assert.equal(state.timeline[0].overrun_sec, 27);
 	assert.equal(totalSec(state.timeline), 80);
 
 	// The last rep lands at 41 s: the rest starts, shorter by the overrun.

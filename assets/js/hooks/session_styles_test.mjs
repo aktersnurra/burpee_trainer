@@ -47,3 +47,13 @@ test("the preflight back control retains a 44px touch target", () => {
 	assert.match(control, /width:\s*44px;/);
 	assert.match(control, /height:\s*44px;/);
 });
+
+test("ahead and behind recolour the fill over the night surface's default pace", () => {
+	for (const pace of ["ahead", "behind"]) {
+		assert.match(
+			css,
+			new RegExp(`#burpee-session \\.session-night\\[data-pace="${pace}"\\]\\s*\\{\\s*--pace:\\s*var\\(--pace-${pace}\\)`),
+			`${pace} must outrank the default --pace`,
+		);
+	}
+});

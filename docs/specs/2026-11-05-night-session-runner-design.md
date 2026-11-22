@@ -57,7 +57,7 @@ only inside the session surface.
 | `--pace-steady` | `#FFA557` | the rep fill, on the beat; the final-three pulse |
 | `--pace-ahead` | `#90A959` | the rep fill, ahead; the camera has you (setup) |
 | `--pace-behind` | `#B46958` | the rep fill, behind |
-| `--session-breath` | `#BAD7FF` | the sink's disc and its air |
+| `--session-breath` | `#BAD7FF` | rest: the sink's disc and its ring; the line that falls through a wait inside a set |
 | `--session-last` | `#F4BF75` | the number on the set's last rep |
 
 ## Into and out of the runner
@@ -134,32 +134,19 @@ sink's disc. Below it, sets done over sets in the workout (`7/20`) in
 only other thing on screen besides the workout line.
 
 **The sink.** A solid disc of `--session-breath` (a soft radial gradient from `#D3E6FF` to
-`#A9C9F3`) holds the time; its radius moves between 23% and 32% of the screen's width. Around
-it, air whirls into and out of it like water in a sink. The air is about 170 specks in
-`--session-breath` that persist through the rest and are moved by the breath:
-
-- **Speed follows the breath.** A speck's inward (or outward) speed is the disc's rate of
-  change, times a reach of about 0.8 of `r_max` (half the screen's diagonal), easing off with
-  distance (`(R/r)^0.35`). So the air rushes in at the start of the nose breath (the sniff),
-  coasts, stops at the turn, and is pushed out fastest in the middle of the mouth breath.
-- **It swirls.** Each speck turns around the disc faster the closer it is (`∝ (R/r)^0.8`),
-  more when the breath moves faster, and never quite stops, so the paths curve like a
-  whirlpool.
-- **The same air goes in and out.** A speck that reaches the disc on the in-breath waits
-  inside it, and the out-breath releases waiting specks from the disc's edge at random angles.
-  Specks pushed past `r_max` wait outside, and the next in-breath brings them back in from
-  the outer ring. Nothing appears or vanishes on a timer.
-- **Trails are real motion:** each speck draws the path it took over its last 15 frames,
-  tapering, so trails are long when the air rushes and dots when it pauses.
-- **Each speck is a little different:** speed (±30%), size and brightness. Each path also
-  wobbles slightly (a slow sine on radius and angle, per speck).
-- A glow around the disc brightens on the in-breath.
+`#A9C9F3`) holds the time and breathes. Around it is a still, thin ring of the same blue at
+40% of the screen's width, a full breath. On the nose breath the disc grows from 20% of the
+width out to the ring, fast at first (the sniff); on the mouth breath it falls away from the
+ring again, and the ring is a little brighter the nearer the disc is. Nothing else moves. In
+and out read from 1.5 m by the disc's size against the ring alone: the disc doubles between
+empty and full. (The air that whirled around the disc was too busy to read a breath from, and
+its 23% to 32% swing too small.)
 
 The breath starts with the rest. 2 s in and 3 s out is 12 breaths a minute, deep, with the
 longer out-breath. It is faster than calm slow breathing (about 6 a minute), which is too
 slow right after a hard set, and longer on the way out, which brings the heart rate down.
 
-**The last three seconds.** The air stops entering and leaving the disc, and the disc shrinks to nothing, eased, over
+**The last three seconds.** The ring fades and the disc shrinks to nothing, eased, over
 the last three seconds. On each of 0:03, 0:02 and 0:01 an orange ring pulses and the lead
 beep plays. The number turns `--session-ink` as the disc leaves it. Then the rep beep and
 the set begins.
@@ -204,12 +191,13 @@ you are on is *n + 1*. Beats never move; the rep beep sounds on each.
 
 - **From the beat to the due time** it rises from empty to full.
 - **Past the due time** it holds full until the rep is done.
-- **When the rep is done** it drains from where it stands to empty at the next beat. That is
-  the gap: planned in an even-paced set, earned by finishing early, or zero for an unbroken rep
-  done on time. As it starts to drain, the block fades away (`--motion-quick`) and only its
-  top edge stays: a bar 4.5% of the screen's width tall in the full pace colour, sinking to the
-  bottom by the next beat, with the number in `--session-ink`. From across the room a rising
-  block means go and a sinking line means wait, with no dimmed, muddy colour.
+- **When the rep is done** the block fades where it stood (`--motion-quick`) and a line falls
+  from the top of the screen to the bottom by the next beat: a bar 4.5% of the screen's width
+  tall in `--session-breath`, the rest's blue, with the number in `--session-ink`. That is the
+  gap: planned in an even-paced set, earned by finishing early, or zero for an unbroken rep
+  done on time. The line always starts at the top, however early the rep came, so its height
+  is the share of the wait that is left. From across the room a rising block means go and a
+  falling blue line means wait; blue is rest everywhere in the runner.
 - **The set's last rep** has no gap; the rest follows (see Sets that follow the camera).
 
 A rep is done when the camera counts it; without the camera, or after it is lost, at its due
@@ -220,7 +208,7 @@ time.
 - **Behind:** now is past the due time of the rep you are on. Stays until the camera counts
   it.
 - **Ahead:** not behind, and your last counted rep came at least a fifth of its rep time
-  (`0.2·a`) before its due time; the drain that follows is the time you earned. Shorter
+  (`0.2·a`) before its due time; the next rep's block rises green. Shorter
   margins read as steady, so the colour never flickers for a rep that only just beat its time.
 - **Steady:** otherwise, before the first rep is counted, and always without the camera.
 
@@ -232,9 +220,11 @@ While the camera is trusted, a gap or a rest starts when the camera counts the r
 early or late. The next rep or set always keeps its beat.
 
 1. **Early.** As now: the set ends when its last rep is counted, and the rest gains the time.
-   Inside a set, an early rep drains longer and green to the next beat.
+   Inside a set, an early rep's line falls longer to the next beat.
 2. **Late.** When a set's time ends short of its reps, the set runs on into the rest: the
-   set screen stays, behind and red, and reps keep counting for that set. When the last one
+   set screen stays, behind and red, and reps keep counting for that set. Over the red block
+   the blue line falls through the rest the set is using, from the top as the set's time ends
+   to the bottom at the count-in, so what the overrun costs is on screen. When the last rep
    is counted the rest screen shows the time left, shortened by the overrun.
    Inside a set nothing is cut short: a late rep holds the fill full and red through the next
    beat (whose beep is the behind pitch) until it is counted.
@@ -268,10 +258,10 @@ Without the camera, every rep beep is the steady one and the counted click never
 
 ## Motion and accessibility
 
-- `prefers-reduced-motion`: the disc stays at its middle size with no flow; fills step
+- `prefers-reduced-motion`: the disc stays at its middle size inside the ring; fills step
   instead of easing; no ring pulses; the Play-pill transition cross-fades. Colours, numbers
   and sounds are unchanged.
-- Pace is never colour alone: the fill's shape (a rising block, a sinking line, a block held
+- Pace is never colour alone: the fill's shape (a rising block, a falling line, a block held
   full) and the beep's pitch carry it too.
 - Colour changes use the app's `--motion-quick` and `--ease-out`.
 - The runner keeps its screen-reader heading and its polite live region for the reps left
@@ -301,7 +291,7 @@ Without the camera, every rep beep is the steady one and the counted click never
 - `assets/js/hooks/session_hook.js`: rep eligibility in a rest while the set is short;
   pace-pitched rep cues; the counted cue.
 - `assets/js/hooks/session_audio.mjs`: ahead and behind pitches, counted, rest, lost.
-- `assets/js/hooks/session_renderer.mjs` and a canvas layer for the sink (its streaks
+- `assets/js/hooks/session_renderer.mjs` and a canvas layer for the sink (once its streaks
   are too many for DOM nodes); CSS for the night tokens, camera setup and pause.
 - `lib/burpee_trainer_web/components/session_components.ex`: camera setup full-bleed,
   the top readouts replaced by the workout line, pause layout.

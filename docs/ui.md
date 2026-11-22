@@ -72,7 +72,7 @@ Pace and breath are data, never decoration. Finish (4a2) keeps the light tokens.
 --pace-steady:      #FFA557   the rep fill on the beat; the final-three ring
 --pace-ahead:       #90A959   the rep fill ahead; the skeleton once the camera has you
 --pace-behind:      #B46958   the rep fill behind
---session-breath:   #BAD7FF   the sink's disc and its air
+--session-breath:   #BAD7FF   rest: the sink's disc and its ring; the line through a wait in a set
 --session-last:     #F4BF75   the number on the set's last rep
 ```
 

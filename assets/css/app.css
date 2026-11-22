@@ -156,13 +156,14 @@ body {
   --session-last: #F4BF75;
   --pace: var(--pace-steady);
   --fill: 0;
+  --line: 0;
   --disc-r: 0px;
   background: var(--session-ground);
   color: var(--session-ink);
   overflow: hidden;
 }
-.session-night[data-pace="ahead"] { --pace: var(--pace-ahead); }
-.session-night[data-pace="behind"] { --pace: var(--pace-behind); }
+#burpee-session .session-night[data-pace="ahead"] { --pace: var(--pace-ahead); }
+#burpee-session .session-night[data-pace="behind"] { --pace: var(--pace-behind); }
 
 /* The title block: a title and one muted line, 150px from the top. */
 .session-night .session-title-block {
@@ -260,8 +261,9 @@ body {
 #session-sink { width: 100%; height: 100%; display: none; }
 #session-runner-client:is(.is-rest, .is-rest-count-in):not(.is-paused) #session-sink { display: block; }
 
-/* A set: a block rises over each rep, in the pace colour. Draining, the block fades and
-   only its top edge stays, sinking to the bottom by the next beat. */
+/* A set: a block rises over each rep, in the pace colour. Once the rep is done the block
+   fades and a line in the rest's blue falls from the top to the bottom by the next beat.
+   Over a set that runs into its rest, the same line falls through the rest it is using. */
 #session-work-fill {
   background: var(--pace);
   transform-origin: bottom;
@@ -270,18 +272,17 @@ body {
   transition: background-color var(--motion-quick) var(--ease-out), opacity var(--motion-quick) var(--ease-out);
 }
 #session-work-line {
-  transform: translateY(calc((1 - var(--fill)) * 100%));
+  transform: translateY(calc((1 - var(--line)) * 100%));
   opacity: 0;
   transition: opacity var(--motion-quick) var(--ease-out);
 }
 #session-work-line > span {
   display: block;
   height: 4.5vw;
-  background: var(--pace);
-  transition: background-color var(--motion-quick) var(--ease-out);
+  background: var(--session-breath);
 }
 #session-runner-client.is-working:not(.is-paused):not([data-draining]) #session-work-fill,
-#session-runner-client.is-working:not(.is-paused)[data-draining] #session-work-line { opacity: 1; }
+#session-runner-client.is-working:not(.is-paused):is([data-draining], [data-overrun]) #session-work-line { opacity: 1; }
 
 /* The workout line: time elapsed, below the top safe area. */
 #session-line {

@@ -745,6 +745,7 @@ export class SessionRenderer {
 		this.updateWorkFill(0);
 		this.setSurfaceData("pace", null);
 		this.setSurfaceData("draining", null);
+		this.setSurfaceData("overrun", null);
 		this.setSurfaceData("last", null);
 		this.lastPulseValue = null;
 		this.currentSetProgress = null;
@@ -776,11 +777,22 @@ export class SessionRenderer {
 
 		const working = ["work", "work_active"].includes(visual.state);
 		const resting = ["rest", "rest_count_in"].includes(visual.state);
+		const draining = Boolean(working && visual.draining);
+		const restLeft = working ? (visual.restLeft ?? null) : null;
+		// The line: the wait for the next beat, or the rest a late set is using.
+		const line = draining ? visual.progress : restLeft;
 		this.setSurfaceData("pace", working ? (visual.pace ?? "steady") : null);
-		this.setSurfaceData("draining", working && visual.draining ? "" : null);
+		this.setSurfaceData("draining", draining ? "" : null);
+		this.setSurfaceData("overrun", restLeft === null ? null : "");
+		if (line !== null) this.setSurfaceVar("--line", Number(line).toFixed(4));
 		this.setSurfaceData("last", working && model.primaryCount === 1 ? "" : null);
 
-		if (working) {
+		if (draining) {
+			// The block fades where it stood; the next rep's starts empty.
+			this.fill = 0;
+			this.fillAt = null;
+			this.updateCurrentSetRepCount(model.primaryCount);
+		} else if (working) {
 			this.updateWorkFill(visual.progress);
 			this.updateCurrentSetRepCount(model.primaryCount);
 		} else {

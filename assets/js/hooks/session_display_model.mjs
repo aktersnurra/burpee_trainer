@@ -57,6 +57,7 @@ export function runningDisplayModel({
 				draining: beat.draining,
 				pace: beat.pace,
 				lead: beat.lead,
+				restLeft: restLeftOf(frame),
 				pulse: null,
 			}
 		: visualStateForFrame({ isRest, remainingSec });
@@ -83,6 +84,14 @@ export function runningDisplayModel({
 	};
 }
 
+// A set that ran into its rest (runIntoRest): the share of that rest still left before the
+// next set's count-in, 1 as the set's own time ends and 0 at the count-in. Otherwise null.
+function restLeftOf(frame) {
+	const overrun = frame?.event?.ran_late ? Number(frame.event.overrun_sec) : 0;
+	if (!(overrun > 0) || frame.phase_remaining > overrun + EPS) return null;
+	return clamp(frame.phase_remaining / overrun);
+}
+
 function visualStateForFrame({ isRest, remainingSec }) {
 	// The timeline has ended, but the camera may still be settling its final rep.
 	if (!isRest) {
@@ -102,8 +111,9 @@ const EPS = 1e-9;
 // A set as a run of beats. Rep k (from 1) has its beat at (k-1)c and is due at (k-1)c + a.
 // A rep is done when the camera counts it (countedAtSec, seconds from the set's start, in
 // order) or, without the camera, at its due time. The fill rises from the beat to the due
-// time, holds full until the rep is done, then drains from where it stood to empty at the
-// next beat. The set's last rep has no gap: once it is done the set is over.
+// time and holds full until the rep is done. Then it is the wait for the next beat, 1 when
+// the rep is done and 0 on the beat: a line that falls from the top, however early the rep
+// came. The set's last rep has no gap: once it is done the set is over.
 export function beatState({ event, phaseElapsedSec, countedAtSec, cameraTrusted = false }) {
 	const reps = event?.reps || 0;
 	const c = Number(event?.sec_per_rep) || 0;
@@ -121,17 +131,6 @@ export function beatState({ event, phaseElapsedSec, countedAtSec, cameraTrusted 
 		: Array.from({ length: reps }, (_, i) => dueOf(i + 1));
 	const doneBy = (time) => doneAt.filter((at) => at <= time + EPS).length;
 
-	// The fill at `time` with `n` reps done.
-	const fillWith = (time, n) => {
-		const next = beatOf(n + 1);
-		if (n >= 1 && time < next - EPS) {
-			const d = doneAt[n - 1];
-			const from = fillWith(d, n - 1);
-			return from * (1 - (time - d) / (next - d));
-		}
-		return clamp((time - next) / a);
-	};
-
 	const done = doneBy(t);
 	if (done >= reps) {
 		return { repOn: reps, done, fill: 0, draining: false, pace: lastPace(), lead: null };
@@ -140,9 +139,9 @@ export function beatState({ event, phaseElapsedSec, countedAtSec, cameraTrusted 
 	const repOn = done + 1;
 	const next = beatOf(repOn);
 	const draining = done >= 1 && t < next - EPS;
-	const fill = fillWith(t, done);
 	const gap = done >= 1 ? next - doneAt[done - 1] : 0;
 	const left = next - t;
+	const fill = draining ? clamp(left / gap) : clamp((t - next) / a);
 	const lead = draining && gap > 3 + EPS && left <= 3 + EPS ? Math.ceil(left - EPS) : null;
 	const pace = !cameraTrusted
 		? "steady"

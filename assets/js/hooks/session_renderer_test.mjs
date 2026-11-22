@@ -395,6 +395,28 @@ test("a set shows its pace, its drain and its last rep on the runner", () => {
 	assert.equal(elements["#set-progress"].hidden, false);
 });
 
+test("a line starts at the top when a rep is done, and a late set shows its rest running out", () => {
+	withReducedMotion(false, () => {
+		const { renderer, elements } = harness();
+		const surface = elements["#session-runner-client"];
+		const work = (visual) =>
+			model("work_active", { visual: { state: "work_active", pulse: null, ...visual }, primaryCount: 3 });
+
+		renderer.renderDisplayModel(work({ progress: 0.4, draining: false, pace: "steady" }));
+		renderer.renderDisplayModel(work({ progress: 1, draining: true, pace: "ahead" }));
+		assert.equal(Number(surface.style["--line"]), 1);
+		assert.equal(fillOf(elements), 0.4);
+		assert.equal(surface.hasAttribute("data-overrun"), false);
+
+		renderer.renderDisplayModel(work({ progress: 1, draining: false, pace: "behind", restLeft: 0.25 }));
+		assert.equal(surface.hasAttribute("data-overrun"), true);
+		assert.equal(Number(surface.style["--line"]), 0.25);
+
+		renderer.renderDisplayModel(model("rest"));
+		assert.equal(surface.hasAttribute("data-overrun"), false);
+	});
+});
+
 test("the workout line shows the time elapsed, clamped", () => {
 	const { renderer, elements } = harness();
 	const line = elements["#session-line-fill"];

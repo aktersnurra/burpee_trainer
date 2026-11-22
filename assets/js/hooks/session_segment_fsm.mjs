@@ -170,7 +170,12 @@ function runIntoRest(timeline, elapsedSec) {
 	if (overrun <= 0) return timeline;
 	return timeline.map((event, index) => {
 		if (index === frame.index - 1) {
-			return { ...event, duration_sec: eventDurationSec(event) + overrun, ran_late: true };
+			return {
+				...event,
+				duration_sec: eventDurationSec(event) + overrun,
+				ran_late: true,
+				overrun_sec: overrun,
+			};
 		}
 		if (index === frame.index) return { ...event, duration_sec: COUNT_IN_SEC };
 		return event;

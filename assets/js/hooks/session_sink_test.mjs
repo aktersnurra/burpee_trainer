@@ -1,13 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { breathAt, createAir, createSink, stepAir } from "./session_sink.mjs";
+import { breathAt, createSink, discRadius, ringRadius } from "./session_sink.mjs";
 
-function seeded(seed) {
-	let state = seed;
-	return () => (state = (state * 16807) % 2147483647) / 2147483647;
+// A canvas that records nothing but lets the sink draw, and the disc's radius each frame.
+function sinkOn({ reduce = false } = {}) {
+	const ctx = new Proxy(
+		{},
+		{ get: (_, key) => (String(key).startsWith("create") ? () => ({ addColorStop() {} }) : () => {}), set: () => true },
+	);
+	const canvas = { clientWidth: 390, clientHeight: 844, width: 0, height: 0, getContext: () => ctx };
+	const radii = [];
+	const sink = createSink(canvas, { reducedMotion: () => reduce, onDisc: (radius) => radii.push(radius) });
+	sink.start();
+	return { sink, radii };
 }
-
-const field = { R: 100, rMax: 420, W: 390 };
 
 test("the breath is 2 s in and 3 s out, continuous at both turns", () => {
 	assert.equal(breathAt(0), 0);
@@ -19,65 +25,30 @@ test("the breath is 2 s in and 3 s out, continuous at both turns", () => {
 	assert.ok(breathAt(0.5) > 0.5, "the in-breath is fast at first, like a sniff");
 });
 
-test("the air is conserved: specks wait in the disc or outside, never vanish", () => {
-	for (let seed = 1; seed < 40; seed++) {
-		const random = seeded(seed);
-		const air = createAir(170, field, random);
-		for (let step = 0; step < 600; step++) {
-			const flow = (random() - 0.5) * 2;
-			stepAir(air, { ...field, flow, dt: 1 / 60, sec: step / 60, live: random() < 0.9 }, random);
-			assert.equal(air.length, 170);
-			assert.ok(air.every((speck) => ["vis", "in", "out"].includes(speck.state)));
-		}
-	}
+test("the disc fills to the ring on the in-breath, a swing readable across the room", () => {
+	assert.equal(discRadius(390, 1), ringRadius(390));
+	assert.ok(discRadius(390, 1) >= 1.8 * discRadius(390, 0));
+	assert.ok(ringRadius(390) * 2 < 390, "the ring stays on the screen");
 });
 
-test("the in-breath draws the air inward and the out-breath pushes it out", () => {
-	const meanRadius = (air) => {
-		const visible = air.filter((speck) => speck.state === "vis");
-		return visible.reduce((sum, speck) => sum + speck.r, 0) / visible.length;
-	};
-	for (const [flow, closer] of [
-		[0.6, true],
-		[-0.6, false],
-	]) {
-		const random = seeded(3);
-		const air = createAir(170, field, random);
-		const before = meanRadius(air);
-		for (let step = 0; step < 10; step++) {
-			stepAir(air, { ...field, flow, dt: 1 / 60, sec: step / 60, live: true }, random);
-		}
-		assert.equal(meanRadius(air) < before, closer);
-	}
+test("the disc grows for the two seconds in and shrinks for the three out", () => {
+	const { sink, radii } = sinkOn();
+	for (let frame = 0; frame <= 300; frame++) sink.frame(30, frame * (1000 / 60));
+	const at = (sec) => radii[Math.round(sec * 60)];
+	for (let sec = 0.25; sec <= 2; sec += 0.25) assert.ok(at(sec) > at(sec - 0.25), `in at ${sec}`);
+	for (let sec = 2.25; sec <= 5; sec += 0.25) assert.ok(at(sec) < at(sec - 0.25), `out at ${sec}`);
 });
 
-test("in the last three seconds no air enters or leaves the disc", () => {
-	const random = seeded(9);
-	const air = createAir(170, field, random);
-	for (let step = 0; step < 120; step++) {
-		stepAir(air, { ...field, flow: step < 60 ? 0.6 : -0.6, dt: 1 / 60, sec: step / 60, live: true }, random);
-	}
-	const states = air.map((speck) => speck.state);
-	for (let step = 0; step < 180; step++) {
-		stepAir(air, { ...field, flow: step < 90 ? 0.8 : -0.8, dt: 1 / 60, sec: step / 60, live: false }, random);
-	}
-	assert.deepEqual(
-		air.map((speck) => speck.state),
-		states,
-	);
+test("in the last three seconds the disc shrinks away", () => {
+	const { sink, radii } = sinkOn();
+	for (const left of [3, 2, 1, 0]) sink.frame(left, 0);
+	assert.ok(radii[0] > radii[1] && radii[1] > radii[2] && radii[2] > radii[3]);
+	assert.equal(radii[3], 0);
 });
 
-test("under reduced motion the disc holds its middle size and no air moves", () => {
-	let strokes = 0;
-	const ctx = new Proxy(
-		{ stroke: () => (strokes += 1) },
-		{ get: (target, key) => target[key] ?? (key.startsWith("create") ? () => ({ addColorStop() {} }) : () => {}), set: () => true },
-	);
-	const canvas = { clientWidth: 390, clientHeight: 844, width: 0, height: 0, getContext: () => ctx };
-	const radii = [];
-	const sink = createSink(canvas, { reducedMotion: () => true, onDisc: (radius) => radii.push(radius) });
-	sink.start();
+test("under reduced motion the disc holds its middle size", () => {
+	const { sink, radii } = sinkOn({ reduce: true });
 	for (let frame = 0; frame < 120; frame++) sink.frame(20 - frame / 60, frame * 16);
-	assert.equal(strokes, 0);
 	assert.ok(radii.every((radius) => radius === radii[0]));
+	assert.ok(radii[0] > discRadius(390, 0) && radii[0] < discRadius(390, 1));
 });
