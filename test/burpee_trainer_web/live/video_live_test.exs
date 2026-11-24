@@ -67,6 +67,9 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
              video.name
            )
 
+    # A video watched to its end opens Finish on its ✓.
+    assert has_element?(view, "#session-completion-review[data-celebrate]")
+
     refute has_element?(view, "#workout-video")
     assert has_element?(view, "#session-actual-reps[value='0']")
     assert has_element?(view, "#completion-reps-less[disabled]")
@@ -168,6 +171,7 @@ defmodule BurpeeTrainerWeb.VideoLiveTest do
 
     render_click(view, "video_ended", %{"watched_sec" => 312})
     refute has_element?(view, "#video-session[data-armed]")
+    refute has_element?(view, "#session-completion-review[data-celebrate]")
     assert has_element?(view, "#session-completion-review", "5:12")
 
     view

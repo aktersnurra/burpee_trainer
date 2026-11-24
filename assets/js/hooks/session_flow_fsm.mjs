@@ -169,7 +169,8 @@ function finishWorkout(state, result, endedEarly = false) {
 			completionLocked: false,
 			saveStatus: "idle",
 		},
-		[{ type: "showCompletion" }],
+		// The finish screen draws its ✓ for a workout that ran to its end, not one cut short.
+		[{ type: "showCompletion", celebrate: !endedEarly }],
 	);
 }
 

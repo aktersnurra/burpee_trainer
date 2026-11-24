@@ -149,9 +149,6 @@ body {
   --session-track: #3A3B35;
   --session-border: #3A3B35;
   --session-on-fill: #262722;
-  --pace-steady: #FFA557;
-  --pace-ahead: #90A959;
-  --pace-behind: #B46958;
   --session-breath: #BAD7FF;
   --session-last: #F4BF75;
   --pace: var(--pace-steady);
@@ -488,6 +485,10 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
    A video's finish screen is the same screen, over its page. */
 #burpee-session,
 #video-finish {
+  /* Pace, read by the night runner and by the ✓ that closes a workout on Finish. */
+  --pace-steady: #FFA557;
+  --pace-ahead: #90A959;
+  --pace-behind: #B46958;
   --session-bg: var(--color-base-100);
   --session-ink: #262722;
   --session-muted: #686b65;
@@ -531,6 +532,29 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 .session-finish { display: flex; flex-direction: column; width: 100%; max-width: 480px; height: 100dvh; margin: 0 auto; overflow-y: auto; padding: max(80px, env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom)); }
 @media (min-width: 800px) { .session-finish { max-width: 680px; } }
 .session-finish-summary { text-align: center; }
+/* A workout that ran to its end closes on the night ground it ran on: the runner's ring (the
+   same size, in paper) draws, a ✓ follows inside it, eight rays burst, and the night lifts off
+   the light Finish beneath. Once, about a second; nothing under reduced motion, and never for a
+   workout cut short or a finish screen come back to. */
+.session-done { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  [data-celebrate] > .session-done { position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; overflow: hidden; background: var(--session-ink); animation: session-done-lift var(--motion-settle) var(--ease-out) 1000ms forwards; }
+  /* The ring is 88 of the mark's 160 units, so this width makes it the runner's ring. */
+  /* The last rep's block, where it stood, fading as it does after every rep. */
+  [data-celebrate] > .session-done::before { content: ""; position: absolute; inset: 0; background: var(--pace-steady); transform-origin: bottom; transform: scaleY(var(--done-fill, 0)); animation: session-done-fade var(--motion-quick) var(--ease-out) forwards; }
+  [data-celebrate="ahead"] > .session-done::before { background: var(--pace-ahead); }
+  [data-celebrate="behind"] > .session-done::before { background: var(--pace-behind); }
+  .session-done-mark { position: relative; width: calc(min(60vw, 46dvh) * 160 / 88); aspect-ratio: 1; fill: none; stroke: var(--session-bg); stroke-linecap: round; stroke-linejoin: round; animation: session-done-pop var(--motion-settle) var(--ease-spring) backwards; }
+  .session-done-ring { stroke-width: 1.5; stroke-dasharray: 1; transform: rotate(-90deg); transform-origin: 80px 80px; animation: session-done-draw var(--motion-settle) var(--ease-out) backwards; }
+  .session-done-check { stroke-width: 3; stroke-dasharray: 1; animation: session-done-draw 240ms var(--ease-out) 260ms backwards; }
+  .session-done-rays { stroke-width: 1.5; opacity: 0; transform-origin: 80px 80px; animation: session-done-burst 420ms var(--ease-out) 440ms; }
+  [data-celebrate] > .session-finish { animation: home-enter var(--motion-settle) var(--ease-out) 1000ms backwards; }
+}
+@keyframes session-done-fade { to { opacity: 0; } }
+@keyframes session-done-pop { from { opacity: 0; transform: scale(.85); } }
+@keyframes session-done-draw { from { stroke-dashoffset: 1; } }
+@keyframes session-done-burst { 0% { opacity: 0; transform: scale(.8); } 35% { opacity: 1; } 100% { opacity: 0; transform: scale(1); } }
+@keyframes session-done-lift { to { opacity: 0; transform: translateY(-10px); visibility: hidden; } }
 #session-completion-review #session-completion-heading { margin: 0; font: 600 var(--text-display)/1.1 var(--font-sans); letter-spacing: -0.03em; }
 .session-finish-summary .session-reps-stepper { margin-top: 22px; }
 .session-finish-count { min-width: 110px; font: 600 96px/1 var(--font-sans); letter-spacing: -0.04em; }

@@ -1000,6 +1000,7 @@ const SessionHook = {
         this.quiesceCompletedWorkout();
         this.queueCompletionDraft();
         this.renderer.renderCompletion(this.flow.completion);
+        if (command.celebrate) this.renderer.celebrate();
         this.renderer.renderFlowState(this.flow);
         // The poses go up while you fill in the finish screen; Save completes them.
         void Promise.resolve(this.traceWrite).then(() =>

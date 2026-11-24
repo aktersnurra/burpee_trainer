@@ -211,7 +211,7 @@ function runnerHarness(store) {
 		saveCleanup: Promise.resolve(),
 		traceRetentionAvailable: true,
 		renderer: {
-			renderFlowState() {}, renderCompletion() {}, clearSaveErrors() {},
+			renderFlowState() {}, renderCompletion() {}, celebrate() {}, clearSaveErrors() {},
 			renderSaveErrors() {}, renderSavePending() {}, clearCountdown() {}, updateTotalCounter() {},
 			updateTotalGoal() {}, renderTimer() {}, enterWorkPhase() {}, triggerDown() {},
 			updateCurrentSetRepCount() {}, updateWorkFill() {}, enterRestPhase() {},

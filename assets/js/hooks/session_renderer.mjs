@@ -138,6 +138,18 @@ export class SessionRenderer {
 		node.textContent = text;
 	}
 
+	// The workout ran to its end: the finish screen opens on its ✓ (CSS draws it, once).
+	// It carries the last rep's block across (its pace and how high it stood), which fades there
+	// as it does after every rep, so the runner does not cut to the ✓.
+	celebrate() {
+		const finish = this.root.querySelector("#session-completion-review");
+		if (!finish) return;
+		const pace = this.rendered["data-pace"];
+		const block = pace != null && this.rendered["data-draining"] == null;
+		finish.style?.setProperty?.("--done-fill", block ? Number(this.fill || 0).toFixed(4) : "0");
+		finish.setAttribute("data-celebrate", block ? pace : "");
+	}
+
 	setHidden(node, value, key) {
 		const hidden = Boolean(value);
 		if (!node || this.rendered[key] === hidden) return;

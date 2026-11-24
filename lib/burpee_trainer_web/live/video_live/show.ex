@@ -76,6 +76,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
     |> assign(:video, video)
     |> assign(:workout_session, session)
     |> assign(:finished?, false)
+    |> assign(:celebrate?, false)
     |> assign(:watched_sec, video.duration_sec)
     |> assign(:armed, nil)
     |> assign(:counted_reps, nil)
@@ -115,7 +116,11 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
           socket
       end
 
-    {:noreply, assign(socket, finished?: true, armed: nil, watched_sec: watched)}
+    # Finish early is armed when its second tap ends the video; unarmed, the video ran out.
+    celebrate? = socket.assigns.armed != "finish"
+
+    {:noreply,
+     assign(socket, finished?: true, celebrate?: celebrate?, armed: nil, watched_sec: watched)}
   end
 
   # The first tap asks; the question shows until a second tap, or a tap anywhere else.
@@ -445,6 +450,7 @@ defmodule BurpeeTrainerWeb.VideoLive.Show do
         <div :if={@finished?} id="video-finish">
           <SessionComponents.completion_review
             hidden={false}
+            celebrate={@celebrate?}
             form={@form}
             name={@video.name}
             events={@events}

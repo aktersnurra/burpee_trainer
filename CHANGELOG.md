@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-11-25 — A ✓ when the workout ends
+
+- **The end of a workout**: a workout or video that runs to its end closes on the runner's dark screen: the ring round the number draws, a ✓ follows inside it and eight rays burst. After a second the dark lifts off Finish, which is already loaded beneath it.
+- **No cut from the last rep**: the last rep's colour block stays where it stood and fades, as it does after every rep.
+- **When it stays away**: Finish early, a finish screen you come back to, and reduced motion all open Finish directly.
+
 ## 2026-11-23 — The runner shows pace and rest
 
 - **Ahead and behind**: the rep fill turns green when you are ahead and red when you are behind. It stayed orange before, whatever the camera counted, so a set you had not started never changed colour.

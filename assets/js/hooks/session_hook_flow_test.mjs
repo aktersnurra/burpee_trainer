@@ -390,6 +390,7 @@ function buildHarness({
 		resetReady() {},
 		renderFlowState() {},
 		renderCompletion() {},
+		celebrate() {},
 		updateTotalCounter(value) {
 			totalUpdates.push(value);
 		},

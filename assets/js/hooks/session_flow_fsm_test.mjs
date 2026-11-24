@@ -487,6 +487,18 @@ test("the finish screen knows whether the workout ran out or ended early, and ha
 	assert.equal(early.completion.mood, null);
 });
 
+test("only a workout that ran to its end is celebrated", () => {
+	const running = step(readyState({ camera: false, warmup: false }), {
+		type: "START",
+		...warmup,
+	}).state;
+	const result = { burpeeCountDone: 10, scheduledRepsDone: 10, durationSec: 50 };
+	const shown = (commands) => commands.find((command) => command.type === "showCompletion");
+
+	assert.equal(shown(step(running, { type: "SESSION_DONE", result }).commands).celebrate, true);
+	assert.equal(shown(step(running, { type: "FINISH_EARLY", result }).commands).celebrate, false);
+});
+
 test("the count's origin is the camera's count when it finished, else the plan's", () => {
 	assert.deepEqual(
 		countOrigin({ trackingTrust: "finished", detectedReps: 42, scheduledRepsDone: 40 }),

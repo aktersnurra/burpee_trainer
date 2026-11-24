@@ -969,3 +969,24 @@ test("the heading is the plan's name, or says the workout ended early", () => {
 	renderer.renderCompletion({ ...finished, endedEarly: true });
 	assert.equal(heading.textContent, "Ended early");
 });
+
+test("celebrating marks the finish screen, so its ✓ draws once", () => {
+	const { renderer, elements } = harness();
+	finishFields(elements);
+	const finish = elements["#session-completion-review"];
+	assert.equal(finish.hasAttribute("data-celebrate"), false);
+	renderer.celebrate();
+	assert.equal(finish.hasAttribute("data-celebrate"), true);
+	assert.equal(finish.style["--done-fill"], "0");
+});
+
+test("the ✓ takes over the last rep's block, in its pace and at its height", () => {
+	const { renderer, elements } = harness();
+	finishFields(elements);
+	renderer.rendered["data-pace"] = "ahead";
+	renderer.fill = 0.75;
+	renderer.celebrate();
+	const finish = elements["#session-completion-review"];
+	assert.equal(finish.getAttribute("data-celebrate"), "ahead");
+	assert.equal(finish.style["--done-fill"], "0.7500");
+});

@@ -392,7 +392,13 @@ piece). Play grows into the runner: an ink curtain opens from the pill's box to 
 360ms (`js/session_curtain.mjs`, since Play is a live navigation the patch transitions cannot
 see), and leaving a night screen by live navigation shrinks it back into Play.
 
-Saving a session is the app's one moment. Finish's ✓ spins while the save runs (the arrow-path
+A workout that runs to its end closes on the night ground it ran on: the runner's ring draws in
+paper, a ✓ follows inside it, eight rays burst, and after a second the night lifts off the light
+Finish, which rises in (`[data-celebrate]`, `.session-done`). It has no colour (pace and breath
+stay data), plays once, and never for Finish early or a finish screen come back to; a video
+watched to its end plays it too.
+
+Saving a session is the app's other moment. Finish's ✓ spins while the save runs (the arrow-path
 stays still when it means retry). The runner's way back to Home is a full page load, so it is a
 cross-document view transition (`@view-transition`, `js/saved_transition.mjs`): Finish lifts
 away and Home settles in; every other page load skips it. The runner and a video return to

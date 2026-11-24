@@ -236,6 +236,13 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   attr(:tags, :list, default: [])
   attr(:source, :string, default: nil, doc: "who counted, when it was not the athlete")
   attr(:armed, :string, default: nil, doc: "\"delete\" while trash asks")
+
+  attr(:celebrate, :boolean,
+    default: false,
+    doc:
+      "the workout ran to its end, so the screen opens on its ✓; the runner's hook sets it itself"
+  )
+
   slot(:meta, doc: "what was planned and how long it took; the runner fills its own")
 
   # Finish: the count and how it went, then trash on the left and ✓ on the right. Trash asks in
@@ -258,7 +265,25 @@ defmodule BurpeeTrainerWeb.SessionComponents do
       heading_id="session-completion-heading"
       hidden={@hidden}
       armed={@armed}
+      celebrate={@celebrate}
     >
+      <%!-- A workout that ran to its end: a ✓ draws itself and bursts, then lifts off the screen. --%>
+      <div class="session-done" aria-hidden="true">
+        <svg viewBox="0 0 160 160" class="session-done-mark">
+          <g class="session-done-rays">
+            <line
+              :for={turn <- 0..7}
+              x1="80"
+              y1="14"
+              x2="80"
+              y2="26"
+              transform={"rotate(#{turn * 45} 80 80)"}
+            />
+          </g>
+          <circle class="session-done-ring" cx="80" cy="80" r="44" pathLength="1" />
+          <path class="session-done-check" d="M61 82 75 96 101 66" pathLength="1" />
+        </svg>
+      </div>
       <div class="session-finish">
         <section id="session-completion-summary" class="session-finish-summary">
           <h1
@@ -508,6 +533,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
   attr(:hidden, :boolean, required: true)
   attr(:class, :string, default: nil)
   attr(:armed, :string, default: nil)
+  attr(:celebrate, :boolean, default: false)
   slot(:inner_block, required: true)
 
   defp panel(assigns) do
@@ -516,6 +542,7 @@ defmodule BurpeeTrainerWeb.SessionComponents do
       id={@id}
       data-session-panel
       data-armed={@armed}
+      data-celebrate={@celebrate}
       hidden={@hidden}
       inert={@hidden && "inert"}
       aria-labelledby={@heading_id}
